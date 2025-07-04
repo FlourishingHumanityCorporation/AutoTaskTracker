@@ -22,7 +22,7 @@ from autotasktracker import (
 
 # Import AI features
 try:
-    from autotasktracker.ai.enhanced_task_extractor import AIEnhancedTaskExtractor
+    from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
     from autotasktracker.ai.embeddings_search import EmbeddingsSearchEngine
     AI_FEATURES_AVAILABLE = True
 except ImportError as e:
@@ -169,6 +169,18 @@ def display_task_group(group: list, group_idx: int, ai_extractor=None, show_simi
                     time_info.append(" | ".join(ai_indicators))
             
             st.caption(" | ".join(time_info))
+            
+            # Display VLM insights if available
+            if enhanced_task.get('visual_context') or enhanced_task.get('ui_state'):
+                with st.expander("👁️ Visual Insights", expanded=False):
+                    if enhanced_task.get('visual_context'):
+                        st.write(f"**Visual Context**: {enhanced_task['visual_context']}")
+                    if enhanced_task.get('ui_state'):
+                        st.write(f"**UI State**: {enhanced_task['ui_state']}")
+                    if enhanced_task.get('subtasks'):
+                        st.write("**Detected Subtasks**:")
+                        for subtask in enhanced_task['subtasks'][:3]:
+                            st.write(f"  • {subtask}")
             
             # Extract and show subtasks from group
             subtasks = []

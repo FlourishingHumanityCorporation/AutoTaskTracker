@@ -35,6 +35,12 @@ class Config:
     CACHE_TTL_SECONDS: int = 60
     DEFAULT_TASK_LIMIT: int = 100
     GROUP_INTERVAL_MINUTES: int = 5
+    SCREENSHOT_INTERVAL_SECONDS: int = 4  # Default from memos config
+    
+    # Time tracking settings
+    MIN_SESSION_DURATION_SECONDS: int = 30
+    MAX_SESSION_GAP_SECONDS: int = 600  # 10 minutes
+    IDLE_THRESHOLD_SECONDS: int = 300   # 5 minutes
     
     # Feature flags
     SHOW_SCREENSHOTS: bool = True
@@ -161,6 +167,15 @@ class Config:
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
         return asdict(self)
+    
+    @property
+    def memos_dir(self) -> Path:
+        """Get the memos directory path."""
+        return Path(self.DB_PATH).parent
+    
+    def get_ollama_url(self) -> str:
+        """Get Ollama API URL from environment or default."""
+        return os.getenv('OLLAMA_URL', 'http://localhost:11434')
 
 
 # Global config instance

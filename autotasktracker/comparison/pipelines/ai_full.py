@@ -8,7 +8,7 @@ from typing import Dict, Any
 # Import from package structure
 
 from autotasktracker.core.database import DatabaseManager
-from autotasktracker.ai.enhanced_task_extractor import AIEnhancedTaskExtractor
+from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
 from autotasktracker.ai.vlm_integration import VLMTaskExtractor
 from .base import BasePipeline
 

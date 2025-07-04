@@ -66,7 +66,7 @@ python autotasktracker.py start
 
 - **Disable screenshots**: Use the toggle in Task Board sidebar
 - **Adjust grouping**: Change time intervals for task grouping
-- **Clean old data**: `./autotask.py cleanup --days 7`
+- **Clean old data**: Configure retention in `~/.memos/config.yaml`
 
 ### Typical Daily Workflow
 
@@ -87,14 +87,14 @@ python autotasktracker.py start
 
 ```bash
 # Start everything
-./start.sh
+python autotasktracker.py start
 
-# Or use the control script
-./autotask.py           # Start with system tray
-./autotask.py console   # Start in console mode  
-./autotask.py status    # Check status
-./autotask.py stop      # Stop everything
-./autotask.py cleanup   # Clean old data
+# Or use individual commands
+python autotasktracker.py dashboard     # Launch task board
+python autotasktracker.py analytics     # Launch analytics dashboard  
+python autotasktracker.py timetracker   # Launch time tracker
+python autotasktracker.py status        # Check status
+python autotasktracker.py stop          # Stop everything
 ```
 
 ## 🔧 Configuration

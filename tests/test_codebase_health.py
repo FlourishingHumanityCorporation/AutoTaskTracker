@@ -7,6 +7,7 @@ This test suite checks for common codebase issues that hurt maintainability:
    - Root directory clutter (files in wrong places)
    - Duplicate/legacy files (*_improved.py, *_v2.py)
    - Proper file organization
+   - Documentation quality and structure
 
 🔧 CODE QUALITY ISSUES:
    - Bare except clauses (dangerous error handling)
@@ -19,6 +20,9 @@ This test suite checks for common codebase issues that hurt maintainability:
    - test_bare_except_clauses ← 🚨 ERROR HANDLING  
    - test_no_sys_path_hacks ← 🚨 IMPORTS
    - test_database_connection_patterns ← 🚨 DATABASE
+
+📚 DOCUMENTATION TESTS:
+   Run separately: pytest tests/test_documentation_health.py -v
 
 Run: pytest tests/test_codebase_health.py -v
 """

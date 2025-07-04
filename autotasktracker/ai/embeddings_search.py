@@ -9,6 +9,7 @@ from typing import List, Dict, Tuple, Optional, Union
 import numpy as np
 from datetime import datetime, timedelta
 import pandas as pd
+from autotasktracker.core.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,26 +17,20 @@ logger = logging.getLogger(__name__)
 class EmbeddingsSearchEngine:
     """Semantic search engine using embeddings from Pensieve."""
     
-    def __init__(self, db_manager_or_path: Union[str, 'DatabaseManager']):
+    def __init__(self, db_manager_or_path: Union[str, DatabaseManager]):
         # Accept either DatabaseManager instance or path for backward compatibility
         if isinstance(db_manager_or_path, str):
-            self.db_path = db_manager_or_path
-            self.db_manager = None
-        else:
+            self.db_manager = DatabaseManager(db_manager_or_path)
+        elif isinstance(db_manager_or_path, DatabaseManager):
             self.db_manager = db_manager_or_path
-            self.db_path = None
+        else:
+            # Default to standard database location
+            self.db_manager = DatabaseManager()
         self.embedding_dim = 768  # Jina embeddings dimension
     
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get database connection with row factory."""
-        if self.db_manager:
-            # Use DatabaseManager's connection if available
-            return self.db_manager.get_connection()
-        else:
-            # Fallback to direct connection for backward compatibility
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            return conn
+    def _get_connection(self):
+        """Get database connection context manager from DatabaseManager."""
+        return self.db_manager.get_connection(readonly=True)
     
     def _parse_embedding(self, embedding_str: str) -> Optional[np.ndarray]:
         """Parse embedding string to numpy array."""
@@ -302,8 +297,13 @@ class EmbeddingsSearchEngine:
 class EmbeddingStats:
     """Statistics and analytics for embeddings."""
     
-    def __init__(self, db_path: str):
-        self.db_path = db_path
+    def __init__(self, db_manager_or_path: Union[str, DatabaseManager]):
+        if isinstance(db_manager_or_path, str):
+            self.db_manager = DatabaseManager(db_manager_or_path)
+        elif isinstance(db_manager_or_path, DatabaseManager):
+            self.db_manager = db_manager_or_path
+        else:
+            self.db_manager = DatabaseManager()
     
     def get_embedding_coverage(self) -> Dict[str, any]:
         """Get statistics about embedding coverage in the database."""
@@ -320,8 +320,7 @@ class EmbeddingStats:
         """
         
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db_manager.get_connection(readonly=True) as conn:
                 cursor = conn.cursor()
                 cursor.execute(query)
                 result = cursor.fetchone()

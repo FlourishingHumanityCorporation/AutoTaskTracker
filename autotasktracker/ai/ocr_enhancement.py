@@ -132,7 +132,8 @@ class OCREnhancer:
                     # Format: [x, y, width, height]
                     return tuple(bbox[:4])
             return None
-        except:
+        except (TypeError, ValueError, IndexError) as e:
+            logger.debug(f"Error parsing bbox: {e}")
             return None
     
     def analyze_layout(self, ocr_results: List[OCRResult]) -> OCRLayout:

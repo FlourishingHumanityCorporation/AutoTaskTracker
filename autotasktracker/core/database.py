@@ -5,38 +5,174 @@ Provides centralized database access and query methods.
 
 import sqlite3
 import os
+import threading
+import time
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
+from queue import Queue, Empty
 import pandas as pd
 from contextlib import contextmanager
 import logging
+from autotasktracker.config import get_config
 
 
 logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    """Manages database connections and provides query methods."""
+    """Manages database connections with connection pooling and performance optimizations."""
     
     def __init__(self, db_path: Optional[str] = None):
         """
-        Initialize DatabaseManager.
+        Initialize DatabaseManager with connection pooling.
         
         Args:
             db_path: Path to the database. If None, uses default path.
         """
         if db_path is None:
-            self.db_path = os.path.expanduser("~/.memos/database.db")
+            config = get_config()
+            self.db_path = config.get_db_path()
         else:
             self.db_path = db_path
         
-        self._connection_pool = []
-        self._max_connections = 5
+        # Connection pooling
+        self._connection_pool = Queue(maxsize=10)
+        self._max_connections = 10
+        self._active_connections = 0
+        self._pool_lock = threading.Lock()
+        self._wal_mode_enabled = False
+        
+        # Initialize database with optimizations
+        self._initialize_database()
+        
+        # Create initial connections
+        self._warm_up_pool()
+    
+    def _initialize_database(self):
+        """Initialize database with performance optimizations."""
+        try:
+            # Create a connection to set up optimizations
+            conn = sqlite3.connect(self.db_path, timeout=30)
+            conn.row_factory = sqlite3.Row
+            
+            # Enable WAL mode for better concurrency
+            conn.execute("PRAGMA journal_mode=WAL")
+            
+            # Performance optimizations
+            conn.execute("PRAGMA synchronous=NORMAL")  # Faster than FULL
+            conn.execute("PRAGMA cache_size=10000")    # 10MB cache
+            conn.execute("PRAGMA temp_store=MEMORY")   # Use memory for temp tables
+            conn.execute("PRAGMA mmap_size=268435456") # 256MB memory map
+            
+            # Create indexes if they don't exist
+            self._create_indexes(conn)
+            
+            conn.commit()
+            conn.close()
+            
+            self._wal_mode_enabled = True
+            logger.info("Database initialized with WAL mode and performance optimizations")
+            
+        except sqlite3.Error as e:
+            logger.error(f"Failed to initialize database: {e}")
+            raise
+    
+    def _create_indexes(self, conn: sqlite3.Connection):
+        """Create performance indexes for VLM queries."""
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_metadata_entity_key ON metadata_entries(entity_id, key)",
+            "CREATE INDEX IF NOT EXISTS idx_metadata_key ON metadata_entries(key)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_created_at ON entities(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_file_type ON entities(file_type_group)",
+            "CREATE INDEX IF NOT EXISTS idx_metadata_created_at ON metadata_entries(created_at)"
+        ]
+        
+        for index_sql in indexes:
+            try:
+                conn.execute(index_sql)
+                logger.debug(f"Created index: {index_sql.split()[-1]}")
+            except sqlite3.Error as e:
+                logger.warning(f"Failed to create index: {e}")
+    
+    def _warm_up_pool(self):
+        """Create initial connections to warm up the pool."""
+        try:
+            for _ in range(min(3, self._max_connections // 2)):
+                conn = self._create_connection()
+                self._connection_pool.put(conn)
+                with self._pool_lock:
+                    self._active_connections += 1
+        except Exception as e:
+            logger.warning(f"Failed to warm up connection pool: {e}")
+    
+    def _create_connection(self, readonly: bool = False) -> sqlite3.Connection:
+        """Create a new database connection with optimizations."""
+        try:
+            if readonly and self._wal_mode_enabled:
+                # Read-only connections in WAL mode
+                conn = sqlite3.connect(f'file:{self.db_path}?mode=ro', uri=True, timeout=30)
+            else:
+                conn = sqlite3.connect(self.db_path, timeout=30)
+            
+            conn.row_factory = sqlite3.Row
+            
+            # Set pragmas for this connection
+            if not readonly:
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA cache_size=10000")
+                conn.execute("PRAGMA temp_store=MEMORY")
+            
+            return conn
+            
+        except sqlite3.Error as e:
+            logger.error(f"Failed to create database connection: {e}")
+            raise
+    
+    def _get_pooled_connection(self, readonly: bool = True) -> sqlite3.Connection:
+        """Get a connection from the pool or create a new one."""
+        try:
+            # Try to get from pool first
+            conn = self._connection_pool.get_nowait()
+            # Test if connection is still valid
+            conn.execute("SELECT 1")
+            return conn
+        except (Empty, sqlite3.Error):
+            # Pool empty or connection invalid, create new one
+            with self._pool_lock:
+                if self._active_connections < self._max_connections:
+                    self._active_connections += 1
+                    return self._create_connection(readonly)
+                else:
+                    # Wait for a connection to become available
+                    try:
+                        conn = self._connection_pool.get(timeout=5)
+                        conn.execute("SELECT 1")  # Test connection
+                        return conn
+                    except (Empty, sqlite3.Error):
+                        # Fallback: create connection anyway (exceeds pool limit)
+                        logger.warning("Connection pool exhausted, creating additional connection")
+                        return self._create_connection(readonly)
+    
+    def _return_connection(self, conn: sqlite3.Connection):
+        """Return a connection to the pool."""
+        try:
+            # Test if connection is still valid
+            conn.execute("SELECT 1")
+            # Put back in pool if there's space
+            self._connection_pool.put_nowait(conn)
+        except (sqlite3.Error, Exception):
+            # Connection invalid or pool full, close it
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+            with self._pool_lock:
+                self._active_connections = max(0, self._active_connections - 1)
     
     @contextmanager
     def get_connection(self, readonly: bool = True):
         """
-        Get a database connection with context manager support.
+        Get a database connection with connection pooling and context manager support.
         
         Args:
             readonly: If True, opens connection in read-only mode
@@ -46,19 +182,33 @@ class DatabaseManager:
         """
         conn = None
         try:
-            if readonly:
-                conn = sqlite3.connect(f'file:{self.db_path}?mode=ro', uri=True)
-            else:
-                conn = sqlite3.connect(self.db_path)
-            
-            conn.row_factory = sqlite3.Row
+            conn = self._get_pooled_connection(readonly)
             yield conn
         except sqlite3.OperationalError as e:
             logger.error(f"Database connection error: {e}")
+            # Try to recover by creating a fresh connection
+            if conn:
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    pass
+            conn = self._create_connection(readonly)
+            yield conn
+        except Exception as e:
+            logger.error(f"Unexpected database error: {e}")
             raise
         finally:
             if conn:
-                conn.close()
+                if readonly:
+                    self._return_connection(conn)
+                else:
+                    # For write connections, close immediately to avoid transaction issues
+                    try:
+                        conn.close()
+                    except sqlite3.Error:
+                        pass
+                    with self._pool_lock:
+                        self._active_connections = max(0, self._active_connections - 1)
     
     def test_connection(self) -> bool:
         """Test if database connection can be established."""
@@ -68,6 +218,30 @@ class DatabaseManager:
                 return True
         except sqlite3.OperationalError:
             return False
+    
+    def get_pool_stats(self) -> Dict[str, Any]:
+        """Get connection pool statistics."""
+        with self._pool_lock:
+            return {
+                'active_connections': self._active_connections,
+                'max_connections': self._max_connections,
+                'pooled_connections': self._connection_pool.qsize(),
+                'wal_mode_enabled': self._wal_mode_enabled
+            }
+    
+    def close_all_connections(self):
+        """Close all pooled connections."""
+        while not self._connection_pool.empty():
+            try:
+                conn = self._connection_pool.get_nowait()
+                conn.close()
+            except sqlite3.Error:
+                pass
+        
+        with self._pool_lock:
+            self._active_connections = 0
+        
+        logger.info("Closed all database connections")
     
     def fetch_tasks(self, 
                    start_date: Optional[datetime] = None,
@@ -297,7 +471,7 @@ class DatabaseManager:
             entities e
             LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
             LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
-            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key = 'minicpm_v_result'
+            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key IN ('minicpm_v_result', 'vlm_structured')
             LEFT JOIN metadata_entries me4 ON e.id = me4.entity_id AND me4.key = 'embedding'
         WHERE
             e.file_type_group = 'image'
@@ -331,6 +505,7 @@ class DatabaseManager:
         Returns:
             Dictionary with coverage statistics
         """
+        # Optimized query using indexes
         query = """
         SELECT 
             COUNT(DISTINCT e.id) as total_screenshots,
@@ -339,7 +514,7 @@ class DatabaseManager:
             COUNT(DISTINCT me_emb.entity_id) as with_embeddings
         FROM entities e
         LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
-        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = 'minicpm_v_result'
+        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key IN ('minicpm_v_result', 'vlm_structured')
         LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb.key = 'embedding'
         WHERE e.file_type_group = 'image'
         """

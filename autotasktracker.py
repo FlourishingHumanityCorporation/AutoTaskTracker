@@ -22,16 +22,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  autotasktracker.py start              # Start all services
-  autotasktracker.py dashboard          # Launch task board
-  autotasktracker.py analytics          # Launch analytics dashboard
+  autotasktracker.py start              # Start all services (refactored)
+  autotasktracker.py dashboard          # Launch task board (refactored)
+  autotasktracker.py analytics          # Launch analytics dashboard (refactored)
+  autotasktracker.py launcher           # Interactive dashboard launcher
   autotasktracker.py stop               # Stop all services
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['start', 'stop', 'dashboard', 'analytics', 'timetracker', 'notifications', 'status'],
+        choices=['start', 'stop', 'dashboard', 'analytics', 'timetracker', 'notifications', 'vlm-monitor', 'status', 'launcher'],
         help='Command to execute'
     )
     
@@ -53,7 +54,7 @@ Examples:
         # Start main dashboard
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/achievement_board.py',
+            'run_task_board.py',
             '--server.port', str(config.TASK_BOARD_PORT)
         ]
         if args.headless:
@@ -71,7 +72,7 @@ Examples:
     elif args.command == 'dashboard':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/achievement_board.py',
+            'run_task_board.py',
             '--server.port', str(config.TASK_BOARD_PORT)
         ]
         if args.headless:
@@ -81,7 +82,7 @@ Examples:
     elif args.command == 'analytics':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/analytics.py',
+            'run_analytics.py',
             '--server.port', str(config.ANALYTICS_PORT)
         ]
         if args.headless:
@@ -91,7 +92,7 @@ Examples:
     elif args.command == 'timetracker':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/timetracker.py',
+            'run_timetracker.py',
             '--server.port', str(config.TIMETRACKER_PORT)
         ]
         if args.headless:
@@ -101,12 +102,28 @@ Examples:
     elif args.command == 'notifications':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/notifications.py',
+            'run_notifications.py',
             '--server.port', str(config.NOTIFICATIONS_PORT)
         ]
         if args.headless:
             cmd.extend(['--server.headless', 'true'])
         subprocess.run(cmd)
+        
+    elif args.command == 'vlm-monitor':
+        cmd = [
+            sys.executable, '-m', 'streamlit', 'run',
+            'run_vlm_monitor.py',
+            '--server.port', '8510'
+        ]
+        if args.headless:
+            cmd.extend(['--server.headless', 'true'])
+        subprocess.run(cmd)
+        
+    elif args.command == 'launcher':
+        # Use the refactored launcher
+        from autotasktracker.dashboards.launcher_refactored import DashboardLauncher
+        launcher = DashboardLauncher()
+        launcher.print_status()
         
     elif args.command == 'status':
         print("Checking AutoTaskTracker status...")

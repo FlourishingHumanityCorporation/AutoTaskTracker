@@ -113,8 +113,8 @@ class TaskExtractor:
             try:
                 data = json.loads(window_title)
                 window_title = data.get('title', window_title)
-            except (json.JSONDecodeError, TypeError, KeyError):
-                pass
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                logger.debug(f"Error parsing JSON window data: {e}")
         
         # Check application-specific patterns
         window_lower = window_title.lower()
@@ -291,8 +291,8 @@ class TaskExtractor:
                         matches = re.findall(pattern, combined)
                         for match in matches[:2]:  # Limit subtasks
                             subtasks.append(match.title())
-        except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
-            pass
+        except (json.JSONDecodeError, TypeError, KeyError, AttributeError) as e:
+            logger.debug(f"Error extracting subtasks from VLM data: {e}")
         
         return subtasks
 

@@ -279,7 +279,7 @@ def get_enhanced_task(window_title: str, ocr_text: Optional[str],
     Returns:
         Best possible task description
     """
-    from ..core.task_extractor import get_task_extractor
+    from autotasktracker.core.task_extractor import get_task_extractor
     
     # First try traditional extraction
     extractor = get_task_extractor()
@@ -309,7 +309,7 @@ def get_enhanced_category(window_title: str, ocr_text: Optional[str],
     Returns:
         Category string with emoji prefix
     """
-    from ..core.categorizer import ActivityCategorizer
+    from autotasktracker.core.categorizer import ActivityCategorizer
     
     # Try VLM categorization first if available
     if vlm_description:

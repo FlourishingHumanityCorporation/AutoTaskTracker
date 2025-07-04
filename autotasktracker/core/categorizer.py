@@ -203,8 +203,8 @@ def extract_task_summary(ocr_text: Optional[str], active_window: Optional[str]) 
             if first_line:
                 return first_line[:100] + "..." if len(first_line) > 100 else first_line
                 
-        except (json.JSONDecodeError, TypeError, IndexError):
-            pass
+        except (json.JSONDecodeError, TypeError, IndexError) as e:
+            logger.debug(f"Error parsing VLM results for task description: {e}")
     
     return "Activity Captured"
 

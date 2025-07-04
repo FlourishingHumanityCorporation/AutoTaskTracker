@@ -9,13 +9,13 @@ import json
 from datetime import datetime, timedelta
 
 # Add project to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from autotasktracker.core.database import DatabaseManager
 from autotasktracker.ai.vlm_integration import VLMTaskExtractor, extract_vlm_enhanced_task
 from autotasktracker.ai.ocr_enhancement import OCREnhancer
 from autotasktracker.ai.embeddings_search import EmbeddingsSearchEngine, EmbeddingStats
-from autotasktracker.ai.enhanced_task_extractor import AIEnhancedTaskExtractor
+from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
 
 
 def test_database_ai_queries():

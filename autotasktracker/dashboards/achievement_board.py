@@ -252,9 +252,20 @@ def calculate_insights(df):
 
 def create_daily_journey_timeline(task_groups):
     """Create a visual timeline of the day's journey"""
+    # Filter to show significant tasks throughout the day
+    significant_tasks = [t for t in task_groups if t[1] >= 5]  # 5+ minutes
+    # Sort by start time to show chronological order
+    significant_tasks.sort(key=lambda x: x[2])
+    
+    # Limit to 15 most significant tasks spread throughout the day
+    if len(significant_tasks) > 15:
+        # Take every Nth task to spread across the day
+        step = len(significant_tasks) // 15
+        significant_tasks = significant_tasks[::step][:15]
+    
     timeline_html = '<div class="timeline-container"><div class="timeline-line"></div>'
     
-    for i, (task, duration, start_time, category) in enumerate(task_groups[:10]):  # Top 10
+    for i, (task, duration, start_time, category) in enumerate(significant_tasks):
         side = 'left' if i % 2 == 0 else 'right'
         
         timeline_html += f'''
@@ -302,7 +313,7 @@ def get_motivational_quote(focus_score, task_count):
     import random
     return random.choice(quotes)
 
-def display_achievement_card(achievement_data, screenshot_path=None):
+def display_achievement_card(achievement_data, screenshot_path=None, show_screenshot=False):
     """Display a task as an achievement card"""
     card_class = f"achievement-card {achievement_data['level']}"
     
@@ -324,7 +335,7 @@ def display_achievement_card(achievement_data, screenshot_path=None):
         st.progress(progress / 100)
     
     with col2:
-        if screenshot_path and os.path.exists(screenshot_path):
+        if show_screenshot and screenshot_path and os.path.exists(screenshot_path):
             try:
                 img = Image.open(screenshot_path)
                 img.thumbnail((150, 150))
@@ -348,30 +359,47 @@ def main():
         st.error("Cannot connect to database. Start Memos with: `memos start`")
         return
     
-    # Get last 7 days of data to find the most recent day with activity
-    week_ago = datetime.now() - timedelta(days=7)
-    df_all = db.fetch_tasks(start_date=week_ago, limit=1000)
+    # Sidebar for date selection
+    with st.sidebar:
+        st.markdown("### 📅 Select Date")
+        
+        # Get available dates from last 30 days
+        month_ago = datetime.now() - timedelta(days=30)
+        df_dates = db.fetch_tasks(start_date=month_ago, limit=5000)
+        
+        if df_dates.empty:
+            st.info("No activities recorded yet. Make sure Memos is running!")
+            return
+        
+        df_dates['date'] = pd.to_datetime(df_dates['created_at']).dt.date
+        available_dates = sorted(df_dates['date'].unique(), reverse=True)
+        
+        # Date selector
+        selected_date = st.selectbox(
+            "Choose a date:",
+            available_dates,
+            format_func=lambda x: "Today" if x == datetime.now().date() else x.strftime('%A, %B %d, %Y')
+        )
+        
+        st.markdown("---")
+        st.markdown("### ⚙️ Settings")
+        show_screenshots = st.checkbox("Show screenshots", value=False)
+        auto_refresh = st.checkbox("Auto-refresh (30s)", value=True)
+        
+        if auto_refresh:
+            st.markdown("<script>setTimeout(function(){window.location.reload();}, 30000);</script>", unsafe_allow_html=True)
     
-    if df_all.empty:
-        st.info("No activities recorded yet. Make sure Memos is running!")
+    # Get selected day's data
+    date_start = datetime.combine(selected_date, datetime.min.time())
+    date_end = datetime.combine(selected_date, datetime.max.time())
+    df = db.fetch_tasks(start_date=date_start, end_date=date_end, limit=2000)
+    
+    if df.empty:
+        st.info(f"No activities recorded on {selected_date.strftime('%A, %B %d, %Y')}")
         return
     
-    # Find the most recent date with data
-    df_all['created_at'] = pd.to_datetime(df_all['created_at'])
-    most_recent_date = df_all['created_at'].max().date()
-    current_date = datetime.now().date()
-    
-    # Get that day's data
-    date_start = datetime.combine(most_recent_date, datetime.min.time())
-    date_end = datetime.combine(most_recent_date, datetime.max.time())
-    df = db.fetch_tasks(start_date=date_start, end_date=date_end, limit=1000)
-    
-    # Show notice if not showing today's data
-    if most_recent_date != current_date:
-        st.info(f"Showing data from {most_recent_date.strftime('%A, %B %d, %Y')} (most recent activity)")
-    
     # Now show the header with the correct date
-    date_display = "Today" if most_recent_date == datetime.now().date() else most_recent_date.strftime('%A, %B %d')
+    date_display = "Today" if selected_date == datetime.now().date() else selected_date.strftime('%A, %B %d')
     header_placeholder.markdown(f"""
     <h1 style="text-align: center; color: #2c3e50;">
         🏆 Your Achievement Board - {date_display}
@@ -453,7 +481,7 @@ def main():
             # If this is a new window or significant time gap, start new task
             if (current_window is None or 
                 current_window != window_title or 
-                (current_end and (timestamp - current_end).total_seconds() > 300)):  # 5 min gap
+                (current_end and (timestamp - current_end).total_seconds() > 600)):  # 10 min gap
                 
                 # Save previous task if it existed for >30 seconds
                 if current_window and current_start and current_end:
@@ -477,20 +505,40 @@ def main():
         # Sort by duration and display top achievements
         task_groups.sort(key=lambda x: x[1], reverse=True)
         
-        # Debug info
-        st.write(f"**Debug:** Found {len(task_groups)} task groups from {len(df)} screenshots")
-        
+        # Show tasks or helpful message
         if len(task_groups) == 0:
-            st.info("No task groups found. This might indicate all activities were too short (< 30 seconds) or data processing issues.")
-            # Show raw data for debugging
-            with st.expander("Debug: Raw Data"):
-                st.write("Sample data:")
-                for i, row in df.head(3).iterrows():
-                    st.write(f"- {row['created_at']}: {row['window_title']} ({row['category']})")
+            st.info("🌟 No significant tasks detected yet. Tasks need to run for at least 30 seconds to appear here.")
+            
+            # Show activity summary instead
+            if len(df) > 0:
+                st.markdown("### 📊 Activity Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Screenshots", len(df))
+                    unique_windows = df['window_title'].nunique()
+                    st.metric("Different Windows", unique_windows)
+                with col2:
+                    time_span = (df['created_at'].max() - df['created_at'].min()).total_seconds() / 3600
+                    st.metric("Time Span", f"{time_span:.1f} hours")
+                    
+                # Show top windows by count
+                st.markdown("### 🔝 Most Visited")
+                top_windows = df['window_title'].value_counts().head(5)
+                for window, count in top_windows.items():
+                    st.write(f"- **{window}**: {count} captures")
         else:
-            for task, duration, start_time, category in task_groups[:8]:  # Top 8 achievements
-                achievement = format_task_as_achievement(task, duration, category)
-                display_achievement_card(achievement)
+            # Show top achievements
+            shown = 0
+            for task, duration, start_time, category in task_groups:
+                if duration >= 1:  # Only show tasks 1 minute or longer
+                    achievement = format_task_as_achievement(task, duration, category)
+                    display_achievement_card(achievement, screenshot_path=None, show_screenshot=show_screenshots)
+                    shown += 1
+                    if shown >= 8:  # Limit to top 8
+                        break
+            
+            if shown == 0:
+                st.info("🌱 Your tasks today were quick! Tasks need at least 1 minute of focus to appear as achievements.")
     
     with col2:
         st.markdown("## 📅 Daily Journey")
@@ -518,7 +566,7 @@ def main():
         st.markdown("### 📊 Quick Stats")
         longest_session = insights.get('longest_session', 0)
         st.metric("Longest Focus Session", f"{int(longest_session)} min")
-        st.metric("Screenshots Today", len(df))
+        st.metric("Total Activities", len(df))
         
         # Category pie chart
         fig = go.Figure(data=[go.Pie(

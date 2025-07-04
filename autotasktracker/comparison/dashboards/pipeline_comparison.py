@@ -5,14 +5,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-import sys
 from PIL import Image
 import json
-
-# Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 from autotasktracker.core.database import DatabaseManager
 from autotasktracker.comparison.pipelines import BasicPipeline, OCRPipeline, AIFullPipeline
