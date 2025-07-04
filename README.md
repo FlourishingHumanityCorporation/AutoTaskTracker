@@ -17,7 +17,7 @@ AutoTaskTracker runs quietly in the background, capturing screenshots and using 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/AutoTaskTracker.git
+git clone https://github.com/FlourishingHumanityCorporation/AutoTaskTracker.git
 cd AutoTaskTracker
 
 # Install (one-time setup)
