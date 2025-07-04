@@ -5,11 +5,12 @@ Streamlit dashboard for AutoTaskTracker - Task Board view.
 import streamlit as st
 import pandas as pd
 import os
+import logging
 from PIL import Image
 from datetime import datetime, timedelta
 import json
 
-# Import from our new package structure
+# Import from our package structure
 from autotasktracker import (
     DatabaseManager, 
     ActivityCategorizer, 
@@ -18,6 +19,15 @@ from autotasktracker import (
     Config, 
     get_config
 )
+
+# Import AI features
+try:
+    from autotasktracker.ai.enhanced_task_extractor import AIEnhancedTaskExtractor
+    from autotasktracker.ai.embeddings_search import EmbeddingsSearchEngine
+    AI_FEATURES_AVAILABLE = True
+except ImportError as e:
+    AI_FEATURES_AVAILABLE = False
+    logging.info(f"AI features not available: {e}")
 
 
 # Initialize configuration
@@ -32,6 +42,10 @@ def init_session_state():
         st.session_state.show_screenshots = config.SHOW_SCREENSHOTS
     if 'group_interval' not in st.session_state:
         st.session_state.group_interval = config.GROUP_INTERVAL_MINUTES
+    if 'use_ai_features' not in st.session_state:
+        st.session_state.use_ai_features = AI_FEATURES_AVAILABLE
+    if 'show_similar_tasks' not in st.session_state:
+        st.session_state.show_similar_tasks = False
 
 
 def group_tasks_by_time(df: pd.DataFrame, interval_minutes: int = None) -> list:
@@ -92,7 +106,7 @@ def group_tasks_by_time(df: pd.DataFrame, interval_minutes: int = None) -> list:
     return groups
 
 
-def display_task_group(group: list, group_idx: int):
+def display_task_group(group: list, group_idx: int, ai_extractor=None, show_similar=False):
     """Display a group of related tasks."""
     if not group:
         return
@@ -100,24 +114,61 @@ def display_task_group(group: list, group_idx: int):
     # Get the primary task for this group
     primary_row = group[0]
     window_title = extract_window_title(primary_row['active_window'])
-    task_title = extract_task_summary(primary_row['ocr_text'], primary_row['active_window'])
-    category = ActivityCategorizer.categorize(window_title, primary_row['ocr_text'])
+    
+    # Use AI extraction if available
+    if ai_extractor and AI_FEATURES_AVAILABLE:
+        enhanced_task = ai_extractor.extract_enhanced_task(
+            window_title=primary_row.get('active_window'),
+            ocr_text=primary_row.get('ocr_text'),
+            vlm_description=primary_row.get('vlm_description'),
+            entity_id=primary_row.get('id')
+        )
+        task_title = enhanced_task['task']
+        category = enhanced_task['category']
+        ai_confidence = enhanced_task['confidence']
+        ai_features = enhanced_task.get('ai_features', {})
+    else:
+        task_title = extract_task_summary(primary_row['ocr_text'], primary_row['active_window'])
+        category = ActivityCategorizer.categorize(window_title, primary_row['ocr_text'])
+        ai_confidence = None
+        ai_features = {}
     
     with st.container():
         col1, col2 = st.columns([3, 1])
         
         with col1:
-            st.subheader(f"{category} | {task_title}")
+            # Task title with AI confidence indicator
+            title_parts = [f"{category} | {task_title}"]
+            if ai_confidence is not None:
+                confidence_emoji = "🎯" if ai_confidence >= 0.8 else "🔍" if ai_confidence >= 0.6 else "❓"
+                title_parts.append(f"{confidence_emoji} {ai_confidence:.0%}")
+            
+            st.subheader(" ".join(title_parts))
             
             # Time information
             start_time = pd.to_datetime(group[0]['created_at'])
             end_time = pd.to_datetime(group[-1]['created_at'])
             duration = (end_time - start_time).total_seconds() / 60
             
+            time_info = []
             if duration > 1:
-                st.caption(f"⏱️ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({duration:.0f} minutes, {len(group)} screenshots)")
+                time_info.append(f"⏱️ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({duration:.0f} minutes, {len(group)} screenshots)")
             else:
-                st.caption(f"⏱️ {start_time.strftime('%H:%M:%S')}")
+                time_info.append(f"⏱️ {start_time.strftime('%H:%M:%S')}")
+            
+            # Add AI feature indicators
+            if ai_features:
+                ai_indicators = []
+                if ai_features.get('ocr_quality') in ['excellent', 'good']:
+                    ai_indicators.append(f"📝 OCR: {ai_features['ocr_quality']}")
+                if ai_features.get('vlm_available'):
+                    ai_indicators.append("👁️ Visual")
+                if ai_features.get('embeddings_available'):
+                    ai_indicators.append("🧠 Similar")
+                if ai_indicators:
+                    time_info.append(" | ".join(ai_indicators))
+            
+            st.caption(" | ".join(time_info))
             
             # Extract and show subtasks from group
             subtasks = []
@@ -156,6 +207,18 @@ def display_task_group(group: list, group_idx: int):
                 for subtask in subtasks[:5]:  # Show max 5 subtasks
                     st.markdown(f"• {subtask}")
             
+            # Show similar tasks if AI features are enabled
+            if show_similar and ai_extractor and primary_row.get('id') and AI_FEATURES_AVAILABLE:
+                try:
+                    similar_tasks = enhanced_task.get('similar_tasks', [])
+                    if similar_tasks:
+                        with st.expander(f"🔗 Similar tasks ({len(similar_tasks)})"):
+                            for similar in similar_tasks[:3]:
+                                similarity_pct = similar['similarity'] * 100
+                                st.write(f"• {similar['task']} (*{similarity_pct:.0f}% similar, {similar['time']}*)")
+                except Exception as e:
+                    st.caption(f"Could not load similar tasks: {e}")
+            
             # Show OCR text preview in expander
             if primary_row['ocr_text']:
                 with st.expander("📝 View captured text"):
@@ -178,7 +241,7 @@ def display_task_group(group: list, group_idx: int):
                                 st.text("No readable text found")
                         else:
                             st.text(str(primary_row['ocr_text'])[:500])
-                    except:
+                    except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
                         st.text(str(primary_row['ocr_text'])[:500])
         
         with col2:
@@ -263,12 +326,53 @@ def main():
         help="Group activities within this time window"
     )
     
+    # AI Features section
+    if AI_FEATURES_AVAILABLE:
+        st.sidebar.subheader("🤖 AI Features")
+        st.session_state.use_ai_features = st.sidebar.checkbox(
+            "Enable AI Insights",
+            value=st.session_state.use_ai_features,
+            help="Use AI to enhance task detection and provide insights"
+        )
+        
+        if st.session_state.use_ai_features:
+            st.session_state.show_similar_tasks = st.sidebar.checkbox(
+                "Show Similar Tasks",
+                value=st.session_state.show_similar_tasks,
+                help="Find and display semantically similar tasks"
+            )
+    else:
+        st.sidebar.info("💡 Install AI dependencies for enhanced features")
+    
+    # Initialize AI extractor if available
+    ai_extractor = None
+    if AI_FEATURES_AVAILABLE and st.session_state.use_ai_features:
+        ai_extractor = AIEnhancedTaskExtractor(db_manager.db_path)
+    
     # Fetch and display tasks
     with st.spinner("Loading activities..."):
-        tasks_df = db_manager.fetch_tasks_by_time_filter(
-            time_filter, 
-            limit=config.DEFAULT_TASK_LIMIT
-        )
+        if AI_FEATURES_AVAILABLE and st.session_state.use_ai_features:
+            # Fetch tasks with AI data
+            tasks_df = db_manager.fetch_tasks_with_ai()
+            if not tasks_df.empty:
+                # Filter by time
+                time_filters = {
+                    "Last 15 Minutes": datetime.now() - timedelta(minutes=15),
+                    "Last Hour": datetime.now() - timedelta(hours=1),
+                    "Today": datetime.now().replace(hour=0, minute=0, second=0, microsecond=0),
+                    "Last 24 Hours": datetime.now() - timedelta(days=1),
+                    "Last 7 Days": datetime.now() - timedelta(days=7),
+                    "All Time": datetime(2000, 1, 1)
+                }
+                start_date = time_filters.get(time_filter, datetime(2000, 1, 1))
+                tasks_df['created_at'] = pd.to_datetime(tasks_df['created_at'])
+                tasks_df = tasks_df[tasks_df['created_at'] >= start_date].head(config.DEFAULT_TASK_LIMIT)
+        else:
+            # Standard fetch
+            tasks_df = db_manager.fetch_tasks_by_time_filter(
+                time_filter, 
+                limit=config.DEFAULT_TASK_LIMIT
+            )
     
     if not tasks_df.empty:
         # Activity Summary
@@ -297,7 +401,12 @@ def main():
         
         # Display task groups
         for group_idx, group in enumerate(task_groups):
-            display_task_group(group, group_idx)
+            display_task_group(
+                group, 
+                group_idx, 
+                ai_extractor=ai_extractor,
+                show_similar=st.session_state.get('show_similar_tasks', False)
+            )
     else:
         st.info("🔍 No activities found for the selected time range.")
         st.write("Make sure Memos is running and capturing screenshots.")

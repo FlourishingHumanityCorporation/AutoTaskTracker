@@ -107,11 +107,13 @@ class DatabaseManager:
         params = []
         
         if start_date:
-            query += " AND datetime(e.created_at, 'localtime') >= ?"
+            # Convert start_date to UTC for comparison with e.created_at (which is stored in UTC)
+            query += " AND e.created_at >= ?"
             params.append(start_date.isoformat())
         
         if end_date:
-            query += " AND datetime(e.created_at, 'localtime') <= ?"
+            # Convert end_date to UTC for comparison with e.created_at (which is stored in UTC)
+            query += " AND e.created_at <= ?"
             params.append(end_date.isoformat())
         
         query += " ORDER BY e.created_at DESC LIMIT ? OFFSET ?"
@@ -261,6 +263,108 @@ class DatabaseManager:
                 'duration_hours': 0,
                 'avg_screenshots_per_hour': 0
             }
+    
+    def fetch_tasks_with_ai(self, 
+                           start_date: Optional[datetime] = None,
+                           end_date: Optional[datetime] = None,
+                           limit: int = 100,
+                           offset: int = 0) -> pd.DataFrame:
+        """
+        Fetch tasks with AI-enhanced data (VLM descriptions and embeddings).
+        
+        Args:
+            start_date: Start date filter
+            end_date: End date filter  
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+            
+        Returns:
+            DataFrame with task and AI data
+        """
+        query = """
+        SELECT
+            e.id,
+            e.filepath,
+            e.filename,
+            datetime(e.created_at, 'localtime') as created_at,
+            e.file_created_at,
+            e.last_scan_at,
+            me.value as ocr_text,
+            me2.value as active_window,
+            me3.value as vlm_description,
+            CASE WHEN me4.value IS NOT NULL THEN 1 ELSE 0 END as has_embedding
+        FROM
+            entities e
+            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
+            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
+            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key = 'vlm_result'
+            LEFT JOIN metadata_entries me4 ON e.id = me4.entity_id AND me4.key = 'embedding'
+        WHERE
+            e.file_type_group = 'image'
+        """
+        
+        params = []
+        
+        if start_date:
+            query += " AND datetime(e.created_at, 'localtime') >= ?"
+            params.append(start_date.isoformat())
+        
+        if end_date:
+            query += " AND datetime(e.created_at, 'localtime') <= ?"
+            params.append(end_date.isoformat())
+        
+        query += " ORDER BY e.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        try:
+            with self.get_connection() as conn:
+                df = pd.read_sql_query(query, conn, params=params)
+                return df
+        except pd.io.sql.DatabaseError as e:
+            logger.error(f"Error fetching tasks with AI data: {e}")
+            return pd.DataFrame()
+    
+    def get_ai_coverage_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about AI feature coverage in the database.
+        
+        Returns:
+            Dictionary with coverage statistics
+        """
+        query = """
+        SELECT 
+            COUNT(DISTINCT e.id) as total_screenshots,
+            COUNT(DISTINCT me_ocr.entity_id) as with_ocr,
+            COUNT(DISTINCT me_vlm.entity_id) as with_vlm,
+            COUNT(DISTINCT me_emb.entity_id) as with_embeddings
+        FROM entities e
+        LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
+        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = 'vlm_result'
+        LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb.key = 'embedding'
+        WHERE e.file_type_group = 'image'
+        """
+        
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                result = cursor.fetchone()
+                
+                if result:
+                    total = result['total_screenshots']
+                    return {
+                        'total_screenshots': total,
+                        'ocr_count': result['with_ocr'],
+                        'ocr_percentage': (result['with_ocr'] / total * 100) if total > 0 else 0,
+                        'vlm_count': result['with_vlm'],
+                        'vlm_percentage': (result['with_vlm'] / total * 100) if total > 0 else 0,
+                        'embedding_count': result['with_embeddings'],
+                        'embedding_percentage': (result['with_embeddings'] / total * 100) if total > 0 else 0
+                    }
+                return {}
+        except sqlite3.Error as e:
+            logger.error(f"Error getting AI coverage stats: {e}")
+            return {}
     
     def search_activities(self, search_term: str, limit: int = 50) -> pd.DataFrame:
         """

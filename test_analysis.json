@@ -1,0 +1,199 @@
+{
+  "summary": {
+    "total_screenshots": 10,
+    "with_ocr": 10,
+    "with_vlm": 0,
+    "with_embeddings": 0,
+    "analysis_timestamp": "2025-07-03T19:15:37.867588"
+  },
+  "method_performance": {
+    "basic": {
+      "avg_confidence": 0.5,
+      "min_confidence": 0.5,
+      "max_confidence": 0.5,
+      "unique_tasks": 3,
+      "unique_categories": 2,
+      "high_confidence_count": 0,
+      "medium_confidence_count": 0,
+      "low_confidence_count": 10
+    },
+    "ocr": {
+      "avg_confidence": 0.0,
+      "min_confidence": 0.0,
+      "max_confidence": 0.0,
+      "unique_tasks": 3,
+      "unique_categories": 2,
+      "high_confidence_count": 0,
+      "medium_confidence_count": 0,
+      "low_confidence_count": 10
+    },
+    "vlm": {
+      "avg_confidence": 0.29999999999999993,
+      "min_confidence": 0.3,
+      "max_confidence": 0.3,
+      "unique_tasks": 3,
+      "unique_categories": 2,
+      "high_confidence_count": 0,
+      "medium_confidence_count": 0,
+      "low_confidence_count": 10
+    },
+    "ai_full": {
+      "avg_confidence": 0.5,
+      "min_confidence": 0.5,
+      "max_confidence": 0.5,
+      "unique_tasks": 3,
+      "unique_categories": 2,
+      "high_confidence_count": 0,
+      "medium_confidence_count": 0,
+      "low_confidence_count": 10
+    }
+  },
+  "confidence_analysis": {
+    "method_ranking": [
+      "basic",
+      "ai_full",
+      "vlm",
+      "ocr"
+    ],
+    "confidence_improvements": {
+      "avg_improvement": 0.0,
+      "positive_improvements": 0,
+      "negative_improvements": 0,
+      "no_change": 10,
+      "max_improvement": 0.0,
+      "min_improvement": 0.0
+    }
+  },
+  "task_diversity": {
+    "basic": {
+      "total_tasks": 10,
+      "unique_tasks": 3,
+      "diversity_ratio": 0.3,
+      "most_common_tasks": [
+        [
+          "AI Coding: AutoTaskTracker",
+          8
+        ],
+        [
+          "AutoTaskTracker \u2014 claude MallocNanoZone=1 \u2014 80\u00d724",
+          1
+        ],
+        [
+          "My AI Task Board",
+          1
+        ]
+      ]
+    },
+    "ocr": {
+      "total_tasks": 10,
+      "unique_tasks": 3,
+      "diversity_ratio": 0.3,
+      "most_common_tasks": [
+        [
+          "AI Coding: AutoTaskTracker",
+          8
+        ],
+        [
+          "AutoTaskTracker \u2014 claude MallocNanoZone=1 \u2014 80\u00d724",
+          1
+        ],
+        [
+          "My AI Task Board",
+          1
+        ]
+      ]
+    },
+    "vlm": {
+      "total_tasks": 10,
+      "unique_tasks": 3,
+      "diversity_ratio": 0.3,
+      "most_common_tasks": [
+        [
+          "AI Coding: AutoTaskTracker",
+          8
+        ],
+        [
+          "AutoTaskTracker \u2014 claude MallocNanoZone=1 \u2014 80\u00d724",
+          1
+        ],
+        [
+          "My AI Task Board",
+          1
+        ]
+      ]
+    },
+    "ai_full": {
+      "total_tasks": 10,
+      "unique_tasks": 3,
+      "diversity_ratio": 0.3,
+      "most_common_tasks": [
+        [
+          "AI Coding: AutoTaskTracker",
+          8
+        ],
+        [
+          "AutoTaskTracker \u2014 claude MallocNanoZone=1 \u2014 80\u00d724",
+          1
+        ],
+        [
+          "My AI Task Board",
+          1
+        ]
+      ]
+    }
+  },
+  "category_distribution": {
+    "basic": {
+      "total_categories": 2,
+      "distribution": [
+        [
+          "\ud83e\udd16 AI Tools",
+          7
+        ],
+        [
+          "\ud83e\uddd1\u200d\ud83d\udcbb Coding",
+          3
+        ]
+      ]
+    },
+    "ocr": {
+      "total_categories": 2,
+      "distribution": [
+        [
+          "\ud83e\udd16 AI Tools",
+          7
+        ],
+        [
+          "\ud83e\uddd1\u200d\ud83d\udcbb Coding",
+          3
+        ]
+      ]
+    },
+    "vlm": {
+      "total_categories": 2,
+      "distribution": [
+        [
+          "\ud83e\udd16 AI Tools",
+          7
+        ],
+        [
+          "\ud83e\uddd1\u200d\ud83d\udcbb Coding",
+          3
+        ]
+      ]
+    },
+    "ai_full": {
+      "total_categories": 2,
+      "distribution": [
+        [
+          "\ud83e\udd16 AI Tools",
+          7
+        ],
+        [
+          "\ud83e\uddd1\u200d\ud83d\udcbb Coding",
+          3
+        ]
+      ]
+    }
+  }
+}

@@ -53,7 +53,7 @@ Examples:
         # Start main dashboard
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/task_board.py',
+            'autotasktracker/dashboards/achievement_board.py',
             '--server.port', str(config.TASK_BOARD_PORT)
         ]
         if args.headless:
@@ -71,7 +71,7 @@ Examples:
     elif args.command == 'dashboard':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'autotasktracker/dashboards/task_board.py',
+            'autotasktracker/dashboards/achievement_board.py',
             '--server.port', str(config.TASK_BOARD_PORT)
         ]
         if args.headless:

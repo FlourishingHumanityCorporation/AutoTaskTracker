@@ -3,41 +3,31 @@
 Task notification system - Provides periodic insights about your work
 """
 
-import sqlite3
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
 import time
 
-from autotasktracker import ActivityCategorizer, extract_window_title
+from autotasktracker import ActivityCategorizer, extract_window_title, DatabaseManager, get_config
 
 try:
     from plyer import notification
     NOTIFICATIONS_AVAILABLE = True
 except ImportError:
     NOTIFICATIONS_AVAILABLE = False
-    print("Desktop notifications not available. Install with: pip install plyer")
+    import logging
+    logging.warning("Desktop notifications not available. Install with: pip install plyer")
 
 class TaskNotifier:
     def __init__(self):
-        self.home_dir = Path.home()
-        self.db_path = self.home_dir / ".memos" / "database.db"
+        self.config = get_config()
+        self.db = DatabaseManager(self.config.DB_PATH)
         self.last_notification = datetime.now()
         self.notification_interval = 3600  # 1 hour
-        
-    def get_db_connection(self):
-        """Connect to the database"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            return conn
-        except:
-            return None
             
     def get_recent_stats(self, hours=1):
         """Get statistics for recent activity"""
-        conn = self.get_db_connection()
-        if not conn:
+        if not self.db.test_connection():
             return None
             
         stats = {
@@ -48,20 +38,13 @@ class TaskNotifier:
         }
         
         try:
-            since = (datetime.now() - timedelta(hours=hours)).isoformat()
+            since = datetime.now() - timedelta(hours=hours)
             
-            # Get recent screenshots with window data
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT e.created_at, me.value as active_window
-                FROM entities e
-                LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'active_window'
-                WHERE e.file_type_group = 'image' AND e.created_at >= ?
-                ORDER BY e.created_at DESC
-            """, (since,))
+            # Get recent tasks using DatabaseManager
+            df = self.db.fetch_tasks(start_date=since, limit=1000)
             
             activities = []
-            for row in cursor.fetchall():
+            for _, row in df.iterrows():
                 if row['active_window']:
                     try:
                         title = extract_window_title(row['active_window'])
@@ -72,7 +55,7 @@ class TaskNotifier:
                                 'category': category,
                                 'title': title
                             })
-                    except:
+                    except (ValueError, TypeError, KeyError):
                         pass
                         
             stats['screenshots'] = len(activities)
@@ -106,7 +89,7 @@ class TaskNotifier:
             conn.close()
             
         except Exception as e:
-            print(f"Error getting stats: {e}")
+            logging.error(f"Error getting stats: {e}")
             
         return stats
         
@@ -148,7 +131,7 @@ class TaskNotifier:
                     timeout=10
                 )
                 return True
-            except:
+            except Exception:
                 pass
         return False
         

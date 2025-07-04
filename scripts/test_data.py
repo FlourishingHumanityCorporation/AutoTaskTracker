@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import sqlite3
 from datetime import datetime, timedelta
+import os
+from pathlib import Path
 
 # Connect to database
-conn = sqlite3.connect('/Users/paulrohde/.memos/database.db')
+db_path = Path.home() / '.memos' / 'database.db'
+conn = sqlite3.connect(str(db_path))
 cursor = conn.cursor()
 
 print("🔍 Checking AutoTaskTracker Data\n")

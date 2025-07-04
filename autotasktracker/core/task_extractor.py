@@ -16,7 +16,7 @@ class TaskExtractor:
         self.app_patterns = {
             # IDEs and Editors
             'vscode': {
-                'pattern': r'(.*?)\s*[—–-]\s*(.*?)\s*[—–-]\s*Visual Studio Code',
+                'pattern': r'(.*?)\s*[—–\-]\s*(.*?)\s*[—–\-]\s*Visual Studio Code',
                 'extract': lambda m: f"Edited {self._clean_project_name(m.group(1).strip())} in {m.group(2).strip()}" if m.group(1).strip() else "Coding in VS Code"
             },
             'sublime': {
@@ -113,7 +113,7 @@ class TaskExtractor:
             try:
                 data = json.loads(window_title)
                 window_title = data.get('title', window_title)
-            except:
+            except (json.JSONDecodeError, TypeError, KeyError):
                 pass
         
         # Check application-specific patterns
@@ -291,7 +291,7 @@ class TaskExtractor:
                         matches = re.findall(pattern, combined)
                         for match in matches[:2]:  # Limit subtasks
                             subtasks.append(match.title())
-        except:
+        except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
             pass
         
         return subtasks
