@@ -328,7 +328,7 @@ def render_pipeline_interface(pipeline, screenshots_df, tab_name):
                             st.write(f"{i+1}. {text} (confidence: {confidence:.2f})")
                 else:
                     st.text(str(selected_screenshot['ocr_text'])[:500])
-            except:
+            except (json.JSONDecodeError, TypeError, KeyError, IndexError):
                 st.text(str(selected_screenshot['ocr_text'])[:500] if selected_screenshot['ocr_text'] else "No OCR text")
         else:
             st.text("No OCR text available")
