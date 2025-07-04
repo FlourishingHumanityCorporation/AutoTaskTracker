@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 
 from autotasktracker import ActivityCategorizer, extract_window_title, DatabaseManager, get_config
+import logging
 
 try:
     from plyer import notification
@@ -85,8 +86,6 @@ class TaskNotifier:
                         current_session = {'category': activities[i]['category'], 'duration': 0}
                         
                 stats['focus_time'] = sum(focus_sessions)
-                
-            conn.close()
             
         except Exception as e:
             logging.error(f"Error getting stats: {e}")

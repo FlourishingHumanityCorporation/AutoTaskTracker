@@ -1,85 +1,53 @@
 # Enhanced Time Tracking Algorithm
 
-Enhanced time tracking with screenshot-aware estimation
-
 ## Overview
 
-AutoTaskTracker's enhanced time tracking system provides accurate work time estimation by understanding the nature of screenshot-based data collection. Unlike simple timestamp differences, this system accounts for capture intervals, work breaks, and provides confidence scoring for estimates.
+AutoTaskTracker's enhanced time tracking provides accurate work time estimation by understanding screenshot-based data collection patterns. Unlike simple timestamp differences, this system accounts for capture intervals, work breaks, and provides confidence scoring.
 
 ## The Challenge
 
-**Screenshot-based tracking presents unique challenges:**
+Screenshot-based tracking challenges:
 - Screenshots captured every 4 seconds (configurable)
-- Gaps between screenshots don't necessarily mean idle time
-- Traditional `end_time - start_time` calculation is inaccurate
-- Need to distinguish between work breaks vs. actual interruptions
+- Gaps don't necessarily mean idle time
+- Traditional `end_time - start_time` calculation inaccurate
+- Need to distinguish work breaks vs interruptions
 
 ## Algorithm Overview
 
-### 1. Session Detection
+### Session Detection
 
-**Input:** Stream of screenshots with timestamps and window titles  
-**Output:** Discrete work sessions with confidence scores
+**Input**: Screenshot stream with timestamps and window titles  
+**Output**: Discrete work sessions with confidence scores
 
-```python
-# Core session detection logic
-for each screenshot:
-    if same_task AND gap <= category_threshold:
-        continue_current_session()
-    else:
-        end_current_session()
-        start_new_session()
-```
+Core logic: Continue session if same task and gap ≤ category threshold, otherwise start new session.
 
-### 2. Category-Aware Gap Thresholds
-
-Different activities have different break patterns:
+### Category-Aware Gap Thresholds
 
 | Category | Gap Threshold | Reasoning |
 |----------|---------------|-----------|
-| 💻 Development | 10 minutes | Developers pause to think, debug |
-| 📖 Reading | 15 minutes | Reading involves natural breaks |
-| 🎬 Entertainment | 20 minutes | Videos have built-in breaks |
-| 💬 Communication | 5 minutes | Quick context switches |
-| 🔍 Research | 10 minutes | Research involves tab switching |
-| 📝 Writing | 10 minutes | Writing needs thinking time |
+| Development | 10 minutes | Thinking, debugging pauses |
+| Reading | 15 minutes | Natural breaks |
+| Entertainment | 20 minutes | Built-in breaks |
+| Communication | 5 minutes | Quick context switches |
+| Research | 10 minutes | Tab switching |
+| Writing | 10 minutes | Thinking time |
 
-### 3. Time Calculation
+### Time Calculation
 
 **Two metrics provided:**
-
-1. **Total Time**: Full session duration including reasonable gaps
-   ```python
-   total_time = session.end_time - session.start_time
-   ```
-
+1. **Total Time**: Full session duration including gaps
 2. **Active Time**: Work time excluding long idle periods
-   ```python
-   active_time = total_time - sum(gaps_over_threshold)
-   ```
 
-### 4. Confidence Scoring
+### Confidence Scoring
 
-Each session gets a confidence score (0.0 to 1.0):
-
-```python
-def calculate_confidence(session):
-    # Screenshot density score
-    expected_screenshots = session.duration / screenshot_interval
-    actual_screenshots = session.screenshot_count
-    density_score = min(1.0, actual_screenshots / expected_screenshots)
-    
-    # Gap penalty
-    gap_ratio = sum(session.gaps) / session.duration
-    gap_penalty = max(0, 1 - gap_ratio * 2)  # 50% gaps = 0 confidence
-    
-    return density_score * gap_penalty
-```
+Each session gets confidence score (0.0 to 1.0) based on:
+- **Screenshot density**: Actual vs expected captures
+- **Gap penalty**: Large gaps reduce confidence
 
 **Confidence Levels:**
-- 🟢 **High (0.8+)**: Dense screenshots, few gaps - very accurate
-- 🟡 **Medium (0.5-0.8)**: Some gaps detected - mostly accurate  
-- 🔴 **Low (<0.5)**: Many gaps or sparse data - estimate only
+- 🟢 **High (0.8+)**: Dense screenshots, few gaps
+- 🟡 **Medium (0.5-0.8)**: Some gaps detected  
+- 🔴 **Low (<0.5)**: Many gaps or sparse data
 
 ## Configuration
 

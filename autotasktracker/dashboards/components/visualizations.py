@@ -1,15 +1,29 @@
 """Visualization components for dashboards."""
 
 import streamlit as st
-import plotly.graph_objects as go
-import plotly.express as px
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
+# Optional plotly imports with graceful degradation
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    go = None
+    px = None
+
 logger = logging.getLogger(__name__)
+
+
+def _fallback_chart(title: str, message: str = "Interactive charts require plotly installation"):
+    """Show fallback message when plotly is not available."""
+    st.info(f"📊 **{title}**\n\n{message}\n\nTo enable interactive charts, install plotly: `pip install plotly`")
+    return None
 
 
 class CategoryPieChart:
@@ -32,6 +46,10 @@ class CategoryPieChart:
         """
         if not category_data:
             st.info("No category data to display")
+            return
+            
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
             return
             
         fig = go.Figure(data=[go.Pie(
@@ -70,6 +88,10 @@ class TimelineChart:
         """
         if not activities:
             st.info("No timeline data to display")
+            return
+            
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
             return
             
         # Convert to DataFrame
@@ -113,6 +135,10 @@ class HourlyActivityChart:
             height: Chart height
             chart_type: 'bar' or 'line'
         """
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
+            return
+            
         # Ensure all hours are represented
         hours = list(range(24))
         counts = [hourly_data.get(h, 0) for h in hours]
@@ -174,6 +200,10 @@ class ProductivityHeatmap:
             st.info("No productivity data to display")
             return
             
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
+            return
+            
         # Pivot data for heatmap
         pivot = data.pivot_table(
             index='hour',
@@ -220,6 +250,10 @@ class TaskDurationChart:
         """
         if not durations:
             st.info("No duration data to display")
+            return
+            
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
             return
             
         fig = go.Figure(data=[
@@ -277,6 +311,10 @@ class TrendChart:
             st.info("No trend data to display")
             return
             
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
+            return
+            
         fig = go.Figure()
         
         # Main line
@@ -331,6 +369,10 @@ class ComparisonChart:
         """
         if not metrics:
             st.info("No comparison data to display")
+            return
+            
+        if not PLOTLY_AVAILABLE:
+            _fallback_chart(title)
             return
             
         # Prepare data for plotly

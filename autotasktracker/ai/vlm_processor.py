@@ -620,37 +620,106 @@ class SmartVLMProcessor:
     
     def _structure_vlm_result(self, raw_result: str, app_type: str, window_title: str) -> Dict:
         """Structure VLM result into useful format."""
+        # Extract key information from the VLM description
+        task = self._extract_task_from_description(raw_result, app_type)
+        category = self._map_app_to_category(app_type)
+        
         structured = {
+            'task': task,
+            'category': category,
             'description': raw_result,
+            'visual_context': raw_result,  # For compatibility
             'app_type': app_type,
             'window_title': window_title,
             'processed_at': datetime.now().isoformat(),
-            'detected_elements': {},
-            'task_context': {},
             'confidence': 0.8,  # Default confidence
+            'ui_elements': self._extract_ui_elements(raw_result),
+            'subtasks': self._extract_subtasks(raw_result),
         }
         
-        # Extract structured information based on app type
-        if app_type == 'IDE':
-            structured['detected_elements'] = self._extract_ide_elements(raw_result)
-            structured['task_context'] = {
-                'activity': 'coding',
-                'specific_task': self._extract_coding_task(raw_result)
-            }
-        elif app_type == 'Terminal':
-            structured['detected_elements'] = self._extract_terminal_elements(raw_result)
-            structured['task_context'] = {
-                'activity': 'command_line',
-                'specific_task': self._extract_terminal_task(raw_result)
-            }
-        elif app_type == 'Browser':
-            structured['detected_elements'] = self._extract_browser_elements(raw_result)
-            structured['task_context'] = {
-                'activity': 'browsing',
-                'specific_task': self._extract_browsing_task(raw_result)
-            }
-        
         return structured
+    
+    def _extract_task_from_description(self, description: str, app_type: str) -> str:
+        """Extract a concise task description from VLM output."""
+        if not description:
+            return f"Using {app_type}"
+            
+        # Look for common task indicators
+        desc_lower = description.lower()
+        
+        if 'coding' in desc_lower or 'programming' in desc_lower:
+            return "Software Development"
+        elif 'terminal' in desc_lower or 'command' in desc_lower:
+            return "Command Line Operations"
+        elif 'browsing' in desc_lower or 'website' in desc_lower:
+            return "Web Browsing"
+        elif 'meeting' in desc_lower or 'video call' in desc_lower:
+            return "Video Conference"
+        elif 'document' in desc_lower or 'writing' in desc_lower:
+            return "Document Editing"
+        else:
+            # Extract first sentence as task
+            sentences = description.split('.')
+            if sentences:
+                first_sentence = sentences[0].strip()
+                if len(first_sentence) > 10:
+                    return first_sentence
+        
+        return f"Working with {app_type}"
+    
+    def _map_app_to_category(self, app_type: str) -> str:
+        """Map application type to category."""
+        mapping = {
+            'IDE': 'Development',
+            'Terminal': 'Development', 
+            'Browser': 'Research',
+            'Meeting': 'Communication',
+            'Document': 'Documentation',
+            'Chat': 'Communication',
+            'Default': 'General'
+        }
+        return mapping.get(app_type, 'General')
+    
+    def _extract_ui_elements(self, description: str) -> Dict:
+        """Extract UI elements mentioned in description."""
+        elements = {}
+        desc_lower = description.lower()
+        
+        if 'button' in desc_lower:
+            elements['buttons'] = True
+        if 'menu' in desc_lower:
+            elements['menus'] = True
+        if 'tab' in desc_lower:
+            elements['tabs'] = True
+        if 'window' in desc_lower:
+            elements['windows'] = True
+        if 'dialog' in desc_lower:
+            elements['dialogs'] = True
+            
+        return elements
+    
+    def _extract_subtasks(self, description: str) -> List[str]:
+        """Extract subtasks from description."""
+        subtasks = []
+        
+        # Look for numbered or bulleted lists
+        lines = description.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith(('1.', '2.', '3.', '-', '•')):
+                subtasks.append(line[2:].strip())
+        
+        # If no explicit lists, try to infer subtasks
+        if not subtasks:
+            desc_lower = description.lower()
+            if 'editing' in desc_lower:
+                subtasks.append('Code editing')
+            if 'debugging' in desc_lower:
+                subtasks.append('Debugging')
+            if 'testing' in desc_lower:
+                subtasks.append('Testing')
+        
+        return subtasks[:5]  # Limit to 5 subtasks
 
 
 class RateLimiter:

@@ -143,13 +143,19 @@ python scripts/vlm_manager.py benchmark     # Test VLM speed
 ### MANDATORY Before ANY Commit:
 ```bash
 # 1. Code quality check
-pytest tests/test_codebase_health.py -v
+pytest tests/health/test_codebase_health.py -v
 
-# 2. Documentation check
-pytest tests/test_documentation_health.py -v
+# 2. Testing system health check
+pytest tests/health/test_testing_system_health.py -v
 
-# 3. Critical functionality
-pytest tests/test_critical.py -v
+# 3. Documentation check
+pytest tests/health/test_documentation_health.py -v
+
+# 4. Critical functionality
+pytest tests/integration/test_pensieve_critical_path.py -v
+
+# 5. NEW: Real functional tests (validates actual functionality)
+python tests/run_functional_tests.py --verbose
 
 # Quick check for common issues
 python -c "
@@ -164,6 +170,30 @@ for f in glob.glob('autotasktracker/**/*.py', recursive=True):
 "
 ```
 
+### NEW: Real Functional Tests (2025-07-04)
+We now have **real functional tests** that validate actual functionality instead of mocking everything:
+
+```bash
+# Run all functional tests
+python tests/run_functional_tests.py
+
+# Run specific categories
+python tests/run_functional_tests.py --category ocr       # Real OCR on real images
+python tests/run_functional_tests.py --category database # Real SQLite operations
+python tests/run_functional_tests.py --category ai       # Real AI processing
+python tests/run_functional_tests.py --category pipeline # Full end-to-end workflows
+
+# Check system requirements
+python tests/run_functional_tests.py --check-only
+```
+
+**What the functional tests actually validate:**
+- ✅ **Real OCR**: Uses actual Tesseract on generated screenshots
+- ✅ **Real Database**: Tests actual SQLite operations with real data
+- ✅ **Real AI**: Tests actual AI models (embeddings, VLM, task extraction)
+- ✅ **Real Pipelines**: End-to-end workflows from screenshot to dashboard
+- ✅ **Performance**: Actual performance under realistic loads
+
 ### What Tests Check:
 - ✅ No bare except clauses
 - ✅ No sys.path hacks
@@ -171,6 +201,10 @@ for f in glob.glob('autotasktracker/**/*.py', recursive=True):
 - ✅ Proper database usage
 - ✅ Documentation quality
 - ✅ No duplicate/improved files
+- ✅ Testing system health and organization
+- ✅ Test categorization and discoverability
+- ✅ No infinite loops in tests
+- ✅ Proper fixture usage
 
 ---
 
@@ -182,9 +216,7 @@ docs/
 ├── architecture/     # Technical design (1-2 files max)
 ├── features/        # Feature docs
 ├── guides/          # How-to guides
-├── design/          # UI/UX specs
-├── planning/        # Future plans only
-└── archive/         # Old docs (minimize)
+└── archive/         # Legacy docs (minimize - prefer deletion)
 ```
 
 ### Writing Rules:
@@ -192,9 +224,18 @@ docs/
 - ❌ NO: "Successfully implemented!"
 - ❌ NO: "As of December 2024..."
 - ❌ NO: Code blocks > 20 lines
+- ❌ NO: Completion/status announcements ("FIXED", "COMPLETE")
+- ❌ NO: Process documentation (cleanup notes, migration guides)
 - ✅ YES: Professional, timeless language
 - ✅ YES: Link to source files
 - ✅ YES: Focus on "what" and "how"
+
+### Documentation Cleanup Rule:
+**DELETE, don't archive!** Remove irrelevant docs completely:
+- Status announcements ("Everything Fixed", "Complete")
+- Process documentation (migration guides, refactoring notes)
+- Outdated planning documents
+- Duplicate content
 
 ### Key Documents:
 - `architecture/CODEBASE_DOCUMENTATION.md` - Primary technical reference
@@ -217,6 +258,7 @@ docs/
 3. Forgetting to update imports after moving files
 4. Not testing commands in documentation
 5. Creating "improved" versions instead of editing
+6. **PENSIEVE ENVIRONMENT ISSUE**: Check Python environment! Pensieve is installed in `venv/` NOT `anaconda3/`
 
 ### Import Patterns
 ```python
@@ -247,6 +289,17 @@ from ..core.database import DatabaseManager
 - Path: `~/.memos/database.db` (NOT `memos.db`)
 - Always use DatabaseManager for connections
 - Check permissions if connection fails
+
+### Pensieve/Memos Screenshot Capture Issues
+**CRITICAL**: Pensieve is installed in `venv/` environment, NOT `anaconda3/`
+```bash
+# ✅ CORRECT commands (use venv Python):
+/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python -m memos.commands ps
+/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python -m memos.commands start
+/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python -m memos.commands stop
+
+# ❌ WRONG: Don't try to install pensieve in anaconda3 (dependency conflicts)
+```
 
 ### AI Features Not Working
 1. Run `python scripts/ai_cli.py status`
@@ -295,6 +348,44 @@ Document significant changes here with date and description.
 - New commands: `vlm_manager.py optimize` for high-performance processing
 - Fixed VLM bottlenecks: serial → concurrent, large images → resized
 - Created `vlm_batch_optimizer.py` with async/await architecture
+
+2025-07-04: Testing System Health and Organization
+- **🧪 Created comprehensive testing system health checker** (`tests/test_testing_system_health.py`)
+- **🔧 Fixed all testing system issues:**
+  - Removed duplicate test functions between dashboard files
+  - Fixed test categorization for e2e tests in subdirectories
+  - Improved fixture detection logic
+  - Renamed misplaced "test" files in scripts/ to avoid confusion
+- **📊 14 comprehensive health checks** covering test discoverability, organization, isolation, and quality
+- **✅ 100% testing system health** - all 14 checks now pass
+- **🏗️ Improved test organization** with proper categorization and file placement
+- Added testing system health check to mandatory pre-commit tests
+- **📝 Renamed all test files and functions for better clarity:**
+  - `test_smoke.py` → `test_basic_functionality.py`
+  - `test_critical.py` → `test_pensieve_critical_path.py`
+  - `test_e2e.py` → `test_pensieve_end_to_end.py`
+  - `test_ai_enhancements.py` → `test_ai_features_integration.py`
+  - Test functions renamed to be more descriptive (e.g., `test_task_repository_init` → `test_task_repository_initialization_with_database_connection`)
+
+2025-01-04: Test Health System Enhancement - Configurable Strict Mode
+- **🧪 Enhanced test quality validation with graduated strictness levels**
+- Created configurable test health system in `tests/health/test_testing_system_health.py`
+- **Three enforcement levels:**
+  - BASELINE: Standard checks (default)
+  - STRICT_MODE: Enhanced quality requirements (no trivial assertions, error testing mandatory)
+  - ULTRA_STRICT_MODE: Maximum enforcement (includes all STRICT checks + additional requirements)
+- **🎯 Real Functionality Validation:** 7-point scoring system to detect if tests catch real bugs:
+  1. State change validation
+  2. Side effects validation
+  3. Realistic data usage
+  4. Business rules validation
+  5. Integration testing depth
+  6. Error propagation testing
+  7. Mutation resistance
+- **✅ Fixed all tests with 0 assertions** across the codebase
+- **📊 Key findings:** Many existing tests score 0-2/7 on real functionality validation
+- **Configuration:** Set `STRICT_MODE=True` or `ULTRA_STRICT_MODE=True` in test file
+- **Usage:** `pytest tests/health/test_testing_system_health.py -v`
 
 ---
 

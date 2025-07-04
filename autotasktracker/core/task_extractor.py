@@ -5,7 +5,10 @@ Provides intelligent extraction of task descriptions from window titles and OCR 
 
 import re
 import json
+import logging
 from typing import Optional, Dict, List, Tuple, Callable
+
+logger = logging.getLogger(__name__)
 
 
 class TaskExtractor:

@@ -35,9 +35,10 @@ class DatabaseManager:
         else:
             self.db_path = db_path
         
-        # Connection pooling
-        self._connection_pool = Queue(maxsize=10)
-        self._max_connections = 10
+        # Connection pooling - separate pools for read-only and read-write
+        self._readonly_pool = Queue(maxsize=16)
+        self._readwrite_pool = Queue(maxsize=4)
+        self._max_connections = 20
         self._active_connections = 0
         self._pool_lock = threading.Lock()
         self._wal_mode_enabled = False
@@ -95,13 +96,20 @@ class DatabaseManager:
                 logger.warning(f"Failed to create index: {e}")
     
     def _warm_up_pool(self):
-        """Create initial connections to warm up the pool."""
+        """Create initial connections to warm up the pools."""
         try:
-            for _ in range(min(3, self._max_connections // 2)):
-                conn = self._create_connection()
-                self._connection_pool.put(conn)
+            # Create read-only connections (most common)
+            for _ in range(2):
+                conn = self._create_connection(readonly=True)
+                self._readonly_pool.put(conn)
                 with self._pool_lock:
                     self._active_connections += 1
+                    
+            # Create one read-write connection
+            conn = self._create_connection(readonly=False)
+            self._readwrite_pool.put(conn)
+            with self._pool_lock:
+                self._active_connections += 1
         except Exception as e:
             logger.warning(f"Failed to warm up connection pool: {e}")
     
@@ -121,6 +129,8 @@ class DatabaseManager:
                 conn.execute("PRAGMA synchronous=NORMAL")
                 conn.execute("PRAGMA cache_size=10000")
                 conn.execute("PRAGMA temp_store=MEMORY")
+                # Ensure autocommit is enabled for bulk operations
+                conn.isolation_level = None
             
             return conn
             
@@ -130,9 +140,11 @@ class DatabaseManager:
     
     def _get_pooled_connection(self, readonly: bool = True) -> sqlite3.Connection:
         """Get a connection from the pool or create a new one."""
+        pool = self._readonly_pool if readonly else self._readwrite_pool
+        
         try:
-            # Try to get from pool first
-            conn = self._connection_pool.get_nowait()
+            # Try to get from appropriate pool first
+            conn = pool.get_nowait()
             # Test if connection is still valid
             conn.execute("SELECT 1")
             return conn
@@ -145,7 +157,7 @@ class DatabaseManager:
                 else:
                     # Wait for a connection to become available
                     try:
-                        conn = self._connection_pool.get(timeout=5)
+                        conn = pool.get(timeout=10)
                         conn.execute("SELECT 1")  # Test connection
                         return conn
                     except (Empty, sqlite3.Error):
@@ -153,13 +165,15 @@ class DatabaseManager:
                         logger.warning("Connection pool exhausted, creating additional connection")
                         return self._create_connection(readonly)
     
-    def _return_connection(self, conn: sqlite3.Connection):
-        """Return a connection to the pool."""
+    def _return_connection(self, conn: sqlite3.Connection, readonly: bool = True):
+        """Return a connection to the appropriate pool."""
+        pool = self._readonly_pool if readonly else self._readwrite_pool
+        
         try:
             # Test if connection is still valid
             conn.execute("SELECT 1")
-            # Put back in pool if there's space
-            self._connection_pool.put_nowait(conn)
+            # Put back in appropriate pool if there's space
+            pool.put_nowait(conn)
         except (sqlite3.Error, Exception):
             # Connection invalid or pool full, close it
             try:
@@ -186,21 +200,14 @@ class DatabaseManager:
             yield conn
         except sqlite3.OperationalError as e:
             logger.error(f"Database connection error: {e}")
-            # Try to recover by creating a fresh connection
-            if conn:
-                try:
-                    conn.close()
-                except sqlite3.Error:
-                    pass
-            conn = self._create_connection(readonly)
-            yield conn
+            raise  # Re-raise the exception instead of double yield
         except Exception as e:
             logger.error(f"Unexpected database error: {e}")
             raise
         finally:
             if conn:
                 if readonly:
-                    self._return_connection(conn)
+                    self._return_connection(conn, readonly=True)
                 else:
                     # For write connections, close immediately to avoid transaction issues
                     try:
@@ -225,17 +232,27 @@ class DatabaseManager:
             return {
                 'active_connections': self._active_connections,
                 'max_connections': self._max_connections,
-                'pooled_connections': self._connection_pool.qsize(),
+                'readonly_pooled': self._readonly_pool.qsize(),
+                'readwrite_pooled': self._readwrite_pool.qsize(),
                 'wal_mode_enabled': self._wal_mode_enabled
             }
     
     def close_all_connections(self):
         """Close all pooled connections."""
-        while not self._connection_pool.empty():
+        # Close read-only pool
+        while not self._readonly_pool.empty():
             try:
-                conn = self._connection_pool.get_nowait()
+                conn = self._readonly_pool.get_nowait()
                 conn.close()
-            except sqlite3.Error:
+            except (sqlite3.Error, Exception):
+                pass
+        
+        # Close read-write pool
+        while not self._readwrite_pool.empty():
+            try:
+                conn = self._readwrite_pool.get_nowait()
+                conn.close()
+            except (sqlite3.Error, Exception):
                 pass
         
         with self._pool_lock:

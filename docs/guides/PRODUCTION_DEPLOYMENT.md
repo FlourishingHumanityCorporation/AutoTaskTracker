@@ -1,83 +1,51 @@
 # Production Deployment Guide
 
-## 🚀 Deploying Refactored Dashboards to Production
+## Overview
 
-This guide walks you through deploying the refactored dashboard architecture to production safely and efficiently.
+Guide for deploying the refactored dashboard architecture to production.
 
-## 📋 Pre-Deployment Checklist
+## Requirements
 
-### System Requirements
-- [ ] Python 3.8+ with virtual environment
-- [ ] All dependencies installed: `pip install -r requirements.txt`
-- [ ] Memos service running: `memos ps` shows active
-- [ ] Database accessible: Test with `python -c "from autotasktracker.core.database import DatabaseManager; print('OK' if DatabaseManager().test_connection() else 'FAIL')"`
-- [ ] Ports available: 8502-8506 not in use by other services
+- Python 3.8+ with virtual environment
+- Dependencies installed: `pip install -r requirements.txt`
+- Memos service running: `memos ps` shows active
+- Ports available: 8502-8506
 
-### Code Validation
-- [ ] All tests passing: `python -m pytest tests/test_dashboard_core.py -v`
-- [ ] Core demo working: `python scripts/demo_core_refactoring.py`
-- [ ] No import errors in refactored modules
-- [ ] Documentation up to date
+## Validation
 
-### Backup Preparation
 ```bash
-# Create deployment backup
-mkdir -p deployments/$(date +%Y%m%d_%H%M%S)_refactored_deployment
-cp -r autotasktracker/dashboards deployments/$(date +%Y%m%d_%H%M%S)_refactored_deployment/dashboards_backup
-cp autotasktracker.py deployments/$(date +%Y%m%d_%H%M%S)_refactored_deployment/autotasktracker_backup.py
+# Test database connection
+python -c "from autotasktracker.core.database import DatabaseManager; print('OK' if DatabaseManager().test_connection() else 'FAIL')"
+
+# Run tests
+python -m pytest tests/test_dashboard_core.py -v
+
+# Test refactored dashboards
+python scripts/demo_core_refactoring.py
 ```
 
-## 🎯 Deployment Strategy: Blue-Green Deployment
+## Deployment
 
-We'll use a blue-green deployment approach to minimize downtime and enable quick rollback.
+### Backup Current System
+```bash
+cp autotasktracker.py autotasktracker_backup.py
+cp -r autotasktracker/dashboards dashboards_backup
+```
 
-### Phase 1: Green Environment Setup (New System)
+### Deploy Refactored System
+```bash
+# Stop current system
+python autotasktracker.py stop
 
-1. **Launch Refactored Dashboards on Alternate Ports**
-   ```bash
-   # Create temporary port configuration
-   export ATT_TASK_BOARD_PORT=8512
-   export ATT_ANALYTICS_PORT=8513
-   export ATT_ACHIEVEMENT_PORT=8514
-   
-   # Start refactored system
-   python -m autotasktracker.dashboards.launcher_refactored start
-   ```
+# Start refactored system
+python -m autotasktracker.dashboards.launcher_refactored start
+```
 
-2. **Validate Green Environment**
-   ```bash
-   # Check all services started
-   curl -s http://localhost:8512 | grep -q "Task Board" && echo "✅ Task Board OK"
-   curl -s http://localhost:8513 | grep -q "Analytics" && echo "✅ Analytics OK"
-   curl -s http://localhost:8514 | grep -q "Achievement" && echo "✅ Achievement OK"
-   ```
-
-3. **Load Test Green Environment**
-   ```bash
-   # Run load tests with real data
-   python scripts/load_test_dashboards.py --target green
-   ```
-
-### Phase 2: Traffic Switching
-
-1. **Update Main Launcher**
-   ```bash
-   # Backup original launcher
-   cp autotasktracker.py autotasktracker_original.py
-   
-   # See autotasktracker/dashboards/launcher_refactored.py for implementation
-   # Create launcher that uses refactored dashboards
-   ```
-
-2. **Switch to Production Ports**
-   ```bash
-   # Stop old system
-   python autotasktracker.py stop
-   
-   # Start new system on production ports
-   unset ATT_TASK_BOARD_PORT ATT_ANALYTICS_PORT ATT_ACHIEVEMENT_PORT
-   python -m autotasktracker.dashboards.launcher_refactored start
-   ```
+### Verify Deployment
+```bash
+curl -s http://localhost:8502 | grep -q "Task Board" && echo "✅ Task Board OK"
+curl -s http://localhost:8503 | grep -q "Analytics" && echo "✅ Analytics OK"
+```
 
 3. **Validate Production Traffic**
    ```bash

@@ -11,9 +11,7 @@ import streamlit as st
 from datetime import datetime
 import logging
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Removed sys.path hack - using proper package imports
 
 from autotasktracker.dashboards.base import BaseDashboard
 from autotasktracker.dashboards.components import (

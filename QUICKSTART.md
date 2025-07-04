@@ -1,16 +1,16 @@
-# 🚀 AutoTaskTracker Quick Start Guide
+# AutoTaskTracker Quick Start Guide
 
 ## One-Command Start
 
 ```bash
-./autotask.py
+python autotasktracker.py start
 ```
 
-That's it! AutoTaskTracker will:
-- ✅ Start capturing screenshots automatically
-- ✅ Process them with OCR
-- ✅ Open dashboards in your browser
-- ✅ Run in system tray (or console if not available)
+AutoTaskTracker will:
+- Start capturing screenshots automatically
+- Process them with OCR
+- Open dashboards in your browser
+- Run in background
 
 ## What You'll See
 
@@ -26,20 +26,10 @@ That's it! AutoTaskTracker will:
 - Focus session analysis
 - Export your data anytime
 
-### 3. Time Tracker (http://localhost:8504)
+### 3. Time Tracker (http://localhost:8505)
 - Detailed time tracking for every task
-- See exactly how long you spent on each activity
 - Timeline view of your day
 - Export time sheets for billing/reporting
-
-## Keyboard Shortcuts (Console Mode)
-
-When running in console mode:
-- `status` - Check system status
-- `open task` - Open task board
-- `open analytics` - Open analytics  
-- `cleanup` - Remove old data
-- `quit` - Stop everything
 
 ## Make It Start Automatically
 

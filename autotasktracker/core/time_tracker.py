@@ -74,14 +74,18 @@ class TimeTracker:
     
     # Task-specific gap thresholds (in seconds)
     CATEGORY_GAP_THRESHOLDS = {
-        '💻 Development': 600,  # 10 min - developers often pause to think
-        '📖 Reading': 900,      # 15 min - reading can have longer gaps
-        '🎬 Entertainment': 1200,  # 20 min - videos can have breaks
-        '💬 Communication': 300,    # 5 min - quick context switches
-        '🔍 Research': 600,        # 10 min - research involves switching
-        '📝 Writing': 600,         # 10 min - writing needs thinking time
-        '🎮 Gaming': 300,          # 5 min - games are more continuous
-        '📋 Other': 600            # 10 min - default
+        '🧑‍💻 Coding': 600,           # 10 min - developers often pause to think
+        '💬 Communication': 300,      # 5 min - quick context switches
+        '🔍 Research/Browsing': 900, # 15 min - research can have longer gaps
+        '📝 Documentation': 600,      # 10 min - writing needs thinking time
+        '🎥 Meetings': 300,          # 5 min - meetings are continuous
+        '🎨 Design': 600,            # 10 min - design work has thinking time
+        '📊 Data Analysis': 600,     # 10 min - analysis involves switching
+        '🎬 Media/Video': 1200,      # 20 min - videos can have breaks
+        '🎮 Gaming': 300,            # 5 min - games are more continuous
+        '🏠 System/Settings': 300,   # 5 min - quick tasks
+        '🤖 AI Tools': 600,          # 10 min - AI interactions
+        '📋 Other': 600              # 10 min - default
     }
     
     def __init__(self, screenshot_interval: int = None):

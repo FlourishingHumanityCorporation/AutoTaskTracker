@@ -315,7 +315,7 @@ class EmbeddingStats:
             MAX(datetime(e.created_at, 'localtime')) as latest_entity
         FROM entities e
         LEFT JOIN metadata_entries me ON e.id = me.entity_id 
-            AND me.metadata_key = 'embedding'
+            AND me."key" = 'embedding'
         WHERE e.file_type_group = 'image'
         """
         

@@ -1,132 +1,92 @@
-# 🤖 AutoTaskTracker
+# AutoTaskTracker
 
-**Automatically discover what you're working on using AI** - No manual logging required!
+AI-powered passive task discovery from screenshots. No manual logging required.
 
-AutoTaskTracker runs quietly in the background, capturing screenshots and using OCR/AI to understand your activities. Get beautiful dashboards showing your productivity patterns and task history.
+AutoTaskTracker captures screenshots every few seconds and uses OCR/AI to automatically understand your activities, providing beautiful dashboards showing productivity patterns and task history.
 
-## ✨ Features
+## Features
 
-- 📸 **Automatic Screenshot Capture** - Every few seconds, completely passive
-- 🔍 **AI-Powered Text Extraction** - OCR processes all captured screens  
-- 📊 **Live Analytics Dashboard** - Real-time productivity insights
-- 📈 **Task Categorization** - Automatically groups activities (Coding, Communication, etc.)
-- 💾 **Data Export** - Download your data as CSV, JSON, or reports
-- 🖥️ **System Tray Integration** - Runs quietly in the background
+- **Automatic Screenshot Capture** - Passive background operation
+- **AI-Powered Analysis** - OCR, embeddings, and optional VLM processing
+- **Live Dashboards** - Task board, analytics, and time tracking
+- **Smart Categorization** - Automatic activity classification
+- **Data Export** - CSV, JSON, and report generation
+- **Privacy First** - All data stays local
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/FlourishingHumanityCorporation/AutoTaskTracker.git
 cd AutoTaskTracker
-
-# Install (one-time setup)
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install memos  # Install separately if needed
 
-# Initialize memos
+# Initialize and start
 memos init
-
-# Start everything!
 python autotasktracker.py start
 ```
 
-**That's it!** Your browser will open with:
+Dashboards automatically open at:
 - Task Board: http://localhost:8502
 - Analytics: http://localhost:8503
 
-## 📸 Screenshots
+## Usage
 
-### Task Board - See What You're Working On
-- Live view of captured activities
-- Auto-refreshes every 30 seconds
-- Groups similar tasks together
-- Shows OCR-extracted text
+### Task Board Dashboard
+Real-time view of activities with automatic task grouping and OCR text extraction.
 
-### Analytics Dashboard - Understand Your Patterns  
-- Daily/weekly productivity metrics
-- Activity distribution charts
-- Focus session tracking
-- Export data anytime
+### Analytics Dashboard  
+Productivity metrics, activity distribution charts, and focus session tracking.
 
-## 🎯 Live Use Tips
+### Daily Workflow
+1. AutoTaskTracker runs automatically in background
+2. Check dashboards anytime for progress insights
+3. Review analytics for productivity patterns
+4. Export data for reports as needed
 
-### Make it Start Automatically
+## Resource Usage
 
-**macOS**: Add to Login Items
-1. Open System Preferences → Users & Groups
-2. Click Login Items
-3. Add `/path/to/AutoTaskTracker/start.sh`
+- **CPU**: <5% average
+- **RAM**: ~200MB
+- **Storage**: ~400MB/day screenshots
+- **Network**: None (local only)
 
-**Linux**: Use the systemd service (see QUICKSTART.md)
-
-### Optimize Performance
-
-- **Disable screenshots**: Use the toggle in Task Board sidebar
-- **Adjust grouping**: Change time intervals for task grouping
-- **Clean old data**: Configure retention in `~/.memos/config.yaml`
-
-### Typical Daily Workflow
-
-1. **Morning**: AutoTaskTracker starts with your computer
-2. **Throughout the day**: Works silently in background
-3. **Anytime**: Check dashboards to see your progress
-4. **End of day**: Review analytics for insights
-5. **Weekly**: Export data for time tracking/reports
-
-## 📊 Resource Usage
-
-- **CPU**: Minimal (< 5% average)
-- **RAM**: ~200MB for all services
-- **Storage**: ~400MB/day of screenshots
-- **Network**: None - everything is local!
-
-## 🛠️ Commands
+## Commands
 
 ```bash
-# Start everything
-python autotasktracker.py start
-
-# Or use individual commands
-python autotasktracker.py dashboard     # Launch task board
-python autotasktracker.py analytics     # Launch analytics dashboard  
-python autotasktracker.py timetracker   # Launch time tracker
-python autotasktracker.py status        # Check status
-python autotasktracker.py stop          # Stop everything
+python autotasktracker.py start      # Start all services
+python autotasktracker.py dashboard  # Task board only  
+python autotasktracker.py analytics  # Analytics only
+python autotasktracker.py status     # Check status
+python autotasktracker.py stop       # Stop everything
 ```
 
-## 🔧 Configuration
+## Configuration
 
 Edit `~/.memos/config.yaml`:
 - `record_interval`: Screenshot frequency (default: 4 seconds)
 - `ocr.enabled`: Toggle OCR processing
-- `vlm`: Enable advanced AI features (requires Ollama)
+- `vlm`: Enable VLM features (requires Ollama)
 
-## 📈 What Gets Tracked
+## Data Captured
 
 - Window titles and application names
-- Text visible on screen (via OCR)
-- Screenshots with timestamps
-- Time spent in different applications
+- OCR text from screenshots
+- Timestamps and activity duration
 - Focus sessions and productivity patterns
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file.
 
-## 🙏 Acknowledgments
+## Built With
 
-Built with:
-- [Memos/Pensieve](https://github.com/arkohut/memos) - Screenshot capture engine
-- [Streamlit](https://streamlit.io) - Dashboard framework
+- [Memos/Pensieve](https://github.com/arkohut/memos) - Screenshot capture
+- [Streamlit](https://streamlit.io) - Dashboard framework  
 - [Tesseract](https://github.com/tesseract-ocr/tesseract) - OCR engine
-
----
-
-**Remember**: The best task tracker is the one you don't have to think about! 🚀

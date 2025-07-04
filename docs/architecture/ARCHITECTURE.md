@@ -1,162 +1,242 @@
-# 🏗️ AutoTaskTracker Architecture Overview
+# AutoTaskTracker Architecture Overview
 
-## 📋 System Overview
+## System Overview
 
-AutoTaskTracker is an AI-powered application that passively discovers and organizes daily tasks from screenshots. It consists of multiple interconnected components working together.
+AutoTaskTracker passively discovers and organizes tasks from screenshots using AI processing pipelines and multiple dashboard interfaces.
 
-```mermaid
-graph TB
-    subgraph "Data Layer"
-        A[Memos/Pensieve Backend] --> B[SQLite Database]
-    # ... (truncated - see source files)
-```
+**Core Design Decision**: Built on Pensieve/memos for screenshot capture because:
+- Handles privacy-first local processing (no cloud dependencies)
+- Provides robust SQLite integration with proven OCR pipeline
+- Enables continuous background operation without user intervention
+- Offers extensible metadata architecture for AI enhancement
 
-## 🎯 Main Application Flow
+## Application Flow
 
-1. **Capture**: Memos captures screenshots automatically
-2. **Process**: AI pipelines extract tasks and metadata  
-3. **Store**: Results saved to SQLite database
-4. **Display**: Multiple dashboards show different views
-5. **Analyze**: Comparison tools evaluate AI performance
+1. **Capture**: Memos captures screenshots automatically (4-second intervals)
+2. **Process**: Layered AI pipelines extract tasks and metadata  
+3. **Store**: Results saved to SQLite database with metadata_entries pattern
+4. **Display**: Multiple specialized dashboards show different analytical views
+5. **Analyze**: Comparison tools evaluate AI pipeline performance
 
-## 📁 File Structure Relationships
+**Key Architectural Decision**: Multi-layered AI processing allows graceful degradation:
+- Base layer: Pattern matching (always works)
+- Enhanced layer: OCR + VLM analysis (when available)
+- Advanced layer: Semantic search with embeddings (when trained)
+
+## File Structure
 
 ```
 AutoTaskTracker/
-├── 🎯 MAIN APPLICATION
-│   ├── autotasktracker/           # Core application package
-    # ... (truncated - see source files)
+├── autotasktracker/           # Core application package
+│   ├── core/                  # Foundation components
+│   ├── ai/                    # AI enhancement features
+│   ├── dashboards/            # User interfaces
+│   ├── comparison/            # AI evaluation tools
+│   └── utils/                 # Shared utilities
+├── scripts/                   # Standalone scripts
+├── tests/                     # Test suite
+└── docs/                      # Documentation
 ```
 
-## 🔗 Component Relationships
+## Component Relationships
 
-### **Data Flow Architecture**
+### Data Flow Architecture
 ```
 Screenshots → OCR/VLM → Task Extraction → Categorization → Database → Dashboards
-     ↓            ↓           ↓              ↓            ↓          ↓
-  Memos/       AI Enhancement  Core         Activity    SQLite    Multiple
-  Pensieve     Layer          Processing   Categorizer  Storage   Interfaces
+     ↓           ↓           ↓              ↓            ↓         ↓
+  Pensieve    AI Analysis  Pattern Match  Smart Rules  SQLite   Streamlit
 ```
 
-### **Dependency Graph**
+**Critical Decision**: Database-centric architecture ensures:
+- All processing results are persisted and auditable
+- Multiple dashboards can share the same processed data
+- AI enhancements can be developed/tested without affecting core functionality
+- Historical analysis becomes possible as data accumulates
+
+### Dependencies
 ```
-Core Components (foundation)
+Core Components (foundation) ← Database schema drives everything
     ↓
-AI Enhancement Layer (builds on core)
+AI Enhancement Layer (builds on core) ← Optional, degrades gracefully
     ↓  
-Comparison Tools (evaluates AI)
+Comparison Tools (evaluates AI) ← Development-time validation
     ↓
-Dashboards (presents everything)
+Dashboards (presents everything) ← User-facing, performance critical
 ```
 
-## 📱 Dashboard Ecosystem
+**Design Rationale**: Layered dependency structure allows:
+- Core functionality works without AI dependencies
+- AI features can be incrementally enabled
+- Development tools don't impact production performance
+- Clear separation enables independent testing and deployment
 
-### **Production Dashboards** (Daily Use)
-- **Main Task Board** (`task_board.py`) → Primary interface for task viewing
-- **Analytics** (`analytics.py`) → Productivity insights and trends  
-- **Achievement Board** (`achievement_board.py`) → Gamification and goals
+## Dashboard Ecosystem
 
-### **Development Dashboards** (Analysis)
-- **Pipeline Comparison** (`comparison/dashboards/`) → AI method evaluation
+**Architectural Decision**: Separate production and development dashboards because:
+- Production dashboards prioritize performance and reliability
+- Development dashboards need experimental features and detailed diagnostics
+- Different user personas (end users vs AI researchers)
+- Independent deployment and scaling requirements
 
-### **Dashboard Relationships**
+### Production Dashboards
+- **Task Board** (`task_board.py`) - Primary interface for task viewing
+- **Analytics** (`analytics.py`) - Productivity insights and trends  
+- **Achievement Board** (`achievement_board.py`) - Gamification and goals
+
+**Design Choice**: Streamlit for production dashboards because:
+- Rapid development with Python-native components
+- Built-in caching and state management
+- Easy integration with pandas/numpy data processing
+- No need for separate frontend/backend complexity
+
+### Development Dashboards
+- **Pipeline Comparison** (`comparison/dashboards/`) - AI method evaluation
+
+**Rationale**: Separate comparison tools enable:
+- A/B testing of different AI approaches
+- Performance benchmarking without affecting production
+- Data-driven decision making for AI improvements
+- Academic research and method validation
+
+## AI Processing Pipeline
+
+**Critical Design Decision**: Graduated AI enhancement pipeline ensures system reliability:
+- Each stage builds on previous stages but can work independently
+- Failures in advanced stages don't break basic functionality
+- Users get value immediately, enhanced value as AI capabilities improve
+- Clear performance/accuracy tradeoffs at each stage
+
+### Processing Stages
+1. **Basic** - Pattern matching on window titles (50+ app patterns)
+2. **OCR Enhanced** - Text extraction and analysis (requires Tesseract)
+3. **VLM Enhanced** - Visual understanding (requires Ollama + 8GB VRAM)
+4. **Full AI** - Semantic similarity search (requires embeddings database)
+
+**Why This Architecture**:
+- **Reliability**: Basic patterns work even when AI services are down
+- **Performance**: Each stage adds computational cost, users can choose tradeoff
+- **Development**: New AI methods can be tested without breaking existing functionality
+- **Privacy**: More advanced stages can be disabled for privacy-sensitive environments
+
+### AI Components
+- `enhanced_task_extractor.py` - Orchestrates all AI features
+- `ocr_enhancement.py` - Text analysis and confidence scoring
+- `vlm_integration.py` - Visual language model integration
+- `embeddings_search.py` - Semantic similarity search
+
+**Component Design Rationale**:
+- **Single Orchestrator**: `enhanced_task_extractor.py` provides unified interface
+- **Specialized Modules**: Each AI capability in separate file for maintainability
+- **Confidence Scoring**: All AI outputs include confidence for user decision-making
+- **Fallback Strategy**: Each component has graceful degradation behavior
+
+### Data Dependencies
 ```
-Main Task Board ←── Core Data ──→ Analytics Dashboard
-      ↓                               ↓
-Achievement Board              Comparison Tools
-      ↓                               ↓
-  (Daily Use)                  (AI Evaluation)
-```
-
-## 🤖 AI Processing Pipeline
-
-### **Processing Stages**
-1. **Basic** → Pattern matching on window titles
-2. **OCR Enhanced** → + Text extraction and analysis
-3. **VLM Enhanced** → + Visual understanding 
-4. **Full AI** → + Semantic similarity search
-
-### **AI Component Relationships**
-```
-autotasktracker/ai/
-├── enhanced_task_extractor.py    # → Orchestrates all AI features
-├── ocr_enhancement.py           # → Text analysis and confidence
-├── vlm_integration.py           # → Visual language model
-└── embeddings_search.py         # → Semantic similarity search
-```
-
-### **Data Dependencies**
-```
-Window Title (always available)
+Window Title (always available) ← Core requirement, minimal processing
     ↓
-OCR Text (when available) → OCR Enhancement
+OCR Text (when available) → OCR Enhancement ← Pensieve integration
     ↓
-VLM Description (when available) → VLM Enhancement  
+VLM Description (when available) → VLM Enhancement ← External Ollama service
     ↓
-Historical Data (when available) → Semantic Search
+Historical Data (when available) → Semantic Search ← Requires training time
 ```
 
-## 📊 Database Schema Relationships
+**Data Flow Decision**: Each stage adds value independently because:
+- Window titles provide immediate basic functionality
+- OCR text enables content-aware task extraction
+- VLM descriptions add visual context understanding
+- Historical embeddings enable pattern recognition and workflow optimization
 
-### **Core Tables**
-- **entities** → Screenshot files and metadata
-- **metadata_entries** → AI processing results linked to entities
-- **Key relationships**: `entities.id` ↔ `metadata_entries.entity_id`
+## Database Schema
 
-### **Metadata Types**
-- `ocr_result` → Text extraction results
-- `vlm_result` → Visual analysis results  
-- `active_window` → Window title information
-- `embedding` → Vector embeddings for similarity search
+**Schema Design Decision**: Inherited Pensieve schema with metadata_entries pattern because:
+- **Extensibility**: New AI features can add metadata without schema changes
+- **Flexibility**: Different AI outputs (text, JSON, binary) stored uniformly
+- **Performance**: Single join operation retrieves all AI results for an entity
+- **Compatibility**: Works with existing Pensieve ecosystem and tools
 
-## 🛠️ Development vs Production
+### Core Tables
+- **entities** - Screenshot files and metadata (Pensieve core)
+- **metadata_entries** - AI processing results linked to entities (Pensieve extensible)
+- **Key relationship**: `entities.id` ↔ `metadata_entries.entity_id`
 
-### **Production Components** (Always Running)
+**Why This Pattern Works**:
+- Pensieve handles screenshot capture, storage, and basic OCR
+- AutoTaskTracker adds AI enhancement as metadata without breaking Pensieve
+- Multiple AI processing results can coexist for same screenshot
+- Historical analysis works across different AI model versions
+
+### Metadata Types
+- `ocr_result` - Text extraction results (Pensieve native)
+- `vlm_result` - Visual analysis results (AutoTaskTracker extension)
+- `active_window` - Window title information (Pensieve native)
+- `embedding` - Vector embeddings for similarity search (AutoTaskTracker extension)
+- `tasks` - Extracted task descriptions (AutoTaskTracker core)
+- `category` - Activity categorization (AutoTaskTracker core)
+
+**Metadata Strategy**: Key-value storage enables:
+- Different AI models can store different result formats
+- Experimentation with new AI approaches without database migrations
+- Version compatibility as AI models improve
+- Audit trail of different processing attempts
+
+## Service Architecture
+
+**Port Strategy Decision**: Fixed port allocation prevents conflicts and enables:
+- Consistent bookmarks and documentation
+- Process management and monitoring scripts
+- Development/production environment isolation
+- Load balancer configuration for multi-instance deployments
+
+### Production Services
 ```
-memos serve    (port 8839) → Backend API
-task_board.py  (port 8502) → Main dashboard
-analytics.py   (port 8503) → Analytics
+memos serve    (port 8839) - Backend API (Pensieve)
+task_board.py  (port 8502) - Main dashboard (primary UI)
+analytics.py   (port 8503) - Analytics dashboard (insights)
 ```
 
-### **Development Components** (As Needed)
+**Production Design Rationale**:
+- **Pensieve Backend**: Handles all data capture and storage concerns
+- **Specialized Dashboards**: Each dashboard optimized for specific use cases
+- **Stateless Frontend**: Streamlit dashboards can be restarted without data loss
+- **Independent Scaling**: Different dashboards can be scaled based on usage patterns
+
+### Development Tools
 ```
-comparison_cli.py              → CLI analysis tool
-pipeline_comparison.py (8512)  → Interactive comparison
-achievement_board.py (8507)    → Goals tracking
+comparison_cli.py              - CLI analysis tool (scripting)
+pipeline_comparison.py (8512)  - Interactive comparison (research)
+achievement_board.py (8507)    - Goals tracking (experimental)
 ```
 
-## 🔄 Component Interaction Patterns
+**Development Tools Philosophy**:
+- **CLI First**: Enables automation and batch processing for research
+- **Interactive Validation**: Web interface for detailed AI pipeline analysis
+- **Experimental Features**: Isolated environment for testing new concepts
+- **Research Support**: Tools designed for AI method development and validation
 
-### **1. Data Processing Flow**
+## Component Interaction Patterns
+
+### Data Processing Flow
 ```
 Memos Capture → Database Storage → Core Processing → AI Enhancement → Dashboard Display
 ```
 
-### **2. User Interaction Flow**  
+### User Interaction Flow  
 ```
 User Views Dashboard → Selects Screenshot → Triggers Processing → Shows Results
 ```
 
-### **3. Development Flow**
+### Development Flow
 ```
 Run Comparison → Analyze Results → Tune Parameters → Re-evaluate → Deploy Changes
 ```
 
-## 📋 Quick Reference Guide
+## Quick Reference
 
-### **Want to see daily tasks?** 
-→ http://localhost:8502 (Main Dashboard)
-
-### **Want to analyze productivity?**
-→ http://localhost:8503 (Analytics)
-
-### **Want to evaluate AI performance?**
-→ `python comparison_cli.py` or http://localhost:8512
-
-### **Want to manage AI features?**
-→ `python scripts/ai_cli.py`
-
-### **Want to understand the code?**
-→ Start with `autotasktracker/core/` then `autotasktracker/ai/`
+- **Daily tasks**: http://localhost:8502 (Task Board)
+- **Analytics**: http://localhost:8503 (Analytics Dashboard)
+- **AI evaluation**: `python comparison_cli.py` or http://localhost:8512
+- **AI management**: `python scripts/ai_cli.py`
+- **Code exploration**: Start with `autotasktracker/core/` then `autotasktracker/ai/`
 
 This architecture enables clear separation of concerns while maintaining flexibility for AI experimentation and improvement.
