@@ -71,8 +71,8 @@ class TaskExtractor:
             
             # Claude/AI
             'claude': {
-                'pattern': r'(.*?)\s*[—–-]\s*.*?[—–-]\s*claude',
-                'extract': lambda m: f"AI Coding: {self._clean_project_name(m.group(1))}"
+                'pattern': r'(.*?)\s*[—–-]\s*(?:✳\s*)?(.*?)\s*[—–-]\s*claude',
+                'extract': self._extract_claude_task
             }
         }
         
@@ -245,6 +245,24 @@ class TaskExtractor:
                 return f"{base_name} ({lang})"
         
         return name
+    
+    def _extract_claude_task(self, match) -> str:
+        """Extract task from Claude AI window title."""
+        parts = match.groups()
+        if len(parts) >= 2:
+            project = parts[0].strip()
+            task_type = parts[1].strip()
+            
+            # Clean up project name
+            project = self._clean_project_name(project)
+            
+            # If task type is meaningful, include it
+            if task_type and task_type not in ['claude', 'Claude']:
+                return f"{task_type}: {project}"
+            else:
+                return f"AI Development: {project}"
+        
+        return "Using Claude AI"
     
     def _generic_extraction(self, window_title: str, ocr_text: Optional[str]) -> str:
         """Fallback generic extraction when no patterns match."""

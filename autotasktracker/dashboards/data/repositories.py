@@ -87,12 +87,13 @@ class TaskRepository(BaseRepository):
         
         tasks = []
         for _, row in df.iterrows():
-            # Group by window and calculate duration
+            # Use extracted task if available, fallback to window title
             window_title = extract_window_title(row.get('active_window', '')) or row.get('window_title', 'Unknown')
+            task_title = row.get('tasks') or window_title
             
             task = Task(
                 id=row['id'],
-                title=window_title,
+                title=task_title,
                 category=row.get('category', 'Other'),
                 timestamp=pd.to_datetime(row['created_at']),
                 duration_minutes=5,  # Default 5 min per capture
