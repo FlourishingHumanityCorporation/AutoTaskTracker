@@ -297,7 +297,7 @@ class DatabaseManager:
             entities e
             LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
             LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
-            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key = 'vlm_result'
+            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key = 'minicpm_v_result'
             LEFT JOIN metadata_entries me4 ON e.id = me4.entity_id AND me4.key = 'embedding'
         WHERE
             e.file_type_group = 'image'
