@@ -339,7 +339,7 @@ class DatabaseManager:
             COUNT(DISTINCT me_emb.entity_id) as with_embeddings
         FROM entities e
         LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
-        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = 'vlm_result'
+        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = 'minicpm_v_result'
         LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb.key = 'embedding'
         WHERE e.file_type_group = 'image'
         """

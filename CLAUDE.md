@@ -1,10 +1,107 @@
 
-# INSTRUCTIONS
+# CRITICAL CODING RULES - STRICTLY ENFORCE
+
+## Code Quality Standards (MANDATORY)
+- **NO BARE EXCEPT CLAUSES**: Always specify exception types `except (ValueError, TypeError):` instead of `except:`
+- **NO SYS.PATH HACKS**: Use proper package imports instead of `sys.path.append()` or `sys.path.insert()`
+- **USE DATABASE MANAGER**: Import from `autotasktracker.core.database.DatabaseManager` instead of direct `sqlite3.connect()`
+- **NO DUPLICATE FILES**: Never create `*_improved.py`, `*_enhanced.py`, `*_v2.py` - edit the original file
+- **PROPER LOGGING**: Use `logging.getLogger(__name__)` instead of `print()` statements in production code
+- **SPECIFIC IMPORTS**: Import exact functions/classes needed, avoid `import *`
+
+## File Organization Rules (MANDATORY)
+- **NO ROOT CLUTTER**: Never create files in project root - use proper directories:
+  - Scripts → `scripts/`
+  - Tests → `tests/`
+  - Dashboards → `autotasktracker/dashboards/`
+  - AI components → `autotasktracker/ai/`
+  - Core utilities → `autotasktracker/core/`
+- **LEGACY ISOLATION**: Put deprecated code in `legacy/` subfolder, never in main directories
+- **NO DEBUG FILES**: Remove temporary files like `debug_*.py`, `test_*.json`, `temp_*.py`
+
+## Exception Handling Rules (MANDATORY)
+```python
+# ❌ WRONG - Bare except
+try:
+    risky_operation()
+except:
+    pass
+
+# ✅ CORRECT - Specific exceptions
+try:
+    risky_operation()
+except (ValueError, TypeError, ConnectionError) as e:
+    logger.warning(f"Operation failed: {e}")
+```
+
+## Import Rules (MANDATORY)
+```python
+# ❌ WRONG - sys.path hack
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+# ✅ CORRECT - Package import
+from autotasktracker.core.database import DatabaseManager
+
+# ❌ WRONG - Direct database connection
+import sqlite3
+conn = sqlite3.connect(db_path)
+
+# ✅ CORRECT - Use DatabaseManager
+from autotasktracker.core.database import DatabaseManager
+db = DatabaseManager()
+with db.get_connection() as conn:
+    # use connection
+```
+
+## Testing Commands (RUN BEFORE COMMITTING)
+```bash
+# MANDATORY: Run codebase health check before any commit
+python -m pytest tests/test_codebase_health.py -v
+
+# CRITICAL: Test specific issues (will show DETAILED error messages):
+python -m pytest tests/test_codebase_health.py::TestCodebaseHealth::test_root_directory_clutter -v -s  # 🚨 ROOT ORGANIZATION
+python -m pytest tests/test_codebase_health.py::TestCodebaseHealth::test_bare_except_clauses -v -s     # 🚨 ERROR HANDLING
+python -m pytest tests/test_codebase_health.py::TestCodebaseHealth::test_no_sys_path_hacks -v -s       # 🚨 IMPORTS
+python -m pytest tests/test_codebase_health.py::TestCodebaseHealth::test_database_connection_patterns -v -s  # 🚨 DATABASE
+
+# MANDATORY: Run critical tests
+python -m pytest tests/test_critical.py -v
+
+# QUICK: Check for immediate code issues
+python -c "
+import ast
+import glob
+for f in glob.glob('autotasktracker/**/*.py', recursive=True):
+    try:
+        with open(f) as file:
+            content = file.read()
+            if 'except:' in content and 'except Exception:' not in content:
+                print(f'🚨 BARE EXCEPT in {f}')
+            if 'sys.path' in content and 'autotasktracker' in f:
+                print(f'🚨 SYS.PATH HACK in {f}')
+    except: pass
+"
+
+# ORGANIZATION: Check root directory cleanliness
+ls -la | grep -E '\.(py|md|json|csv)$' | grep -v -E '(README|CLAUDE|QUICKSTART|requirements|autotasktracker\.py)'
+```
+
+## Improved Error Messages
+The codebase health tests now provide DETAILED, actionable error messages with:
+- 🚨 Clear categorization of issues (DOCUMENTATION CLUTTER, DEBUG FILES, etc.)
+- ✅ Specific allowed files listed
+- 🔧 Exact commands to fix issues
+- 📊 Visual indicators (emojis) for immediate recognition
+
+When tests fail, you'll see EXACTLY what needs to be fixed and how to fix it!
+
+## ORIGINAL INSTRUCTIONS
 - IMPROVE THE CURRENT FILE RATHER THAN CREATING A NEW FILE THAT'S CALLED FILE_IMPROVED!!!
 - NEVER CREATE FILES IN ROOT DIRECTORY - ALWAYS FIND THE RIGHT DIRECTORY TO PUT THE FILE IN BEFORE CREATING IT
 - LABEL EACH FILE AS DESCRIPTIVE AS POSSIBLE AND CLEARLY DOCUMENT THE PURPOSE OF THE FILE
 - DOCUMENT ALL CHANGES IN THE CLAUDE.md FILE
-- 
 
 # AutoTaskTracker - Mission Critical Context
 

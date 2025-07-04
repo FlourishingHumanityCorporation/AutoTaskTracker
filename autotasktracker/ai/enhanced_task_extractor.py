@@ -253,5 +253,5 @@ class AIEnhancedTaskExtractor:
                 return f"{delta.seconds // 60}m ago"
             else:
                 return "just now"
-        except:
+        except (ValueError, TypeError, AttributeError):
             return timestamp

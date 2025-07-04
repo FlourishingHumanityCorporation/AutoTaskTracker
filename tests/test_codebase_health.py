@@ -1,6 +1,26 @@
 """
-Test suite to check for common codebase issues
-Ensures code quality and prevents common problems
+🚨 CODEBASE HEALTH CHECKER 🚨
+
+This test suite checks for common codebase issues that hurt maintainability:
+
+🏗️  ORGANIZATION ISSUES:
+   - Root directory clutter (files in wrong places)
+   - Duplicate/legacy files (*_improved.py, *_v2.py)
+   - Proper file organization
+
+🔧 CODE QUALITY ISSUES:
+   - Bare except clauses (dangerous error handling)
+   - sys.path hacks (improper imports)
+   - Direct database connections (should use DatabaseManager)
+   - Print statements vs proper logging
+
+📊 CRITICAL TESTS (must pass for production):
+   - test_root_directory_clutter ← 🚨 ORGANIZATION
+   - test_bare_except_clauses ← 🚨 ERROR HANDLING  
+   - test_no_sys_path_hacks ← 🚨 IMPORTS
+   - test_database_connection_patterns ← 🚨 DATABASE
+
+Run: pytest tests/test_codebase_health.py -v
 """
 
 import os
@@ -371,7 +391,11 @@ class TestCodebaseHealth:
             print("  Consider removing these if they're no longer needed.")
     
     def test_root_directory_clutter(self):
-        """Test for messy root directory with too many loose files"""
+        """🚨 CRITICAL: Test for messy root directory with too many loose files 🚨
+        
+        A clean root directory is essential for project maintainability!
+        Only core project files should be in the root directory.
+        """
         root_files = []
         allowed_root_files = {
             # Core project files
@@ -391,36 +415,95 @@ class TestCodebaseHealth:
                 if item.name not in allowed_root_files:
                     root_files.append(str(item))
         
-        # Flag if there are too many loose files in root
-        problematic_files = []
+        # Categorize problematic files with clear messaging
+        documentation_files = []
         migration_scripts = []
         debug_files = []
         ai_files = []
+        loose_python_files = []
+        other_files = []
         
         for file_path in root_files:
             filename = Path(file_path).name.lower()
             
             # Categorize problematic files
-            if any(word in filename for word in ['migrate', 'migration']):
+            if filename.endswith('.md') and filename not in ['readme.md', 'claude.md', 'quickstart.md']:
+                documentation_files.append(file_path)
+            elif any(word in filename for word in ['migrate', 'migration']):
                 migration_scripts.append(file_path)
-            elif any(word in filename for word in ['debug', 'test_', 'temp']):
+            elif any(word in filename for word in ['debug', 'test_', 'temp', 'analysis', 'results']):
                 debug_files.append(file_path)
-            elif filename.startswith('ai_'):
+            elif filename.startswith('ai_') or 'ai_' in filename:
                 ai_files.append(file_path)
             elif filename.endswith('.py'):
-                problematic_files.append(file_path)
+                loose_python_files.append(file_path)
+            else:
+                other_files.append(file_path)
         
+        # Build comprehensive error message
         issues_found = []
-        if migration_scripts:
-            issues_found.extend([f"{f} (migration script - move to scripts/)" for f in migration_scripts])
-        if debug_files:
-            issues_found.extend([f"{f} (debug/test file - move to tests/ or remove)" for f in debug_files])
-        if ai_files:
-            issues_found.extend([f"{f} (AI script - move to scripts/ or examples/)" for f in ai_files])
-        if problematic_files:
-            issues_found.extend([f"{f} (loose Python file - organize into proper module)" for f in problematic_files])
         
-        assert not issues_found, f"Root directory clutter found: {issues_found}"
+        if documentation_files:
+            issues_found.append(f"\n🚨 DOCUMENTATION CLUTTER ({len(documentation_files)} files):")
+            for f in documentation_files:
+                issues_found.append(f"  ❌ {Path(f).name} → Move to docs/")
+                
+        if migration_scripts:
+            issues_found.append(f"\n🚨 MIGRATION SCRIPTS ({len(migration_scripts)} files):")
+            for f in migration_scripts:
+                issues_found.append(f"  ❌ {Path(f).name} → Move to scripts/")
+                
+        if debug_files:
+            issues_found.append(f"\n🚨 DEBUG/TEST FILES ({len(debug_files)} files):")
+            for f in debug_files:
+                issues_found.append(f"  ❌ {Path(f).name} → Move to tests/ or DELETE")
+                
+        if ai_files:
+            issues_found.append(f"\n🚨 AI SCRIPTS ({len(ai_files)} files):")
+            for f in ai_files:
+                issues_found.append(f"  ❌ {Path(f).name} → Move to scripts/ or examples/")
+                
+        if loose_python_files:
+            issues_found.append(f"\n🚨 LOOSE PYTHON FILES ({len(loose_python_files)} files):")
+            for f in loose_python_files:
+                issues_found.append(f"  ❌ {Path(f).name} → Move to scripts/ or organize into proper module")
+                
+        if other_files:
+            issues_found.append(f"\n🚨 OTHER CLUTTER ({len(other_files)} files):")
+            for f in other_files:
+                issues_found.append(f"  ❌ {Path(f).name} → Review and organize properly")
+        
+        if issues_found:
+            error_message = f"""
+🚨🚨🚨 ROOT DIRECTORY CLUTTER DETECTED 🚨🚨🚨
+
+Your project root is messy! This makes the project harder to navigate and maintain.
+
+ISSUES FOUND: {''.join(issues_found)}
+
+✅ ALLOWED ROOT FILES ONLY:
+  - Core: README.md, LICENSE, requirements.txt, .gitignore
+  - Project: autotasktracker.py (main entry), CLAUDE.md, QUICKSTART.md
+  - Build: setup.sh, Dockerfile, Makefile
+
+🔧 QUICK FIX COMMANDS:
+  # Move documentation
+  mv *.md docs/ (except README.md, CLAUDE.md, QUICKSTART.md)
+  
+  # Move scripts
+  mv *_cli.py scripts/
+  mv migrate*.py scripts/
+  
+  # Clean up test files
+  rm test_*.json test_*.csv debug_*.py
+  
+  # Move AI files
+  mv AI_*.md docs/
+  mv ai_*.py examples/
+
+This test will PASS once root directory is properly organized!
+"""
+            raise AssertionError(error_message)
     
     def test_redundant_documentation(self):
         """Test for redundant or outdated documentation files"""
