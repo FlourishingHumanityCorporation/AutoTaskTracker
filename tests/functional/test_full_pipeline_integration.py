@@ -225,6 +225,25 @@ finally:
         assert entity['created_at'] is not None, "Entity should have timestamp"
         assert entity['last_scan_at'] is not None, "Entity should be marked as processed"
         
+        # Additional explicit validations at function level
+        assert db_path.exists(), "Database file should exist after processing"
+        assert len(entities) >= 1, "Pipeline should create at least one entity record"
+        assert str(test_screenshot) in entity['filepath'], "Entity should reference the test screenshot"
+        
+        # Check metadata was stored
+        cursor = conn.execute("SELECT * FROM metadata_entries WHERE entity_id = ?", (entity['id'],))
+        metadata = cursor.fetchall()
+        assert len(metadata) >= 2, "Should have stored OCR and window title metadata"
+        
+        # Verify pipeline completed successfully
+        metadata_keys = [m['key'] for m in metadata]
+        assert 'ocr_text' in metadata_keys, "Should have OCR text metadata"
+        assert 'active_window' in metadata_keys, "Should have window title metadata"
+        
+        conn.close()
+        
+        print(f"✅ Pipeline test completed: {len(entities)} entities, {len(metadata)} metadata entries")
+        
         # Check metadata entries
         cursor = conn.execute("""
             SELECT key, value FROM metadata_entries 

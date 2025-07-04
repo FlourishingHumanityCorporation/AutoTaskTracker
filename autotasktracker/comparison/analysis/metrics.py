@@ -89,7 +89,7 @@ class ComparisonMetrics:
                 'confidence_metrics': ComparisonMetrics.calculate_confidence_metrics(confidences),
                 'task_diversity': ComparisonMetrics.calculate_diversity_metrics(tasks),
                 'category_diversity': ComparisonMetrics.calculate_diversity_metrics(categories),
-                'feature_usage': ComparisonMetrics.calculate_feature_usage_metrics([features])
+                'feature_usage': ComparisonMetrics.calculate_feature_usage_metrics(features)
             }
         
         # Add cross-pipeline comparisons

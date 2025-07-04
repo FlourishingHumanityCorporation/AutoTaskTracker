@@ -16,6 +16,7 @@ try:
     NOTIFICATIONS_AVAILABLE = True
 except ImportError:
     NOTIFICATIONS_AVAILABLE = False
+    notification = None  # Make notification available as None when not installed
     import logging
     logging.warning("Desktop notifications not available. Install with: pip install plyer")
 
@@ -61,6 +62,9 @@ class TaskNotifier:
                         
             stats['screenshots'] = len(activities)
             
+            # Sort activities by time (oldest first)
+            activities.sort(key=lambda x: x['time'])
+            
             # Calculate category distribution
             for activity in activities:
                 cat = activity['category']
@@ -74,18 +78,28 @@ class TaskNotifier:
             # Calculate focus time (continuous work in same category)
             if activities:
                 focus_sessions = []
-                current_session = {'category': activities[0]['category'], 'duration': 0}
+                current_session = {'category': activities[0]['category'], 'start': 0, 'duration': 0}
                 
                 for i in range(1, len(activities)):
-                    time_diff = (activities[i-1]['time'] - activities[i]['time']).total_seconds() / 60
+                    # Calculate time difference (newer timestamp - older timestamp)
+                    time_diff = (activities[i]['time'] - activities[i-1]['time']).total_seconds() / 60
+                    
+                    # Check if this continues the current session
                     if time_diff <= 5 and activities[i]['category'] == current_session['category']:
+                        # Accumulate the time difference
                         current_session['duration'] += time_diff
                     else:
+                        # Session ended, check if it qualifies as focus time
                         if current_session['duration'] >= 10:  # At least 10 minutes
                             focus_sessions.append(current_session['duration'])
-                        current_session = {'category': activities[i]['category'], 'duration': 0}
+                        # Start new session
+                        current_session = {'category': activities[i]['category'], 'start': i, 'duration': 0}
+                
+                # Don't forget the last session
+                if current_session['duration'] >= 10:
+                    focus_sessions.append(current_session['duration'])
                         
-                stats['focus_time'] = sum(focus_sessions)
+                stats['focus_time'] = round(sum(focus_sessions), 1)
             
         except Exception as e:
             logging.error(f"Error getting stats: {e}")

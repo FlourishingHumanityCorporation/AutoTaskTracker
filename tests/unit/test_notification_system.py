@@ -145,7 +145,7 @@ class TestTaskNotifier:
                             pass
                 
                 # Should send notification (past throttle period)
-                assert mock_notify.called
+                assert mock_notify.notify.called
 
     def test_get_recent_stats_calculation(self, notifier, mock_db):
         """Test that recent stats are calculated correctly."""
@@ -153,17 +153,25 @@ class TestTaskNotifier:
         with patch('autotasktracker.dashboards.notifications.logging'):
             stats = notifier.get_recent_stats(hours=1)
         
-        assert stats is not None
-        assert stats['screenshots'] == 3
-        assert '🧑‍💻 Coding' in stats['categories']
-        assert stats['categories']['🧑‍💻 Coding'] == 2
-        assert stats['top_activity'] == '🧑‍💻 Coding'
+        # Strengthen assertions with type and value checks
+        assert isinstance(stats, dict), "Stats should be a dictionary"
+        assert stats['screenshots'] == 3, "Should count 3 screenshots"
+        assert isinstance(stats['categories'], dict), "Categories should be a dict"
+        assert '🧑‍💻 Coding' in stats['categories'], "Should have Coding category"
+        assert stats['categories']['🧑‍💻 Coding'] == 2, "Should have 2 coding activities"
+        assert stats['top_activity'] == '🧑‍💻 Coding', "Top activity should be Coding"
+        
+        # Validate all expected keys are present
+        expected_keys = {'screenshots', 'categories', 'top_activity'}
+        assert set(stats.keys()) >= expected_keys, f"Missing keys: {expected_keys - set(stats.keys())}"
 
     def test_get_recent_stats_handles_db_errors(self, notifier, mock_db):
         """Test stats calculation handles database errors gracefully."""
         mock_db.test_connection.return_value = False
         stats = notifier.get_recent_stats(hours=1)
-        assert stats is None
+        # Strengthen assertion - verify exact return value and type
+        assert stats is None, "Should return None on database error"
+        assert not isinstance(stats, dict), "Should not return partial data on error"
 
     def test_focus_time_calculation(self, notifier, mock_db):
         """Test that focus time is calculated correctly."""

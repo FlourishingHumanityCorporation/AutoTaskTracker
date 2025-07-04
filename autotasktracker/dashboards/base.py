@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple
 import pandas as pd
 
-from ..core.database import DatabaseManager
-from ..utils.config import get_config
-from ..utils.streamlit_helpers import configure_page, show_error_message
-from .cache import DashboardCache, QueryCache
+from autotasktracker.core.database import DatabaseManager
+from autotasktracker.utils.config import get_config
+from autotasktracker.utils.streamlit_helpers import configure_page, show_error_message
+from autotasktracker.dashboards.cache import DashboardCache, QueryCache
 
 logger = logging.getLogger(__name__)
 

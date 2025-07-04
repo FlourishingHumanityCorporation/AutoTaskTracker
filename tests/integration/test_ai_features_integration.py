@@ -4,6 +4,7 @@ Test script for AI enhancements in AutoTaskTracker.
 Validates VLM integration, embeddings search, and OCR enhancement.
 """
 import json
+import pytest
 from datetime import datetime, timedelta
 
 from autotasktracker.core.database import DatabaseManager
@@ -13,6 +14,7 @@ from autotasktracker.ai.embeddings_search import EmbeddingsSearchEngine, Embeddi
 from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
 
 
+@pytest.mark.timeout(30)
 def test_database_ai_coverage_statistics_and_query_functionality():
     """Test database queries for AI coverage statistics and AI-enhanced data retrieval functionality."""
     print("\n=== Testing Database AI Queries ===")
@@ -101,6 +103,7 @@ def test_database_ai_coverage_statistics_and_query_functionality():
     assert callable(getattr(db_manager, 'get_ai_coverage_stats', None)), "get_ai_coverage_stats should be callable"
 
 
+@pytest.mark.timeout(30)
 def test_visual_language_model_integration_and_task_extraction():
     """Test Visual Language Model (VLM) integration functionality and task extraction from screenshot descriptions."""
     print("\n=== Testing VLM Integration ===")
@@ -179,6 +182,7 @@ def test_visual_language_model_integration_and_task_extraction():
     assert successful_extractions >= 0, "VLM extraction should not crash (0+ successful extractions expected)"
 
 
+@pytest.mark.timeout(30)
 def test_optical_character_recognition_enhancement_and_text_extraction():
     """Test OCR (Optical Character Recognition) enhancement features for improving text extraction quality from screenshots."""
     print("\n=== Testing OCR Enhancement ===")
@@ -255,6 +259,7 @@ def test_optical_character_recognition_enhancement_and_text_extraction():
     assert isinstance(enhanced['has_code'], bool), "has_code should be boolean"
 
 
+@pytest.mark.timeout(30)
 def test_semantic_embeddings_search_engine_functionality():
     """Test semantic embeddings search engine functionality for finding similar tasks and content."""
     print("\n=== Testing Embeddings Search ===")
@@ -332,6 +337,7 @@ def test_semantic_embeddings_search_engine_functionality():
     assert isinstance(tasks_df, type(tasks_df)), "fetch_tasks_with_ai should return a DataFrame-like object"
 
 
+@pytest.mark.timeout(30)
 def test_ai_enhanced_integrated_task_extractor_with_multiple_ai_features():
     """Test the integrated AI-enhanced task extractor that combines VLM, OCR, and embeddings functionality."""
     print("\n=== Testing Enhanced Task Extractor ===")

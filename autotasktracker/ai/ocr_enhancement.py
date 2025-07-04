@@ -89,7 +89,7 @@ class OCREnhancer:
                         if text and confidence > 0.5:  # Basic threshold
                             results.append(OCRResult(
                                 text=text.strip(),
-                                confidence=float(confidence),
+                                confidence=round(float(confidence), 4),
                                 bbox=self._parse_bbox(bbox)
                             ))
             
@@ -103,7 +103,7 @@ class OCREnhancer:
                     if text and confidence > 0.5:
                         results.append(OCRResult(
                             text=text.strip(),
-                            confidence=float(confidence),
+                            confidence=round(float(confidence), 4),
                             bbox=self._parse_bbox(bbox)
                         ))
             

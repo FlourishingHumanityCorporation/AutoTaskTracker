@@ -34,8 +34,9 @@ def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def _db_conn() -> sqlite3.Connection:  # type: ignore[valid-type]
+    """Database connection fixture with function scope for test independence."""
     if not DB_PATH.exists():
         pytest.xfail("Pensieve DB not found; have you run `memos init`?")
     conn = sqlite3.connect(DB_PATH)

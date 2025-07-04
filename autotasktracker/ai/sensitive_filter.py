@@ -20,7 +20,7 @@ class SensitiveDataFilter:
         self.patterns = {
             'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
             'phone': re.compile(r'\b(\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b'),
-            'ssn': re.compile(r'\b\d{3}-?\d{2}-?\d{4}\b'),
+            'ssn': re.compile(r'\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b'),
             'credit_card': re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'),
             'api_key': re.compile(r'\b[A-Za-z0-9]{32,}\b'),
             'password_field': re.compile(r'password[:\s]*[^\s\n]+', re.IGNORECASE),
@@ -117,7 +117,7 @@ class SensitiveDataFilter:
             else:
                 score += 0.4  # Medium sensitivity windows
         
-        return min(1.0, score)
+        return round(min(1.0, score), 4)
     
     def should_process_image(self, image_path: str, window_title: str = None, 
                            ocr_text: str = None, threshold: float = 0.5) -> Tuple[bool, float, Dict]:

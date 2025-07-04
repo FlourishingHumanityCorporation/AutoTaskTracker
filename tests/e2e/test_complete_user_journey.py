@@ -59,6 +59,18 @@ DB_PROCESS_WAIT_S = 10
 
 @pytest.mark.timeout(120)
 def test_complete_end_to_end_user_journey_from_screenshot_to_dashboard_display(e2e_env: dict[str, Any]) -> None:
+    """Test complete user journey from screenshot capture to dashboard display.
+    
+    This comprehensive test validates the entire pipeline:
+    1. Screenshot file creation and detection
+    2. Pensieve watcher processing
+    3. Database entry creation
+    4. Streamlit dashboard rendering
+    5. UI elements visible via Playwright
+    
+    The test uses isolated HOME directory to avoid conflicts and launches
+    all required services (watcher, API, dashboard).
+    """
     env = e2e_env["env"]
     home_dir: Path = e2e_env["home"]
     processes: list[subprocess.Popen[str]] = e2e_env["processes"]

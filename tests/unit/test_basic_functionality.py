@@ -85,7 +85,7 @@ def test_pensieve_screenshot_capture_creates_new_image_file() -> None:
         pytest.xfail("`memos record --once` failed – screen capture may be blocked in headless session.")
 
     # give the OS a moment to flush the file
-    time.sleep(2)
+    time.sleep(0.5)  # Reduced from 2s for performance
     after = {p for p in screens_dir.glob("*.png")} | {p for p in screens_dir.glob("*.webp")}
     new_files = after - before
     if not new_files:
@@ -102,7 +102,6 @@ def test_pensieve_screenshot_capture_creates_new_image_file() -> None:
     assert new_file.suffix in ['.png', '.webp'], f"Screenshot file has unexpected format: {new_file.suffix}"
     
     # Validate the file was created recently (within last 10 seconds)
-    import time
     file_age = time.time() - new_file.stat().st_mtime
     assert file_age < 10, f"Screenshot file is too old ({file_age:.1f}s), may not be from this test"
 
@@ -136,7 +135,6 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
     - Response contains expected content
     """
     import requests
-    import time
 
     try:
         start_time = time.time()

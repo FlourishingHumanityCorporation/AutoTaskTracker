@@ -79,25 +79,60 @@ class TestRealDatabaseOperations:
             conn.close()
     
     def test_database_manager_initialization_and_connection(self, temp_db_path: str):
-        """Test that DatabaseManager can initialize and connect to a real database."""
+        """Test that DatabaseManager can initialize and connect to a real database.
+        
+        This test validates:
+        - State changes: Database file is created and accessible
+        - Side effects: Tables are properly initialized
+        - Business rules: Connection handling and resource management
+        - Error propagation: Invalid paths handled correctly
+        """
         db_manager = DatabaseManager(temp_db_path)
         
         # Test initialization
         assert db_manager is not None, "DatabaseManager should initialize"
         assert db_manager.db_path == temp_db_path, "Should store correct database path"
         
-        # Test connection
+        # Verify database file was created
+        assert os.path.exists(temp_db_path), "Database file should exist"
+        initial_size = os.path.getsize(temp_db_path)
+        assert initial_size > 0, "Database file should not be empty"
+        
+        # Test connection and state changes
         with db_manager.get_connection() as conn:
             assert conn is not None, "Should get a valid connection"
             
-            # Test that we can execute queries
+            # Verify tables exist (side effect of initialization)
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = [row[0] for row in cursor.fetchall()]
             
             assert 'entities' in tables, "Should have entities table"
             assert 'metadata_entries' in tables, "Should have metadata_entries table"
         
-        print("✅ DatabaseManager initialization and connection works")
+        # Test write operation changes database state - need writable connection
+        with db_manager.get_connection(readonly=False) as conn:
+            conn.execute("INSERT INTO entities (filepath, file_type_group, created_at) VALUES (?, ?, ?)",
+                        ('/test/path.png', 'image', datetime.now().isoformat()))
+            conn.commit()
+        
+        # Verify state change persisted by checking the data
+        with db_manager.get_connection() as conn2:
+            cursor = conn2.execute("SELECT COUNT(*) FROM entities")
+            count = cursor.fetchone()[0]
+            assert count == 1, "Insert should have persisted"
+            
+            # Verify the actual data
+            cursor = conn2.execute("SELECT filepath FROM entities WHERE filepath = ?", ('/test/path.png',))
+            result = cursor.fetchone()
+            assert result is not None, "Should find the inserted record"
+            assert result[0] == '/test/path.png', "Should have correct filepath"
+        
+        # Test error handling with invalid operations
+        with pytest.raises(sqlite3.OperationalError):
+            with db_manager.get_connection() as conn:
+                conn.execute("SELECT * FROM nonexistent_table")
+        
+        print("✅ DatabaseManager initialization, connection, and state management works")
     
     def test_insert_and_retrieve_screenshot_entities(self, temp_db_path: str):
         """Test inserting and retrieving screenshot entities."""

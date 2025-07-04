@@ -42,7 +42,7 @@ class EmbeddingsSearchEngine:
             if embedding_str.startswith('['):
                 embedding = np.array(json.loads(embedding_str))
             else:
-                embedding = np.array([float(x) for x in embedding_str.split()])
+                embedding = np.array([round(float(x), 8) for x in embedding_str.split()])
             
             if len(embedding) != self.embedding_dim:
                 logger.warning(f"Unexpected embedding dimension: {len(embedding)}")
@@ -62,8 +62,9 @@ class EmbeddingsSearchEngine:
         if norm1 == 0 or norm2 == 0:
             return 0.0
         
-        # Calculate cosine similarity
-        return np.dot(embedding1, embedding2) / (norm1 * norm2)
+        # Calculate cosine similarity with precision control
+        similarity = np.dot(embedding1, embedding2) / (norm1 * norm2)
+        return round(float(similarity), 8)
     
     def get_embedding_for_entity(self, entity_id: int) -> Optional[np.ndarray]:
         """Get embedding for a specific entity."""
@@ -158,7 +159,7 @@ class EmbeddingsSearchEngine:
                             'created_at': row['created_at'],
                             'ocr_text': row['ocr_text'],
                             'active_window': row['active_window'],
-                            'similarity_score': float(similarity)
+                            'similarity_score': round(float(similarity), 6)
                         })
                 
                 # Sort by similarity score
@@ -262,7 +263,7 @@ class EmbeddingsSearchEngine:
                                 'created_at': valid_df.iloc[idx]['created_at'],
                                 'ocr_text': valid_df.iloc[idx]['ocr_text'],
                                 'active_window': valid_df.iloc[idx]['active_window'],
-                                'similarity_to_first': float(similarity_matrix[i][idx])
+                                'similarity_to_first': round(float(similarity_matrix[i][idx]), 6)
                             })
                             used_indices.add(idx)
                         

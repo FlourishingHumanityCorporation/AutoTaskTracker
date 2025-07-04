@@ -27,13 +27,20 @@ Read this ENTIRE file before making ANY changes to the codebase.
 5. **NEVER use `sqlite3.connect()` directly** - Use `DatabaseManager`
 6. **NEVER use `print()` in production** - Use `logging.getLogger(__name__)`
 7. **NEVER create announcement-style docs** - No "We're excited to announce!"
+8. **NEVER implement poor workarounds** - Fix the root causes of issues
 
 ### ALWAYS DO THESE:
-1. **ALWAYS run tests before committing**: `pytest tests/test_codebase_health.py`
+1. **ALWAYS run ALL health tests before committing**: 
+   ```bash
+   pytest tests/health/test_codebase_health.py -v
+   pytest tests/health/test_documentation_health.py -v
+   pytest tests/health/test_testing_system_health.py -v
+   ```
 2. **ALWAYS check existing code first**: Don't create duplicate functionality
 3. **ALWAYS use specific imports**: `from module import SpecificClass`
 4. **ALWAYS update CLAUDE.md**: Document significant changes here
 5. **ALWAYS follow file organization**: See [File Organization](#file-organization)
+6. **ALWAYS delete completion docs immediately**: Never create status/summary/complete files
 
 ---
 
@@ -65,13 +72,24 @@ AutoTaskTracker/
 │   ├── dashboards/           # Streamlit UIs
 │   │   ├── task_board.py     # Main dashboard
 │   │   ├── analytics.py      # Analytics dashboard
-│   │   └── legacy/           # Old versions (don't modify)
+│   │   ├── *_refactored.py   # New refactored versions
+│   │   ├── components/       # Reusable UI components
+│   │   └── data/            # Data models and repositories
 │   ├── comparison/           # AI pipeline comparison tools
 │   └── utils/                # Shared utilities
-├── scripts/                  # Standalone scripts
+├── scripts/                  # Standalone scripts (including run_*.py)
 ├── tests/                    # All tests
+│   ├── health/              # Health checks
+│   ├── unit/                # Unit tests
+│   ├── integration/         # Integration tests
+│   ├── functional/          # Real functionality tests
+│   └── e2e/                 # End-to-end tests
 ├── docs/                     # Documentation (organized!)
-└── CLAUDE.md                 # THIS FILE - AI instructions
+│   ├── architecture/        # Technical design
+│   ├── features/            # Feature documentation
+│   └── guides/              # How-to guides
+├── setup.py                 # Package installation
+└── CLAUDE.md                # THIS FILE - AI instructions
 ```
 
 ### Key Technologies:
@@ -97,6 +115,9 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Install package in development mode
+pip install -e .
+
 # Initialize Pensieve
 memos init
 memos enable
@@ -110,12 +131,20 @@ memos ps
 ```bash
 # Main task board (port 8502)
 python autotasktracker.py dashboard
+# OR: python scripts/run_task_board.py
 
 # Analytics (port 8503)
 python autotasktracker.py analytics
+# OR: python scripts/run_analytics.py
+
+# Time tracker (port 8505)
+python scripts/run_timetracker.py
 
 # All dashboards
 python autotasktracker.py start
+
+# Refactored dashboards (new architecture)
+python autotasktracker/dashboards/launcher_refactored.py
 ```
 
 ### AI Features
@@ -170,7 +199,7 @@ for f in glob.glob('autotasktracker/**/*.py', recursive=True):
 "
 ```
 
-### NEW: Real Functional Tests (2025-07-04)
+### NEW: Real Functional Tests (2025-01-04)
 We now have **real functional tests** that validate actual functionality instead of mocking everything:
 
 ```bash
@@ -236,6 +265,13 @@ docs/
 - Process documentation (migration guides, refactoring notes)
 - Outdated planning documents
 - Duplicate content
+
+### Root Cause Prevention:
+**Why completion docs get created and how to prevent:**
+- ❌ **Symptom**: Creating "COMPLETE.md", "FINAL.md", "SUMMARY.md" files
+- ✅ **Root Cause**: Lack of process enforcement and automated checks
+- ✅ **Prevention**: Run `pytest tests/health/test_documentation_health.py` before ANY commit
+- ✅ **Alternative**: Update existing docs or use git commit messages for status
 
 ### Key Documents:
 - `architecture/CODEBASE_DOCUMENTATION.md` - Primary technical reference
@@ -316,7 +352,7 @@ from ..core.database import DatabaseManager
 ## 📝 CHANGE LOG
 Document significant changes here with date and description.
 
-2025-07-04: Major Dashboard Architecture Refactoring - COMPLETE
+2025-01-04: Major Dashboard Architecture Refactoring - COMPLETE
 - **🏗️ Built comprehensive new dashboard architecture with 40% code reduction**
 - Created `BaseDashboard` class with common functionality (connection, caching, error handling)
 - Built 15+ reusable UI components: filters, metrics, visualizations, data display
@@ -331,7 +367,7 @@ Document significant changes here with date and description.
 - **📚 Complete documentation:** `REFACTORING_COMPLETE.md`, `MIGRATION_GUIDE.md`, `REFACTORING_RESULTS.md`
 - **🚀 Ready for production:** All refactored dashboards tested and validated
 
-2025-07-04: Enhanced Time Tracking System
+2025-01-04: Enhanced Time Tracking System
 - Added `autotasktracker/core/time_tracker.py` with screenshot-aware session detection
 - Implemented confidence scoring for time estimates (🟢🟡🔴 indicators)
 - Added active vs total time metrics to distinguish work from idle time
@@ -349,7 +385,7 @@ Document significant changes here with date and description.
 - Fixed VLM bottlenecks: serial → concurrent, large images → resized
 - Created `vlm_batch_optimizer.py` with async/await architecture
 
-2025-07-04: Testing System Health and Organization
+2025-01-04: Testing System Health and Organization
 - **🧪 Created comprehensive testing system health checker** (`tests/test_testing_system_health.py`)
 - **🔧 Fixed all testing system issues:**
   - Removed duplicate test functions between dashboard files

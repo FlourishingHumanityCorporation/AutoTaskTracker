@@ -290,14 +290,28 @@ class TestDataSanitization:
             assert should_process  # Safe content should be processed
 
     def test_credit_card_number_detection(self):
-        """Test that credit card numbers are detected."""
+        """Test that credit card numbers are detected with boundary conditions."""
         filter = SensitiveDataFilter()
         
         cc_test_cases = [
+            # Valid formats
             ("4532 1234 5678 9010", True),   # Visa with spaces
             ("5425-2334-3010-9903", True),   # Mastercard with dashes
             ("378282246310005", False),      # Amex (15 digits, pattern expects 16)
-            ("6011123456789012", True)       # Discover without spaces
+            ("6011123456789012", True),      # Discover without spaces
+            
+            # Boundary cases
+            ("1234567890123456", True),      # 16 digits, no spaces
+            ("123456789012345", False),      # 15 digits (too short)
+            ("12345678901234567", False),    # 17 digits (too long)
+            ("0000 0000 0000 0000", True),   # All zeros (still matches pattern)
+            ("9999-9999-9999-9999", True),   # All nines with dashes
+            
+            # Edge formats
+            ("4532-1234-5678-9010", True),   # Mixed separators
+            ("4532.1234.5678.9010", False),  # Dots not supported
+            ("4532 1234 5678 901", False),   # Missing digit
+            ("4532  1234  5678  9010", False), # Double spaces
         ]
         
         for cc, should_match in cc_test_cases:
@@ -313,14 +327,30 @@ class TestDataSanitization:
                 assert score >= 0.3  # At least medium sensitivity
 
     def test_social_security_number_detection(self):
-        """Test that SSN-like patterns are detected."""
+        """Test that SSN-like patterns are detected with boundary conditions."""
         filter = SensitiveDataFilter()
         
         ssn_patterns = [
+            # Valid formats
             ("123-45-6789", True),      # Standard SSN format - should match
             ("987-65-4321", True),      # Standard SSN format - should match  
             ("SSN: 987654321", True),   # 9 digits together - should match
-            ("Social: 111-22-3333", True)  # Standard format - should match
+            ("Social: 111-22-3333", True),  # Standard format - should match
+            
+            # Boundary cases
+            ("000-00-0000", True),      # All zeros (edge case)
+            ("999-99-9999", True),      # All nines (edge case)
+            ("12-34-5678", False),      # Too short (8 chars)
+            ("1234-56-7890", False),    # Wrong format (4-2-4)
+            ("123-456-789", False),     # Wrong format (3-3-3)
+            ("123-45-67890", False),    # Too long (10 chars)
+            
+            # Edge formats
+            ("123 45 6789", True),      # Spaces instead of dashes
+            ("123.45.6789", False),     # Dots not standard
+            ("123456789", True),        # 9 digits no separator
+            ("12345678", False),        # 8 digits (too short)
+            ("1234567890", False),      # 10 digits (too long)
         ]
         
         for ssn_text, should_match in ssn_patterns:

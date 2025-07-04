@@ -160,7 +160,7 @@ class TestTestingSystemHealth:
                     break
             
             # Check if file is in organized subdirectories
-            if test_file.parent.name in ['unit', 'integration', 'infrastructure', 'health', 'e2e']:
+            if test_file.parent.name in ['unit', 'integration', 'infrastructure', 'health', 'e2e', 'functional']:
                 category_found = True
                 # Map directory to categories
                 if test_file.parent.name == 'unit':
@@ -194,6 +194,16 @@ class TestTestingSystemHealth:
                         found_categories.add('headless_environment')
                     if 'user_journey' in filename:
                         found_categories.add('complete_user_journey')
+                elif test_file.parent.name == 'functional':
+                    found_categories.add('functional')
+                    if 'ocr' in filename:
+                        found_categories.add('ocr_processing')
+                    if 'database' in filename:
+                        found_categories.add('database')
+                    if 'ai' in filename:
+                        found_categories.add('ai_processing')
+                    if 'pipeline' in filename:
+                        found_categories.add('pipeline_integration')
             
             if not category_found:
                 categorization_issues.append(f"{test_file}: Unknown test category")

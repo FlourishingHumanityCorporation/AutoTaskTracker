@@ -41,9 +41,15 @@ class TestTimeTrackingAccuracy:
         df = pd.DataFrame(screenshots)
         sessions = tracker.track_sessions(df)
         
-        # Should detect exactly one session
-        assert len(sessions) == 1
+        # Should detect exactly one session - validates session grouping algorithm
+        assert len(sessions) == 1, "Session grouping should create exactly one session from continuous activity"
         session = sessions[0]
+        assert "Code Editor" in session.task_name, "Should extract task name from window title"
+        assert session.category in ['🧑‍💻 Coding', '📋 Other'], "Should categorize as coding activity"
+        
+        # Validate session boundaries are correctly calculated
+        assert session.start_time == screenshots[0]['created_at'], "Session start should match first screenshot"
+        assert session.end_time >= screenshots[-1]['created_at'], "Session end should be at or after last screenshot"
         
         # Duration should be 36 seconds (9 intervals × 4 seconds) + 4 second padding
         expected_duration = 40  # seconds
@@ -77,9 +83,17 @@ class TestTimeTrackingAccuracy:
         df = pd.DataFrame(screenshots)
         sessions = tracker.track_sessions(df)
         
-        # Should still be one session (research allows longer gaps)
-        assert len(sessions) == 1
+        # Should still be one session (research allows longer gaps) - tests gap tolerance logic
+        assert len(sessions) == 1, "Research activity should tolerate 2-minute gaps and remain one session"
         session = sessions[0]
+        assert "Browser" in session.task_name, "Should extract browser task name"
+        assert "Research" in session.category or "Browser" in session.category, "Should categorize as research/browsing"
+        
+        # Validate session spans the entire time period including gap
+        first_screenshot_time = screenshots[0]['created_at']
+        last_screenshot_time = screenshots[-1]['created_at']
+        assert session.start_time == first_screenshot_time, "Session should start with first screenshot"
+        assert session.end_time >= last_screenshot_time, "Session should end at or after last screenshot"
         
         # Total duration: ~136 seconds (last screenshot time - first + padding)
         assert 135 <= session.duration_seconds <= 140
@@ -88,11 +102,20 @@ class TestTimeTrackingAccuracy:
         expected_active = (4 * 4) + (4 * 4) + 8  # Two groups + padding
         assert abs(session.active_time_seconds - expected_active) <= 4
         
-        # Should have recorded the gap
-        assert len(session.gaps) > 0
-        # Gap is calculated as time between screenshots minus interval
-        # The actual gap might be less than expected due to how it's calculated
-        assert max(session.gaps) >= 95  # Allow for calculation differences
+        # Should have recorded the gap - validate gap detection logic
+        assert len(session.gaps) >= 1, "Should detect at least one gap"
+        # Validate gap detection algorithm properly identifies temporal discontinuities
+        largest_gap = max(session.gaps)
+        assert largest_gap >= 95, f"Largest gap should be ~2 minutes, got {largest_gap}s"
+        assert all(gap > 0 for gap in session.gaps), "All gaps should be positive"
+        
+        # Validate gap calculation accuracy - gaps should reflect actual time discontinuities
+        total_gap_time = sum(session.gaps)
+        # Gap calculation can vary based on implementation - ensure it's reasonable (85-125s range)
+        assert 85 <= total_gap_time <= 125, f"Total gap time should be reasonable (~100-120s), got {total_gap_time}s"
+        
+        # Ensure gap detection doesn't create false positives
+        assert len(session.gaps) <= 2, "Should not detect excessive gaps from regular intervals"
 
     def test_time_tracking_precision_subsecond(self, tracker):
         """Test that subsecond precision is maintained in calculations."""
@@ -277,10 +300,14 @@ class TestTimeTrackingAccuracy:
         df = pd.DataFrame(screenshots)
         sessions = tracker.track_sessions(df)
         
-        # Should only include the longer session
-        assert len(sessions) == 1
-        assert sessions[0].task_name == "Longer"
-        assert sessions[0].duration_seconds >= 40
+        # Should only include the longer session - validates minimum duration filtering
+        assert len(sessions) == 1, "Minimum duration filter should exclude sessions < 30 seconds"
+        assert sessions[0].task_name == "Longer", "Should preserve longer session that meets minimum duration"
+        assert sessions[0].duration_seconds >= 40, "Session duration should meet minimum threshold"
+        
+        # Verify the short session was actually filtered out
+        all_task_names = [session.task_name for session in sessions]
+        assert "Quick" not in all_task_names, "Short duration sessions should be filtered out"
 
     def test_daily_summary_calculation_accuracy(self, tracker):
         """Test accuracy of daily summary statistics."""
@@ -331,7 +358,7 @@ class TestTimeTrackingAccuracy:
         assert summary['average_session_minutes'] == pytest.approx(21.7, 0.1)
         assert summary['focus_score'] >= 10  # At least 1 session >= 30 min
         assert summary['idle_percentage'] == pytest.approx(4.6, 0.5)  # Gaps / total
-        assert summary['high_confidence_sessions'] == 2  # confidence > 0.8
+        assert summary['high_confidence_sessions'] == 3  # confidence > 0.8 (0.9, 0.95, 0.85)
 
     def test_time_zone_handling_accuracy(self, tracker):
         """Test that time calculations work correctly across time zones."""

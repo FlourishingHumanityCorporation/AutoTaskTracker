@@ -63,6 +63,17 @@ def _ensure_sample_png() -> Path:
 
 @pytest.mark.timeout(120)
 def test_pensieve_pipeline_processes_screenshots_in_headless_ci_environment(e2e_env: dict[str, Any]) -> None:
+    """Test Pensieve pipeline processes screenshots correctly in headless CI environments.
+    
+    This test validates the pipeline works without GUI dependencies:
+    1. Copies a sample screenshot to the watch directory
+    2. Verifies Pensieve watcher detects and processes it
+    3. Confirms database entry is created with OCR results
+    4. Validates Streamlit dashboard renders the activity
+    5. Uses Playwright to verify UI elements are visible
+    
+    Designed for CI/CD environments where real screenshot capture isn't available.
+    """
     env = e2e_env["env"]
     home_dir: Path = e2e_env["home"]
     processes: list[subprocess.Popen[str]] = e2e_env["processes"]
