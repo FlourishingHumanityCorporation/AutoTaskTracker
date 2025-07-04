@@ -1,0 +1,13 @@
+"""Core modules for AutoTaskTracker."""
+
+from .categorizer import ActivityCategorizer, categorize_activity, extract_task_summary, extract_window_title
+from .database import DatabaseManager, get_default_db_manager
+
+__all__ = [
+    'ActivityCategorizer',
+    'categorize_activity',
+    'extract_task_summary', 
+    'extract_window_title',
+    'DatabaseManager',
+    'get_default_db_manager'
+]

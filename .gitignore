@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Memos/Pensieve data
+.memos/
+
+# Streamlit
+.streamlit/
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Environment variables
+.env
+.env.local
+
+# Screenshots (if stored locally)
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Config overrides
+config.local.json
+settings.local.json
