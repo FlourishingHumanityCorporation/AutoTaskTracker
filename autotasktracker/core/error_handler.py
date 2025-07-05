@@ -10,6 +10,8 @@ from functools import wraps
 from collections import defaultdict, deque
 import threading
 
+from autotasktracker.config import get_config
+
 
 class VLMErrorHandler:
     """Centralized error handling for VLM operations."""
@@ -77,7 +79,12 @@ class VLMErrorHandler:
     def get_recent_errors(self, limit: int = 10) -> List[Dict]:
         """Get recent errors for debugging."""
         with self.error_lock:
-            return list(self.error_history)[-limit:]
+            if limit is None:
+                return list(self.error_history)
+            elif limit <= 0:
+                return []
+            else:
+                return list(self.error_history)[-limit:]
 
 
 # Global error handler instance
@@ -240,7 +247,12 @@ class HealthMonitor:
     def get_recent_alerts(self, limit: int = 10) -> List[Dict]:
         """Get recent alerts."""
         with self.lock:
-            return list(self.alerts)[-limit:]
+            if limit is None:
+                return list(self.alerts)
+            elif limit <= 0:
+                return []
+            else:
+                return list(self.alerts)[-limit:]
 
 
 # Global health monitor
@@ -267,7 +279,7 @@ def _check_ollama_available():
     """Check if Ollama service is available."""
     import requests
     try:
-        response = requests.get('http://localhost:11434/api/tags', timeout=5)
+        response = requests.get(f'{get_config().get_ollama_url()}/api/tags', timeout=5)
         return response.status_code == 200
     except requests.RequestException:
         return False
@@ -276,7 +288,7 @@ def _check_ollama_available():
 def _check_database_available():
     """Check if database is available."""
     try:
-        from autotasktracker.core.database import DatabaseManager
+        from autotasktracker.core import DatabaseManager
         db = DatabaseManager()
         return db.test_connection()
     except (requests.RequestException, ImportError):
@@ -289,7 +301,7 @@ def _check_memory_usage():
         import psutil
         memory_percent = psutil.virtual_memory().percent
         return memory_percent < 90  # Alert if memory usage > 90%
-    except ImportError:
+    except (ImportError, OSError, RuntimeError):
         return True  # If we can't check, assume it's fine
 
 

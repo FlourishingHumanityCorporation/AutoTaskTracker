@@ -11,11 +11,11 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
-from autotasktracker.core.task_extractor import TaskExtractor
-from autotasktracker.ai.vlm_integration import VLMTaskExtractor, extract_vlm_enhanced_task
-from autotasktracker.ai.ocr_enhancement import OCREnhancer
-from autotasktracker.ai.embeddings_search import EmbeddingsSearchEngine
-from autotasktracker.core.categorizer import ActivityCategorizer
+from autotasktracker.core import TaskExtractor
+from autotasktracker.ai import VLMTaskExtractor, extract_vlm_enhanced_task
+from autotasktracker.ai import OCREnhancer
+from autotasktracker.ai import EmbeddingsSearchEngine
+from autotasktracker.core import ActivityCategorizer
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class AIEnhancedTaskExtractor:
                 )
                 similar_tasks = [
                     {
-                        "tasks": self.base_extractor.extract_task(s.get('active_window', '')),
+                        "tasks": self.base_extractor.extract_task(s.get("active_window", '')),
                         'similarity': s['similarity_score'],
                         'time': s['created_at']
                     }
@@ -108,7 +108,7 @@ class AIEnhancedTaskExtractor:
         # Combine all information
         result = {
             "tasks": base_task or "Activity Captured",
-            'category': category,
+            "category": category,
             'confidence': 0.5,  # Base confidence
             'ai_features': {
                 'ocr_quality': ocr_enhancement.get('ocr_quality') if ocr_enhancement else None,
@@ -221,7 +221,7 @@ class AIEnhancedTaskExtractor:
                 insights['has_similar_tasks'] = True
                 insights['task_context'] = [
                     {
-                        "tasks": self.base_extractor.extract_task(c.get('active_window', '')),
+                        "tasks": self.base_extractor.extract_task(c.get("active_window", '')),
                         'time_ago': self._time_ago(c['created_at']),
                         'similarity': c['similarity_score']
                     }
@@ -230,7 +230,7 @@ class AIEnhancedTaskExtractor:
                 
                 # Suggest category based on similar tasks
                 categories = [
-                    ActivityCategorizer.categorize(c.get('active_window', ''))
+                    ActivityCategorizer.categorize(c.get("active_window", ''))
                     for c in context
                 ]
                 # Most common category

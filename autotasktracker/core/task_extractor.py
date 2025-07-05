@@ -8,6 +8,8 @@ import json
 import logging
 from typing import Optional, Dict, List, Tuple, Callable
 
+from autotasktracker.config import get_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -218,11 +220,14 @@ class TaskExtractor:
         if port_match:
             port = port_match.group(1)
             # Common port mappings
+            config = get_config()
             port_apps = {
                 '3000': 'React app', '4200': 'Angular app', '5000': 'Flask app',
                 '8000': 'Django app', '8080': 'Web app', '8501': 'Streamlit app',
-                '8502': 'Task Board', '8503': 'Analytics Dashboard', 
-                '8504': 'Time Tracker', '8507': 'Task Discovery'
+                str(config.TASK_BOARD_PORT): 'Task Board', 
+                str(config.ANALYTICS_PORT): 'Analytics Dashboard', 
+                str(config.TIMETRACKER_PORT): 'Time Tracker', 
+                str(config.ADVANCED_ANALYTICS_PORT): 'Advanced Analytics'
             }
             app_type = port_apps.get(port, f'app on :{port}')
             return f"Testing {app_type}"

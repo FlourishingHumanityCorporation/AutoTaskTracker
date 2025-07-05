@@ -7,9 +7,9 @@ from typing import Dict, Any
 
 # Import from package structure
 
-from autotasktracker.core.database import DatabaseManager
-from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
-from autotasktracker.ai.vlm_integration import VLMTaskExtractor
+from autotasktracker.core import DatabaseManager
+from autotasktracker.ai import AIEnhancedTaskExtractor
+from autotasktracker.ai import VLMTaskExtractor
 from .base import BasePipeline
 
 
@@ -26,7 +26,7 @@ class AIFullPipeline(BasePipeline):
     
     def process_screenshot(self, screenshot_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process screenshot using full AI enhancement."""
-        window_title = screenshot_data.get('active_window', '')
+        window_title = screenshot_data.get("active_window", '')
         ocr_text = screenshot_data.get("ocr_result", '')
         vlm_description = screenshot_data.get('vlm_description', '')
         entity_id = screenshot_data.get('id')
@@ -56,7 +56,7 @@ class AIFullPipeline(BasePipeline):
         
         return {
             "tasks": enhanced_result["tasks"],
-            'category': enhanced_result['category'],
+            "category": enhanced_result["category"],
             'confidence': enhanced_result['confidence'],
             'features_used': features_used,
             'details': {

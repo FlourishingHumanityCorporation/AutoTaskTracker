@@ -10,6 +10,111 @@ from typing import Optional, List, Dict, Any
 import os
 from PIL import Image
 
+# Enhanced search capabilities  
+try:
+    from ...pensieve.enhanced_search import get_enhanced_search, SearchQuery
+    ENHANCED_SEARCH_AVAILABLE = True
+except ImportError:
+    ENHANCED_SEARCH_AVAILABLE = False
+
+
+class EnhancedSearch:
+    """Enhanced search component with semantic capabilities."""
+    
+    @staticmethod
+    def render(
+        key: str = "enhanced_search",
+        placeholder: str = "🔍 Search...",
+        show_search_type: bool = True,
+        default_type: str = "Text"
+    ) -> Dict[str, Any]:
+        """Render enhanced search component.
+        
+        Args:
+            key: Unique key for the search component
+            placeholder: Placeholder text for search input
+            show_search_type: Whether to show search type selector
+            default_type: Default search type
+            
+        Returns:
+            Dictionary with search query and type
+        """
+        search_result = {"query": "", "type": "text", "has_query": False}
+        
+        if show_search_type and ENHANCED_SEARCH_AVAILABLE:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                query = st.text_input(placeholder, key=f"{key}_input")
+            with col2:
+                search_type = st.selectbox(
+                    "Type",
+                    ["Text", "Semantic", "Hybrid"],
+                    index=["Text", "Semantic", "Hybrid"].index(default_type) if default_type in ["Text", "Semantic", "Hybrid"] else 0,
+                    key=f"{key}_type"
+                )
+        else:
+            query = st.text_input(placeholder, key=f"{key}_input")
+            search_type = default_type
+        
+        if query:
+            search_result.update({
+                "query": query,
+                "type": search_type.lower(),
+                "has_query": True
+            })
+            
+        return search_result
+    
+    @staticmethod
+    def execute_search(search_result: Dict[str, Any], data: pd.DataFrame) -> pd.DataFrame:
+        """Execute search on DataFrame.
+        
+        Args:
+            search_result: Result from render() method
+            data: DataFrame to search
+            
+        Returns:
+            Filtered DataFrame
+        """
+        if not search_result["has_query"]:
+            return data
+            
+        query = search_result["query"]
+        search_type = search_result["type"]
+        
+        if (ENHANCED_SEARCH_AVAILABLE and 
+            search_type in ["semantic", "hybrid"] and 
+            len(query) > 3):
+            
+            try:
+                enhanced_search = get_enhanced_search()
+                search_query = SearchQuery(
+                    query=query,
+                    search_type=search_type,
+                    limit=len(data),
+                    min_relevance=0.3
+                )
+                
+                # Get entity IDs that match the search
+                search_results = enhanced_search.search(search_query)
+                matching_ids = {result.entity.id for result in search_results}
+                
+                # Filter data to matching entities if ID column exists
+                if 'id' in data.columns:
+                    filtered_data = data[data['id'].isin(matching_ids)]
+                    if len(search_results) > 0:
+                        st.info(f"🎯 Found {len(search_results)} semantic matches")
+                    return filtered_data
+                    
+            except Exception as e:
+                logger.debug(f"Enhanced search failed, falling back to text: {e}")
+        
+        # Fallback to basic text search
+        mask = data.astype(str).apply(
+            lambda x: x.str.contains(query, case=False, na=False)
+        ).any(axis=1)
+        return data[mask]
+
 
 class TaskGroup:
     """Component for displaying grouped tasks."""
@@ -141,8 +246,8 @@ class ActivityCard:
                             img = Image.open(screenshot_path)
                             img.thumbnail((300, 300))
                             st.image(img, use_container_width=True)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Failed to load screenshot thumbnail: {e}")
                             
                 st.divider()
                 
@@ -197,13 +302,14 @@ class DataTable:
             data = data[columns]
             
         if enable_search and len(data) > 10:
-            search = st.text_input("🔍 Search table...", key="table_search")
-            if search:
-                # Search across all string columns
-                mask = data.astype(str).apply(
-                    lambda x: x.str.contains(search, case=False, na=False)
-                ).any(axis=1)
-                data = data[mask]
+            # Use enhanced search component
+            search_result = EnhancedSearch.render(
+                key="table_search",
+                placeholder="🔍 Search table..."
+            )
+            
+            if search_result["has_query"]:
+                data = EnhancedSearch.execute_search(search_result, data)
                 
         st.dataframe(
             data,

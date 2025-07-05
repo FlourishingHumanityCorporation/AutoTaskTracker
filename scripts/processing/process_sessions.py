@@ -14,6 +14,7 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from autotasktracker.core.time_tracker import TimeTracker, TaskSession
+from autotasktracker.config import get_config
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -23,15 +24,16 @@ class SessionProcessor:
     """Process screenshots into work sessions."""
     
     def __init__(self, screenshot_interval: int = 4):
-        self.db_path = os.path.expanduser("~/.memos/database.db")
+        self.db_path = get_config().get_db_path()
         self.time_tracker = TimeTracker(screenshot_interval)
         
     def get_screenshots_for_period(self, start: datetime, end: datetime) -> List[Dict]:
         """Get screenshots with tasks for a time period."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        try:
+        from autotasktracker.core import DatabaseManager
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
             cursor.execute("""
                 SELECT 
                     e.id,
@@ -41,10 +43,10 @@ class SessionProcessor:
                     m_category.value as category,
                     m_ocr.value as ocr_text
                 FROM entities e
-                LEFT JOIN metadata_entries m_window ON e.id = m_window.entity_id AND m_window.key = 'active_window'
-                LEFT JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = 'tasks'
-                LEFT JOIN metadata_entries m_category ON e.id = m_category.entity_id AND m_category.key = 'category'
-                LEFT JOIN metadata_entries m_ocr ON e.id = m_ocr.entity_id AND m_ocr.key = 'ocr_result'
+                LEFT JOIN metadata_entries m_window ON e.id = m_window.entity_id AND m_window.key = "active_window"
+                LEFT JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = "tasks"
+                LEFT JOIN metadata_entries m_category ON e.id = m_category.entity_id AND m_category.key = "category"
+                LEFT JOIN metadata_entries m_ocr ON e.id = m_ocr.entity_id AND m_ocr.key = "ocr_result"
                 WHERE e.created_at >= ? AND e.created_at <= ?
                 ORDER BY e.created_at
             """, (start.strftime('%Y-%m-%d %H:%M:%S'), end.strftime('%Y-%m-%d %H:%M:%S')))
@@ -54,19 +56,16 @@ class SessionProcessor:
                 screenshots.append({
                     'id': row[0],
                     'created_at': row[1],
-                    'active_window': json.dumps({
+                    "active_window": json.dumps({
                         'title': row[2] or 'Unknown',
                         'app': self._extract_app_name(row[2])
                     }),
                     "tasks": row[3],
-                    'category': row[4],
+                    "category": row[4],
                     "ocr_result": row[5]
                 })
             
             return screenshots
-            
-        finally:
-            conn.close()
     
     def _extract_app_name(self, window_title: str) -> str:
         """Extract application name from window title."""
@@ -115,10 +114,11 @@ class SessionProcessor:
     
     def save_sessions_to_db(self, sessions: List[TaskSession]):
         """Save processed sessions to database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        try:
+        from autotasktracker.core import DatabaseManager
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
             # Create sessions table if it doesn't exist
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS work_sessions (
@@ -157,9 +157,6 @@ class SessionProcessor:
             
             conn.commit()
             logger.info(f"Saved {len(sessions)} sessions to database")
-            
-        finally:
-            conn.close()
     
     def get_daily_summary(self, date: datetime) -> Dict:
         """Get summary of work sessions for a specific day."""

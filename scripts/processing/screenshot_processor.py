@@ -13,10 +13,10 @@ from typing import List, Dict, Optional
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
 from autotasktracker.core.task_extractor import get_task_extractor
-from autotasktracker.core.categorizer import ActivityCategorizer
-from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
+from autotasktracker.core import ActivityCategorizer
+from autotasktracker.ai import AIEnhancedTaskExtractor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +30,7 @@ class ScreenshotProcessor:
     
     def __init__(self, check_interval: int = 30):
         """Initialize processor with specified check interval in seconds."""
-        self.db = DatabaseManager()
+        self.db = DatabaseManager(use_pensieve_api=True)
         self.task_extractor = get_task_extractor()
         self.check_interval = check_interval
         self.processed_count = 0
@@ -56,9 +56,9 @@ class ScreenshotProcessor:
                     SELECT DISTINCT e.id, e.filepath, e.created_at
                     FROM entities e
                     LEFT JOIN metadata_entries m_task 
-                        ON e.id = m_task.entity_id AND m_task.key = 'tasks'
+                        ON e.id = m_task.entity_id AND m_task.key = "tasks"
                     LEFT JOIN metadata_entries m_cat
-                        ON e.id = m_cat.entity_id AND m_cat.key = 'category'
+                        ON e.id = m_cat.entity_id AND m_cat.key = "category"
                     WHERE m_task.id IS NULL OR m_cat.id IS NULL
                     ORDER BY e.created_at DESC
                     LIMIT ?
@@ -71,7 +71,7 @@ class ScreenshotProcessor:
                     # Get window title
                     cursor.execute("""
                         SELECT value FROM metadata_entries
-                        WHERE entity_id = ? AND key = 'active_window'
+                        WHERE entity_id = ? AND key = "active_window"
                     """, (entity_id,))
                     
                     window_row = cursor.fetchone()
@@ -80,7 +80,7 @@ class ScreenshotProcessor:
                     # Get OCR text if available
                     cursor.execute("""
                         SELECT value FROM metadata_entries
-                        WHERE entity_id = ? AND key = 'ocr_result'
+                        WHERE entity_id = ? AND key = "ocr_result"
                     """, (entity_id,))
                     
                     ocr_row = cursor.fetchone()
@@ -120,7 +120,7 @@ class ScreenshotProcessor:
                     entity_id=entity_id
                 )
                 task = result.get("tasks", 'Unknown Activity')
-                category = result.get('category', ActivityCategorizer.DEFAULT_CATEGORY)
+                category = result.get("category", ActivityCategorizer.DEFAULT_CATEGORY)
                 confidence = result.get('confidence', 0.5)
             else:
                 # Fallback to basic extraction
@@ -139,14 +139,14 @@ class ScreenshotProcessor:
                 cursor.execute("""
                     INSERT INTO metadata_entries 
                     (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                    VALUES (?, 'tasks', ?, 'auto_processor', 'text', datetime('now'), datetime('now'))
+                    VALUES (?, "tasks", ?, 'auto_processor', 'text', datetime('now'), datetime('now'))
                 """, (entity_id, task))
                 
                 # Save category
                 cursor.execute("""
                     INSERT INTO metadata_entries 
                     (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                    VALUES (?, 'category', ?, 'auto_processor', 'text', datetime('now'), datetime('now'))
+                    VALUES (?, "category", ?, 'auto_processor', 'text', datetime('now'), datetime('now'))
                 """, (entity_id, category))
                 
                 # Save confidence score

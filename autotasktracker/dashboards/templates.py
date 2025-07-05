@@ -16,6 +16,7 @@ from .components import (
     DataTable
 )
 from .data import TaskRepository, MetricsRepository
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ class DashboardTemplates:
         return DashboardTemplate.create_simple_dashboard(
             title="Overview Dashboard - AutoTaskTracker",
             icon="📊",
-            port=8508,
+            port=get_config().OVERVIEW_PORT,
             metrics_config={
                 'total_tasks': True,
                 'total_duration': True,
@@ -186,7 +187,7 @@ class DashboardTemplates:
         return DashboardTemplate.create_simple_dashboard(
             title="Focus Tracker - AutoTaskTracker",
             icon="🎯",
-            port=8509,
+            port=get_config().FOCUS_TRACKER_PORT,
             metrics_config={
                 'total_tasks': True,
                 'total_duration': True,
@@ -202,7 +203,7 @@ class DashboardTemplates:
         return DashboardTemplate.create_simple_dashboard(
             title="Daily Summary - AutoTaskTracker",
             icon="📅",
-            port=8510,
+            port=get_config().DAILY_SUMMARY_PORT,
             metrics_config={
                 'total_tasks': True,
                 'total_duration': True,

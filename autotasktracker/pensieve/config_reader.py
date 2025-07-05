@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional, Union
 from dataclasses import dataclass
 import json
 
+from autotasktracker.config import get_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +46,8 @@ class PensieveConfigReader:
     
     def __init__(self):
         """Initialize config reader."""
-        self.memos_dir = Path.home() / ".memos"
+        config = get_config()
+        self.memos_dir = config.memos_dir_property
         self.config_file = self.memos_dir / "config.yaml"
         self._cached_config: Optional[PensieveConfig] = None
         self._cache_timestamp: float = 0
@@ -52,21 +55,10 @@ class PensieveConfigReader:
     def get_memos_status(self) -> Dict[str, Any]:
         """Get current memos service status."""
         try:
-            # Use the correct Python environment path
-            venv_python = Path(__file__).parent.parent.parent / "venv" / "bin" / "python"
-            
-            if venv_python.exists():
-                result = subprocess.run(
-                    [str(venv_python), "-m", "memos.commands", "ps"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-            else:
-                # Fallback to system Python
-                result = subprocess.run(
-                    ["memos", "ps"],
-                    capture_output=True,
+            # Use memos command directly (it should be in PATH)
+            result = subprocess.run(
+                ["memos", "ps"],
+                capture_output=True,
                     text=True,
                     timeout=10
                 )
@@ -158,13 +150,14 @@ class PensieveConfigReader:
         config_data = {}
         
         # Default values
+        app_config = get_config()
         config_data.update({
-            "database_path": str(self.memos_dir / "database.db"),
-            "screenshots_dir": str(self.memos_dir / "screenshots"),
-            "record_interval": 4,  # Default 4 seconds
+            "database_path": app_config.get_db_path(),
+            "screenshots_dir": app_config.get_screenshots_path(),
+            "record_interval": app_config.SCREENSHOT_INTERVAL_SECONDS,
             "ocr_enabled": True,
-            "api_port": 8839,
-            "web_port": 8840,
+            "api_port": app_config.MEMOS_PORT,
+            "web_port": app_config.MEMOS_WEB_PORT,
             "max_workers": 4,
             "idle_processing": True,
             "sampling_strategy": "adaptive",
@@ -287,8 +280,8 @@ class PensieveConfigReader:
             "VECTOR_SEARCH_ENABLED": pensieve_config.vector_search_enabled,
             
             # API settings
-            "PENSIEVE_API_URL": f"http://localhost:{pensieve_config.api_port}",
-            "PENSIEVE_WEB_URL": f"http://localhost:{pensieve_config.web_port}",
+            "PENSIEVE_API_URL": f"http://{get_config().SERVER_HOST}:{pensieve_config.api_port}",
+            "PENSIEVE_WEB_URL": f"http://{get_config().SERVER_HOST}:{pensieve_config.web_port}",
         }
     
     def write_autotasktracker_config(self, output_path: Optional[Union[str, Path]] = None) -> bool:

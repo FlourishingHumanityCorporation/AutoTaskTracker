@@ -212,14 +212,14 @@ class TestComparisonMetrics:
         """Test comprehensive pipeline comparison."""
         pipeline_results = {
             'basic': [
-                {"tasks": 'Task A', 'category': 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
-                {"tasks": 'Task B', 'category': 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
-                {"tasks": 'Task A', 'category': 'Cat2', 'confidence': 0.5, 'features_used': ['Window Title']}
+                {"tasks": 'Task A', "category": 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
+                {"tasks": 'Task B', "category": 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
+                {"tasks": 'Task A', "category": 'Cat2', 'confidence': 0.5, 'features_used': ['Window Title']}
             ],
             'enhanced': [
-                {"tasks": 'Enhanced Task A', 'category': 'Cat1', 'confidence': 0.8, 'features_used': ['Window Title', 'OCR']},
-                {"tasks": 'Enhanced Task B', 'category': 'Cat1', 'confidence': 0.9, 'features_used': ['Window Title', 'OCR', 'VLM']},
-                {"tasks": 'Enhanced Task C', 'category': 'Cat3', 'confidence': 0.7, 'features_used': ['Window Title', 'OCR']}
+                {"tasks": 'Enhanced Task A', "category": 'Cat1', 'confidence': 0.8, 'features_used': ['Window Title', 'OCR']},
+                {"tasks": 'Enhanced Task B', "category": 'Cat1', 'confidence': 0.9, 'features_used': ['Window Title', 'OCR', 'VLM']},
+                {"tasks": 'Enhanced Task C', "category": 'Cat3', 'confidence': 0.7, 'features_used': ['Window Title', 'OCR']}
             ]
         }
         
@@ -260,86 +260,137 @@ class TestComparisonMetrics:
         # Test pipeline with no results
         mixed_comparison = ComparisonMetrics.compare_pipelines({
             'pipeline_a': [],
-            'pipeline_b': [{"tasks": 'Task', 'category': 'Cat', 'confidence': 0.7, 'features_used': ['Feature']}]
+            'pipeline_b': [{"tasks": 'Task', "category": 'Cat', 'confidence': 0.7, 'features_used': ['Feature']}]
         })
         assert 'pipeline_b' in mixed_comparison
         assert 'pipeline_a' not in mixed_comparison  # Empty results filtered out
     
     def test_calculate_improvement_metrics(self):
-        """Test improvement metrics calculation between baseline and enhanced results."""
+        """Test improvement metrics calculation with comprehensive validation.
+        
+        Enhanced test validates:
+        - State changes: Comparison between baseline and enhanced results
+        - Business rules: Improvement thresholds and statistical analysis
+        - Realistic data: Real-world confidence score scenarios
+        - Integration: Mathematical consistency across metrics
+        """
+        # Realistic scenario: ML pipeline improvements
         baseline_results = [
-            {'confidence': 0.5},
-            {'confidence': 0.4},
-            {'confidence': 0.6},
-            {'confidence': 0.3},
-            {'confidence': 0.5}
+            {'confidence': 0.5},  # Basic OCR result
+            {'confidence': 0.4},  # Low confidence window title match
+            {'confidence': 0.6},  # Moderate confidence result
+            {'confidence': 0.3},  # Very low confidence  
+            {'confidence': 0.5}   # Another basic result
         ]
         
         enhanced_results = [
-            {'confidence': 0.8},  # +0.3 improvement
-            {'confidence': 0.4},  # 0.0 no change
-            {'confidence': 0.5},  # -0.1 degradation
-            {'confidence': 0.7},  # +0.4 improvement
-            {'confidence': 0.9}   # +0.4 improvement
+            {'confidence': 0.8},  # +0.3 improvement (VLM enhanced)
+            {'confidence': 0.4},  # 0.0 no change (same result)
+            {'confidence': 0.5},  # -0.1 degradation (edge case)
+            {'confidence': 0.7},  # +0.4 improvement (semantic search)
+            {'confidence': 0.9}   # +0.4 improvement (multi-modal)
         ]
+        
+        # State changes: Calculate before and after metrics
+        baseline_mean = np.mean([r['confidence'] for r in baseline_results])
+        enhanced_mean = np.mean([r['confidence'] for r in enhanced_results])
         
         improvements = ComparisonMetrics.calculate_improvement_metrics(baseline_results, enhanced_results)
         
-        # Validate structure
+        # Business rules: Validate improvement measurement accuracy
         expected_keys = ['mean_improvement', 'median_improvement', 'std_improvement',
                         'positive_improvements', 'negative_improvements', 'no_change',
                         'improvement_ratio', 'max_improvement', 'min_improvement']
         for key in expected_keys:
             assert key in improvements, f"Missing metric: {key}"
         
-        # Calculate expected values
+        # Realistic data: Verify mathematical correctness
         improvement_values = [0.3, 0.0, -0.1, 0.4, 0.4]
         
         assert abs(improvements['mean_improvement'] - np.mean(improvement_values)) < 0.001
         assert abs(improvements['median_improvement'] - np.median(improvement_values)) < 0.001
         assert abs(improvements['std_improvement'] - np.std(improvement_values)) < 0.001
         
-        assert improvements['positive_improvements'] == 3  # 0.3, 0.4, 0.4
-        assert improvements['negative_improvements'] == 1   # -0.1
-        assert improvements['no_change'] == 1              # 0.0
-        assert improvements['improvement_ratio'] == 3/5    # 60% improved
-        assert improvements['max_improvement'] == 0.4
-        assert abs(improvements['min_improvement'] - (-0.1)) < 0.001  # Handle floating point precision
+        # Business rules: Improvement categorization
+        assert improvements['positive_improvements'] == 3, "Should count 3 positive improvements"
+        assert improvements['negative_improvements'] == 1, "Should count 1 degradation"
+        assert improvements['no_change'] == 1, "Should count 1 unchanged result"
+        assert improvements['improvement_ratio'] == 0.6, "Should show 60% improvement rate"
+        assert improvements['max_improvement'] == 0.4, "Maximum improvement should be 0.4"
+        assert abs(improvements['min_improvement'] - (-0.1)) < 0.001, "Minimum should be -0.1"
+        
+        # Integration: Verify metric consistency
+        total_classified = (improvements['positive_improvements'] + 
+                          improvements['negative_improvements'] + 
+                          improvements['no_change'])
+        assert total_classified == len(baseline_results), "All results should be classified"
+        
+        # Validate overall improvement direction
+        overall_improvement = enhanced_mean - baseline_mean
+        assert overall_improvement > 0, "Enhanced results should have higher mean confidence"
+        assert abs(improvements['mean_improvement'] - overall_improvement) < 0.001, "Mean improvement should match overall change"
     
     def test_calculate_improvement_metrics_edge_cases(self):
-        """Test improvement metrics with edge cases."""
-        # Test mismatched lengths
+        """Test improvement metrics edge cases with comprehensive validation.
+        
+        Enhanced test validates:
+        - Error handling: Invalid input scenarios and graceful degradation
+        - Boundary conditions: Empty data, single data points, extreme values
+        - Business rules: Edge case metric calculations and consistency
+        """
+        # Error handling: Test mismatched lengths
         baseline = [{'confidence': 0.5}]
         enhanced = [{'confidence': 0.8}, {'confidence': 0.9}]
         
         error_result = ComparisonMetrics.calculate_improvement_metrics(baseline, enhanced)
-        assert 'error' in error_result
+        assert 'error' in error_result, "Should return error for mismatched lengths"
         assert 'Result sets must have same length' in error_result['error']
         
-        # Test empty lists
+        # Boundary conditions: Test empty lists
         empty_result = ComparisonMetrics.calculate_improvement_metrics([], [])
-        assert empty_result == {}
+        assert empty_result == {}, "Empty inputs should return empty result"
         
-        # Test single comparison
+        # Boundary conditions: Test single comparison
         single_baseline = [{'confidence': 0.5}]
         single_enhanced = [{'confidence': 0.8}]
         
         single_result = ComparisonMetrics.calculate_improvement_metrics(single_baseline, single_enhanced)
-        assert abs(single_result['mean_improvement'] - 0.3) < 0.001
-        assert single_result['positive_improvements'] == 1
-        assert single_result['negative_improvements'] == 0
-        assert single_result['improvement_ratio'] == 1.0
+        assert abs(single_result['mean_improvement'] - 0.3) < 0.001, "Single improvement should be 0.3"
+        assert single_result['positive_improvements'] == 1, "Should count 1 positive improvement"
+        assert single_result['negative_improvements'] == 0, "Should count 0 negative improvements"
+        assert single_result['improvement_ratio'] == 1.0, "Should show 100% improvement"
+        assert single_result['median_improvement'] == 0.3, "Median of single value should equal the value"
+        assert single_result['std_improvement'] == 0.0, "Standard deviation of single value should be 0"
         
-        # Test no improvements
-        no_improvement_baseline = [{'confidence': 0.8}, {'confidence': 0.9}]
-        no_improvement_enhanced = [{'confidence': 0.7}, {'confidence': 0.8}]
+        # Business rules: Test complete degradation scenario
+        degradation_baseline = [{'confidence': 0.8}, {'confidence': 0.9}]
+        degradation_enhanced = [{'confidence': 0.7}, {'confidence': 0.8}]
         
-        no_improvement_result = ComparisonMetrics.calculate_improvement_metrics(
-            no_improvement_baseline, no_improvement_enhanced
+        degradation_result = ComparisonMetrics.calculate_improvement_metrics(
+            degradation_baseline, degradation_enhanced
         )
-        assert no_improvement_result['improvement_ratio'] == 0.0
-        assert no_improvement_result['positive_improvements'] == 0
-        assert no_improvement_result['negative_improvements'] == 2
+        assert degradation_result['improvement_ratio'] == 0.0, "Should show 0% improvement"
+        assert degradation_result['positive_improvements'] == 0, "Should count 0 positive improvements"
+        assert degradation_result['negative_improvements'] == 2, "Should count 2 degradations"
+        assert degradation_result['mean_improvement'] < 0, "Mean improvement should be negative"
+        assert degradation_result['max_improvement'] < 0, "Even max should be negative in degradation"
+        
+        # Boundary conditions: Test extreme improvement scenario
+        extreme_baseline = [{'confidence': 0.1}, {'confidence': 0.2}]
+        extreme_enhanced = [{'confidence': 0.9}, {'confidence': 1.0}]
+        
+        extreme_result = ComparisonMetrics.calculate_improvement_metrics(extreme_baseline, extreme_enhanced)
+        assert extreme_result['improvement_ratio'] == 1.0, "Should show 100% improvement"
+        assert extreme_result['mean_improvement'] == 0.8, "Should show large mean improvement"
+        assert extreme_result['min_improvement'] == 0.8, "All improvements should be substantial"
+        
+        # Business rules: Test perfect baseline scenario
+        perfect_baseline = [{'confidence': 1.0}, {'confidence': 1.0}]
+        worse_enhanced = [{'confidence': 0.9}, {'confidence': 0.8}]
+        
+        perfect_result = ComparisonMetrics.calculate_improvement_metrics(perfect_baseline, worse_enhanced)
+        assert perfect_result['improvement_ratio'] == 0.0, "Perfect baseline should show no improvement"
+        assert perfect_result['max_improvement'] < 0, "All changes should be degradations"
 
 
 class TestComparisonMetricsIntegration:
@@ -349,17 +400,17 @@ class TestComparisonMetricsIntegration:
         """Test a realistic pipeline comparison scenario."""
         # Simulate real pipeline comparison data
         basic_pipeline_results = [
-            {"tasks": 'Browse web', 'category': 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
-            {"tasks": 'Edit document', 'category': 'Productivity', 'confidence': 0.5, 'features_used': ['Window Title']},
-            {"tasks": 'Code review', 'category': 'Development', 'confidence': 0.5, 'features_used': ['Window Title']},
-            {"tasks": 'Browse web', 'category': 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Browse web', "category": 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Edit document', "category": 'Productivity', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Code review', "category": 'Development', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Browse web', "category": 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
         ]
         
         ai_enhanced_results = [
-            {"tasks": 'Research documentation', 'category': 'Browser', 'confidence': 0.85, 'features_used': ['Window Title', 'OCR', 'VLM']},
-            {"tasks": 'Write technical report', 'category': 'Productivity', 'confidence': 0.92, 'features_used': ['Window Title', 'OCR', 'Semantic Search']},
-            {"tasks": 'Review Python code', 'category': 'Development', 'confidence': 0.88, 'features_used': ['Window Title', 'OCR', 'VLM', 'Layout Analysis']},
-            {"tasks": 'Study API documentation', 'category': 'Browser', 'confidence': 0.79, 'features_used': ['Window Title', 'OCR', 'VLM']},
+            {"tasks": 'Research documentation', "category": 'Browser', 'confidence': 0.85, 'features_used': ['Window Title', 'OCR', 'VLM']},
+            {"tasks": 'Write technical report', "category": 'Productivity', 'confidence': 0.92, 'features_used': ['Window Title', 'OCR', 'Semantic Search']},
+            {"tasks": 'Review Python code', "category": 'Development', 'confidence': 0.88, 'features_used': ['Window Title', 'OCR', 'VLM', 'Layout Analysis']},
+            {"tasks": 'Study API documentation', "category": 'Browser', 'confidence': 0.79, 'features_used': ['Window Title', 'OCR', 'VLM']},
         ]
         
         pipeline_results = {
@@ -398,34 +449,68 @@ class TestComparisonMetricsIntegration:
         assert improvements['min_improvement'] > 0.2    # Even worst case is good
     
     def test_metrics_statistical_properties(self):
-        """Test that metrics have expected statistical properties."""
-        # Generate test data with known properties
-        np.random.seed(42)  # For reproducible tests
+        """Test metrics statistical properties with comprehensive validation.
         
-        # High variance confidence scores
+        Enhanced test validates:
+        - Business rules: Statistical relationships and mathematical properties
+        - Realistic data: Representative confidence and diversity scenarios
+        - Integration: Cross-metric consistency and mathematical soundness
+        """
+        # Generate test data with known properties for reproducible tests
+        np.random.seed(42)
+        
+        # Business rules: Test variance relationships
+        # High variance confidence scores (erratic ML pipeline)
         high_variance_confidences = [0.1, 0.9, 0.2, 0.8, 0.3, 0.7, 0.4, 0.6]
         high_var_metrics = ComparisonMetrics.calculate_confidence_metrics(high_variance_confidences)
         
-        # Low variance confidence scores
+        # Low variance confidence scores (stable ML pipeline)
         low_variance_confidences = [0.48, 0.52, 0.49, 0.51, 0.47, 0.53, 0.50, 0.49]
         low_var_metrics = ComparisonMetrics.calculate_confidence_metrics(low_variance_confidences)
         
-        # High variance should have higher standard deviation
-        assert high_var_metrics['std'] > low_var_metrics['std']
+        # Business rules: Variance should correlate with standard deviation
+        assert high_var_metrics['std'] > low_var_metrics['std'], "High variance data should have higher std dev"
+        assert high_var_metrics['std'] > 0.2, "High variance should be substantial"
+        assert low_var_metrics['std'] < 0.05, "Low variance should be minimal"
         
-        # Test diversity with known entropy properties
-        # Maximum diversity (all unique)
-        max_diversity_items = ['A', 'B', 'C', 'D']
+        # Realistic data: Test confidence distribution properties
+        # High variance should have wider confidence distribution
+        high_var_range = high_var_metrics['max'] - high_var_metrics['min']
+        low_var_range = low_var_metrics['max'] - low_var_metrics['min']
+        assert high_var_range > low_var_range, "High variance should have wider range"
+        
+        # Test confidence ratios make sense for different distributions
+        assert high_var_metrics['high_confidence_ratio'] > 0, "High variance data should have some high confidence"
+        assert high_var_metrics['low_confidence_ratio'] > 0, "High variance data should have some low confidence"
+        
+        # Integration: Test diversity entropy properties
+        # Maximum diversity (all unique tasks)
+        max_diversity_items = ['Code Review', 'Documentation', 'Testing', 'Debugging']
         max_div_metrics = ComparisonMetrics.calculate_diversity_metrics(max_diversity_items)
         
-        # Minimum diversity (all same)
-        min_diversity_items = ['A', 'A', 'A', 'A']
+        # Minimum diversity (repetitive tasks)
+        min_diversity_items = ['Email', 'Email', 'Email', 'Email']
         min_div_metrics = ComparisonMetrics.calculate_diversity_metrics(min_diversity_items)
         
-        # Maximum diversity should have higher entropy
-        assert max_div_metrics['entropy'] > min_div_metrics['entropy']
-        assert max_div_metrics['diversity_ratio'] > min_div_metrics['diversity_ratio']
-        assert min_div_metrics['entropy'] == 0.0  # No diversity = 0 entropy
+        # Business rules: Entropy relationships
+        assert max_div_metrics['entropy'] > min_div_metrics['entropy'], "Unique tasks should have higher entropy"
+        assert max_div_metrics['diversity_ratio'] > min_div_metrics['diversity_ratio'], "Unique tasks should have higher diversity ratio"
+        assert min_div_metrics['entropy'] == 0.0, "Identical items should have zero entropy"
+        assert max_div_metrics['diversity_ratio'] == 1.0, "All unique items should have diversity ratio of 1.0"
+        assert min_div_metrics['diversity_ratio'] == 0.25, "4 identical items should have diversity ratio of 1/4"
+        
+        # Integration: Mathematical soundness checks
+        # Entropy should be bounded by log2(unique_items)
+        max_possible_entropy = np.log2(max_div_metrics['unique_items'])
+        assert max_div_metrics['entropy'] <= max_possible_entropy + 0.001, "Entropy should not exceed theoretical maximum"
+        
+        # Test with realistic intermediate diversity
+        mixed_diversity_items = ['Code', 'Code', 'Meeting', 'Email', 'Email', 'Email']
+        mixed_div_metrics = ComparisonMetrics.calculate_diversity_metrics(mixed_diversity_items)
+        
+        # Should be between extremes
+        assert min_div_metrics['entropy'] < mixed_div_metrics['entropy'] < max_div_metrics['entropy'], "Mixed diversity should be between extremes"
+        assert min_div_metrics['diversity_ratio'] < mixed_div_metrics['diversity_ratio'] < max_div_metrics['diversity_ratio'], "Mixed diversity ratio should be between extremes"
 
 
 if __name__ == "__main__":

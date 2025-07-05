@@ -40,7 +40,7 @@ class TestTimeTrackingAccuracy:
         for i in range(10):
             screenshots.append({
                 'created_at': base_time + timedelta(seconds=i * 4),
-                'active_window': '{"title": "Code Editor - main.py", "app": "VSCode"}',
+                "active_window": '{"title": "Code Editor - main.py", "app": "VSCode"}',
                 "ocr_result": 'coding content'
             })
         
@@ -115,14 +115,14 @@ class TestTimeTrackingAccuracy:
         screenshots = [
             # First session: 5 screenshots
             *[{'created_at': base_time + timedelta(seconds=i * 4),
-               'active_window': '{"title": "Browser - Research", "app": "Chrome"}',
+               "active_window": '{"title": "Browser - Research", "app": "Chrome"}',
                "ocr_result": 'research'} for i in range(5)],
             
             # Gap of 2 minutes
             
             # Continuation: 5 more screenshots
             *[{'created_at': base_time + timedelta(seconds=120 + i * 4),
-               'active_window': '{"title": "Browser - Research", "app": "Chrome"}',
+               "active_window": '{"title": "Browser - Research", "app": "Chrome"}',
                "ocr_result": 'research'} for i in range(5)]
         ]
         
@@ -174,7 +174,7 @@ class TestTimeTrackingAccuracy:
             timestamp = base_time + timedelta(seconds=i * 4.157)  # Non-integer interval
             screenshots.append({
                 'created_at': timestamp,
-                'active_window': '{"title": "Terminal", "app": "Terminal"}',
+                "active_window": '{"title": "Terminal", "app": "Terminal"}',
                 "ocr_result": 'command line'
             })
         
@@ -199,17 +199,17 @@ class TestTimeTrackingAccuracy:
         screenshots = [
             # Task A: 10 screenshots over 36 seconds
             *[{'created_at': base_time + timedelta(seconds=i * 4),
-               'active_window': '{"title": "Email Client", "app": "Mail"}',
+               "active_window": '{"title": "Email Client", "app": "Mail"}',
                "ocr_result": 'email'} for i in range(10)],
             
             # Task B: 10 screenshots over 36 seconds
             *[{'created_at': base_time + timedelta(seconds=40 + i * 4),
-               'active_window': '{"title": "Spreadsheet", "app": "Excel"}',
+               "active_window": '{"title": "Spreadsheet", "app": "Excel"}',
                "ocr_result": 'data'} for i in range(10)],
             
             # Back to Task A: 10 screenshots
             *[{'created_at': base_time + timedelta(seconds=80 + i * 4),
-               'active_window': '{"title": "Email Client", "app": "Mail"}',
+               "active_window": '{"title": "Email Client", "app": "Mail"}',
                "ocr_result": 'email'} for i in range(10)]
         ]
         
@@ -231,7 +231,7 @@ class TestTimeTrackingAccuracy:
         # Scenario 1: Perfect regular screenshots (high confidence)
         regular_data = pd.DataFrame([
             {'created_at': base_time + timedelta(seconds=i * 4),
-             'active_window': '{"title": "IDE", "app": "IDE"}',
+             "active_window": '{"title": "IDE", "app": "IDE"}',
              "ocr_result": 'code'} for i in range(10)
         ])
         
@@ -240,10 +240,10 @@ class TestTimeTrackingAccuracy:
         
         # Scenario 2: Irregular gaps (lower confidence)
         irregular_data = pd.DataFrame([
-            {'created_at': base_time, 'active_window': '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},
-            {'created_at': base_time + timedelta(seconds=4), 'active_window': '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},
-            {'created_at': base_time + timedelta(seconds=45), 'active_window': '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},  # Big gap
-            {'created_at': base_time + timedelta(seconds=49), 'active_window': '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},
+            {'created_at': base_time, "active_window": '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},
+            {'created_at': base_time + timedelta(seconds=4), "active_window": '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},
+            {'created_at': base_time + timedelta(seconds=45), "active_window": '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},  # Big gap
+            {'created_at': base_time + timedelta(seconds=49), "active_window": '{"title": "IDE", "app": "IDE"}', "ocr_result": 'code'},
         ])
         
         sessions = tracker.track_sessions(irregular_data)
@@ -266,13 +266,13 @@ class TestTimeTrackingAccuracy:
         for i in range(10):
             reading_data.append({
                 'created_at': base_time + timedelta(seconds=i*4),
-                'active_window': '{"title": "Research Paper - Chrome", "app": "Chrome"}',
+                "active_window": '{"title": "Research Paper - Chrome", "app": "Chrome"}',
                 "ocr_result": 'research'
             })
         # Add one more after 14:59 gap
         reading_data.append({
             'created_at': base_time + timedelta(minutes=14, seconds=59),
-            'active_window': '{"title": "Research Paper - Chrome", "app": "Chrome"}',
+            "active_window": '{"title": "Research Paper - Chrome", "app": "Chrome"}',
             "ocr_result": 'research'
         })
         
@@ -286,7 +286,7 @@ class TestTimeTrackingAccuracy:
         for i in range(20):
             coding_data.append({
                 'created_at': base_time + timedelta(seconds=i*30),  # 30 second intervals
-                'active_window': '{"title": "main.py - VSCode", "app": "Code"}',
+                "active_window": '{"title": "main.py - VSCode", "app": "Code"}',
                 "ocr_result": 'def function'
             })
         
@@ -306,10 +306,10 @@ class TestTimeTrackingAccuracy:
         
         # Create data with various gaps
         screenshots = [
-            {'created_at': base_time, 'active_window': '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},
-            {'created_at': base_time + timedelta(seconds=4), 'active_window': '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},
-            {'created_at': base_time + timedelta(seconds=180), 'active_window': '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},  # 3-min gap
-            {'created_at': base_time + timedelta(seconds=184), 'active_window': '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},
+            {'created_at': base_time, "active_window": '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},
+            {'created_at': base_time + timedelta(seconds=4), "active_window": '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},
+            {'created_at': base_time + timedelta(seconds=180), "active_window": '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},  # 3-min gap
+            {'created_at': base_time + timedelta(seconds=184), "active_window": '{"title": "Editor", "app": "Editor"}', "ocr_result": 'work'},
         ]
         
         df = pd.DataFrame(screenshots)
@@ -343,29 +343,29 @@ class TestTimeTrackingAccuracy:
         min_duration_threshold = 30  # seconds
         screenshots = [
             # Session 1: 20-second session (below minimum)
-            {'created_at': base_time, 'active_window': '{"title": "Quick Task", "app": "QuickApp"}', "ocr_result": 'quick work'},
-            {'created_at': base_time + timedelta(seconds=20), 'active_window': '{"title": "Quick Task", "app": "QuickApp"}', "ocr_result": 'quick end'},
+            {'created_at': base_time, "active_window": '{"title": "Quick Task", "app": "QuickApp"}', "ocr_result": 'quick work'},
+            {'created_at': base_time + timedelta(seconds=20), "active_window": '{"title": "Quick Task", "app": "QuickApp"}', "ocr_result": 'quick end'},
             
             # Session 2: 15-second session (well below minimum)
-            {'created_at': base_time + timedelta(seconds=45), 'active_window': '{"title": "Very Short", "app": "ShortApp"}', "ocr_result": 'brief'},
-            {'created_at': base_time + timedelta(seconds=60), 'active_window': '{"title": "Very Short", "app": "ShortApp"}', "ocr_result": 'done'},
+            {'created_at': base_time + timedelta(seconds=45), "active_window": '{"title": "Very Short", "app": "ShortApp"}', "ocr_result": 'brief'},
+            {'created_at': base_time + timedelta(seconds=60), "active_window": '{"title": "Very Short", "app": "ShortApp"}', "ocr_result": 'done'},
             
             # Session 3: 40-second session (above minimum)
-            {'created_at': base_time + timedelta(seconds=90), 'active_window': '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'substantial work'},
-            {'created_at': base_time + timedelta(seconds=94), 'active_window': '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'continuing'},
-            {'created_at': base_time + timedelta(seconds=98), 'active_window': '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'more work'},
-            {'created_at': base_time + timedelta(seconds=130), 'active_window': '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'finishing'},
+            {'created_at': base_time + timedelta(seconds=90), "active_window": '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'substantial work'},
+            {'created_at': base_time + timedelta(seconds=94), "active_window": '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'continuing'},
+            {'created_at': base_time + timedelta(seconds=98), "active_window": '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'more work'},
+            {'created_at': base_time + timedelta(seconds=130), "active_window": '{"title": "Longer Task", "app": "LongApp"}', "ocr_result": 'finishing'},
             
             # Session 4: Exactly at minimum threshold (30 seconds)
-            {'created_at': base_time + timedelta(seconds=150), 'active_window': '{"title": "Exact Duration", "app": "ExactApp"}', "ocr_result": 'start'},
-            {'created_at': base_time + timedelta(seconds=180), 'active_window': '{"title": "Exact Duration", "app": "ExactApp"}', "ocr_result": 'end'},
+            {'created_at': base_time + timedelta(seconds=150), "active_window": '{"title": "Exact Duration", "app": "ExactApp"}', "ocr_result": 'start'},
+            {'created_at': base_time + timedelta(seconds=180), "active_window": '{"title": "Exact Duration", "app": "ExactApp"}', "ocr_result": 'end'},
         ]
         
         # Validate test data structure
         assert len(screenshots) == 10, "Should have exactly 10 test screenshots"
         assert all('created_at' in s for s in screenshots), "All screenshots should have created_at"
-        assert all('active_window' in s for s in screenshots), "All screenshots should have active_window"
-        assert all('ocr_result' in s for s in screenshots), "All screenshots should have ocr_result"
+        assert all("active_window" in s for s in screenshots), "All screenshots should have active_window"
+        assert all("ocr_result" in s for s in screenshots), "All screenshots should have ocr_result"
         
         # Process sessions with performance measurement
         df = pd.DataFrame(screenshots)
@@ -500,7 +500,7 @@ class TestTimeTrackingAccuracy:
         for i in range(20):
             screenshots.append({
                 'created_at': base_time + timedelta(seconds=i*30),
-                'active_window': '{"title": "Long Task", "app": "App"}',
+                "active_window": '{"title": "Long Task", "app": "App"}',
                 "ocr_result": 'work'
             })
         

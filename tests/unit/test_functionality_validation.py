@@ -166,9 +166,9 @@ class TestEnhancedFunctionalityValidation:
             ("Terminal - bash", "git commit -m 'fix bug'", "git", "Terminal with git should extract git task"),
             ("Google Chrome - GitHub", None, "browsing", "Browser should extract browsing task"),
             ("", "", "unknown", "Empty input should handle gracefully"),
-            ("a" * 1000, None, "task", "Very long title should handle gracefully"),
-            ("📝 Emoji Title 🚀", None, "task", "Unicode should handle gracefully"),
-            ("NULL\x00CHAR", None, "task", "Null characters should handle gracefully")
+            ("a" * 1000, None, "tasks", "Very long title should handle gracefully"),
+            ("📝 Emoji Title 🚀", None, "tasks", "Unicode should handle gracefully"),
+            ("NULL\x00CHAR", None, "tasks", "Null characters should handle gracefully")
         ]
         
         extraction_times = []
@@ -189,7 +189,7 @@ class TestEnhancedFunctionalityValidation:
                 assert len(result) <= 1000, f"Result should not be excessively long for: {description}"
                 
                 # Validate extraction contains expected content
-                if expected_contains != "unknown" and expected_contains != "task":
+                if expected_contains != "unknown" and expected_contains != "tasks":
                     assert expected_contains.lower() in result.lower(), f"Should contain '{expected_contains}' for: {description}"
                 
                 # Performance validation
@@ -199,7 +199,7 @@ class TestEnhancedFunctionalityValidation:
                 
             except Exception as e:
                 # Some edge cases might raise exceptions - that's acceptable
-                assert "task" in str(e).lower() or "extract" in str(e).lower() or "input" in str(e).lower(), \
+                assert "tasks" in str(e).lower() or "extract" in str(e).lower() or "input" in str(e).lower(), \
                     f"Exception should be task-related for {description}: {e}"
         
         # Validate overall performance

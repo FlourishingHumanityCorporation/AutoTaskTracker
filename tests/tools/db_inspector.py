@@ -49,7 +49,7 @@ cursor.execute("""
         datetime(e.created_at, 'localtime') as time,
         me.value as window
     FROM entities e
-    LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'active_window'
+    LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = "active_window"
     WHERE e.file_type_group = 'image'
     ORDER BY e.created_at DESC
     LIMIT 5

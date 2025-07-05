@@ -26,7 +26,8 @@ class TestMemosServiceIntegration:
                 # Try to connect to default memos port
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.settimeout(2)
-                    result = sock.connect_ex(('localhost', 8839))
+                    from autotasktracker.config import get_config
+                    result = sock.connect_ex((get_config().SERVER_HOST, get_config().MEMOS_PORT))
                     return result == 0
             except Exception:
                 return False
@@ -38,7 +39,8 @@ class TestMemosServiceIntegration:
         if is_running:
             # If service is running, test basic HTTP health
             try:
-                response = requests.get('http://localhost:8839/api/health', timeout=5)
+                from autotasktracker.config import get_config
+                response = requests.get(f'http://{get_config().SERVER_HOST}:{get_config().MEMOS_PORT}/api/health', timeout=5)
                 # Should get some response (even if it's an error)
                 assert response.status_code in [200, 404, 405, 500]
             except requests.exceptions.RequestException:
@@ -156,7 +158,14 @@ class TestDashboardServiceIntegration:
         config = get_config()
         
         # Test that port configuration exists and is reasonable
-        expected_ports = [8502, 8503, 8504, 8505, 8506, 8507]
+        expected_ports = [
+            config.TASK_BOARD_PORT,
+            config.ANALYTICS_PORT,
+            config.TIMETRACKER_PORT,
+            config.TIME_TRACKER_PORT,
+            config.NOTIFICATIONS_PORT,
+            config.ADVANCED_ANALYTICS_PORT
+        ]
         
         for port in expected_ports:
             # Port should be in valid range
@@ -323,13 +332,15 @@ class TestExternalServiceMonitoring:
             try:
                 # Simple port scan for common AutoTaskTracker ports
                 listening_ports = []
-                test_ports = [8502, 8503, 8839]  # Dashboard ports + memos
+                from autotasktracker.config import get_config
+                config = get_config()
+                test_ports = [config.TASK_BOARD_PORT, config.ANALYTICS_PORT, config.MEMOS_PORT]  # Dashboard ports + memos
                 
                 for port in test_ports:
                     try:
                         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                             sock.settimeout(1)
-                            result = sock.connect_ex(('localhost', port))
+                            result = sock.connect_ex((config.SERVER_HOST, port))
                             if result == 0:
                                 listening_ports.append(port)
                     except Exception:
@@ -347,7 +358,8 @@ class TestExternalServiceMonitoring:
         """Test service health check endpoints."""
         # Test memos health endpoint if service is running
         try:
-            response = requests.get('http://localhost:8839/api/v1/status', timeout=2)
+            from autotasktracker.config import get_config
+        response = requests.get(f'http://{get_config().SERVER_HOST}:{get_config().MEMOS_PORT}/api/v1/status', timeout=2)
             # If we get a response, service is running
             assert response.status_code in [200, 404, 405]  # Various valid responses
         except requests.exceptions.RequestException:

@@ -13,6 +13,7 @@ from .components import (
 )
 from .data import TaskRepository, MetricsRepository
 from .cache import cached_data
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class AchievementBoardDashboard(BaseDashboard):
         super().__init__(
             title="Achievement Board - AutoTaskTracker",
             icon="🏆",
-            port=8504
+            port=get_config().TIMETRACKER_PORT
         )
         
     def init_session_state(self):
@@ -153,8 +154,8 @@ class AchievementBoardDashboard(BaseDashboard):
                         img = Image.open(screenshot_path)
                         img.thumbnail((150, 150))
                         st.image(img, use_container_width=True)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to load achievement icon: {e}")
                         
         st.markdown('</div>', unsafe_allow_html=True)
         

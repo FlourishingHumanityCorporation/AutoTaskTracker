@@ -25,7 +25,7 @@ except ImportError:
 class TaskNotifier:
     def __init__(self):
         self.config = get_config()
-        self.db = DatabaseManager(self.config.DB_PATH)
+        self.db = DatabaseManager()  # Use Pensieve integration by default
         self.last_notification = datetime.now()
         self.notification_interval = 3600  # 1 hour
             
@@ -49,14 +49,14 @@ class TaskNotifier:
             
             activities = []
             for _, row in df.iterrows():
-                if row['active_window']:
+                if row["active_window"]:
                     try:
-                        title = extract_window_title(row['active_window'])
+                        title = extract_window_title(row["active_window"])
                         if title:
                             category = ActivityCategorizer.categorize(title)
                             activities.append({
                                 'time': datetime.fromisoformat(row['created_at']),
-                                'category': category,
+                                "category": category,
                                 'title': title
                             })
                     except (ValueError, TypeError, KeyError):
@@ -69,7 +69,7 @@ class TaskNotifier:
             
             # Calculate category distribution
             for activity in activities:
-                cat = activity['category']
+                cat = activity["category"]
                 stats["category"][cat] = stats["category"].get(cat, 0) + 1
                 
             # Find top activity
@@ -80,14 +80,14 @@ class TaskNotifier:
             # Calculate focus time (continuous work in same category)
             if activities:
                 focus_sessions = []
-                current_session = {'category': activities[0]['category'], 'start': 0, 'duration': 0}
+                current_session = {"category": activities[0]["category"], 'start': 0, 'duration': 0}
                 
                 for i in range(1, len(activities)):
                     # Calculate time difference (newer timestamp - older timestamp)
                     time_diff = (activities[i]['time'] - activities[i-1]['time']).total_seconds() / 60
                     
                     # Check if this continues the current session
-                    if time_diff <= 5 and activities[i]['category'] == current_session['category']:
+                    if time_diff <= 5 and activities[i]["category"] == current_session["category"]:
                         # Accumulate the time difference
                         current_session['duration'] += time_diff
                     else:
@@ -95,7 +95,7 @@ class TaskNotifier:
                         if current_session['duration'] >= 10:  # At least 10 minutes
                             focus_sessions.append(current_session['duration'])
                         # Start new session
-                        current_session = {'category': activities[i]['category'], 'start': i, 'duration': 0}
+                        current_session = {"category": activities[i]["category"], 'start': i, 'duration': 0}
                 
                 # Don't forget the last session
                 if current_session['duration'] >= 10:
@@ -146,8 +146,8 @@ class TaskNotifier:
                     timeout=10
                 )
                 return True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Desktop notification failed: {e}")
         return False
         
     def run_periodic_check(self):
@@ -172,7 +172,7 @@ class TaskNotifier:
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                print(f"Error in notification loop: {e}")
+                logger.error(f"Error in notification loop: {e}")
                 time.sleep(300)
 
 if __name__ == "__main__":

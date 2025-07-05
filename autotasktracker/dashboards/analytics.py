@@ -7,7 +7,7 @@ import logging
 
 # Removed sys.path hack - using proper package imports
 
-from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards import BaseDashboard
 from autotasktracker.dashboards.components import (
     TimeFilterComponent, 
     CategoryFilterComponent,
@@ -20,6 +20,7 @@ from autotasktracker.dashboards.components import (
 )
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.dashboards.cache import MetricsCache
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class AnalyticsDashboard(BaseDashboard):
         super().__init__(
             title="Analytics - AutoTaskTracker",
             icon="📊",
-            port=8503
+            port=get_config().ANALYTICS_PORT
         )
         
     def render_sidebar(self):

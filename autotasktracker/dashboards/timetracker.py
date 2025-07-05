@@ -18,7 +18,7 @@ from autotasktracker import (
     Config,
     get_config
 )
-from autotasktracker.core.time_tracker import TimeTracker
+from autotasktracker.core import TimeTracker
 
 # Initialize configuration
 config = get_config()
@@ -103,8 +103,8 @@ def main():
     st.title("⏱️ Task Time Tracker")
     st.write("Detailed time tracking for all your activities with intelligent task recognition")
 
-    # Database connection
-    db = DatabaseManager(config.DB_PATH)
+    # Database connection - use Pensieve integration by default
+    db = DatabaseManager()
     if not db.test_connection():
         st.error("❌ Cannot connect to database. Make sure Memos is running.")
         st.stop()
@@ -158,7 +158,7 @@ def main():
             'end': session.end_time,
             'duration': session.duration_minutes,
             'active_duration': session.active_time_minutes,
-            'category': category,
+            "category": category,
             'confidence': session.confidence,
             'screenshot_count': session.screenshot_count,
             'color': 'lightblue'  # Default color
@@ -242,7 +242,7 @@ def main():
             'Active Time (min)': f"{metrics['active_minutes']:.1f}",
             'Sessions': metrics['session_count'],
             'Confidence': f"{confidence_icon} {metrics['average_confidence']:.2f}",
-            'Category': metrics['category'],
+            'Category': metrics["category"],
             'First Seen': metrics['first_seen'].strftime('%H:%M') if metrics['first_seen'] else 'N/A',
             'Last Seen': metrics['last_seen'].strftime('%H:%M') if metrics['last_seen'] else 'N/A'
         })

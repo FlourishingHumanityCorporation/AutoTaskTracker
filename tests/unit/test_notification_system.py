@@ -42,7 +42,7 @@ class TestTaskNotifier:
                 (datetime.now() - timedelta(minutes=5)).isoformat(),
                 (datetime.now() - timedelta(minutes=10)).isoformat()
             ],
-            'active_window': [
+            "active_window": [
                 '{"title": "Visual Studio Code - project.py", "app": "Code"}',
                 '{"title": "Chrome - Documentation", "app": "Chrome"}',
                 '{"title": "Visual Studio Code - project.py", "app": "Code"}'
@@ -158,17 +158,17 @@ class TestTaskNotifier:
             ({
                 'total_screenshots': 100,
                 'productive_time': 120,  # 2 hours
-                'categories': {'Development': 60, 'Communication': 30, 'Other': 10}
+                "category": {'Development': 60, 'Communication': 30, 'Other': 10}
             }, "Normal productivity stats"),
             ({
                 'total_screenshots': 0,
                 'productive_time': 0,
-                'categories': {}
+                "category": {}
             }, "Zero activity stats"),
             ({
                 'total_screenshots': 1000,
                 'productive_time': 480,  # 8 hours
-                'categories': {'Development': 400, 'Meeting': 60, 'Documentation': 20}
+                "category": {'Development': 400, 'Meeting': 60, 'Documentation': 20}
             }, "High activity stats")
         ]
         
@@ -206,7 +206,7 @@ class TestTaskNotifier:
                 if stats.get('total_screenshots', 0) > 0:
                     # Message should reference activity somehow
                     assert any(word in formatted_message.lower() for word in 
-                              ['screenshot', 'activity', 'productive', 'work', 'task']), \
+                              ['screenshot', 'activity', 'productive', 'work', "tasks"]), \
                         f"Should reference activity for {description}"
                 
                 # Performance validation
@@ -359,7 +359,7 @@ class TestTaskNotifier:
         
         mock_db.fetch_tasks.return_value = pd.DataFrame({
             'created_at': [t.isoformat() for t in timestamps],
-            'active_window': ['{"title": "VS Code - coding", "app": "Code"}'] * 20,
+            "active_window": ['{"title": "VS Code - coding", "app": "Code"}'] * 20,
             "ocr_result": ['code'] * 20
         })
         
@@ -380,7 +380,7 @@ class TestTaskNotifier:
         
         mock_db.fetch_tasks.return_value = pd.DataFrame({
             'created_at': [t.isoformat() for t in timestamps],
-            'active_window': ['{"title": "Visual Studio Code", "app": "Code"}'] * 20,
+            "active_window": ['{"title": "Visual Studio Code", "app": "Code"}'] * 20,
             "ocr_result": ['def function():'] * 20
         })
         

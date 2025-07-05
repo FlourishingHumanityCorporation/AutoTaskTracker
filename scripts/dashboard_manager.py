@@ -18,7 +18,7 @@ import logging
 # Add package to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from autotasktracker.utils.config import get_config
+from autotasktracker.config import get_config
 from autotasktracker.utils.debug_capture import start_debug_session, stop_debug_session
 
 logger = logging.getLogger(__name__)

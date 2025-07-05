@@ -32,9 +32,22 @@ class PostgreSQLAdapter:
         self.pensieve_client = get_pensieve_client()
         self.config = get_pensieve_config()
         self.capabilities = self._detect_capabilities()
-        self.fallback_db = DatabaseManager(use_pensieve_api=False)
+        self._fallback_db = None  # Lazy initialization
         
         logger.info(f"PostgreSQL adapter initialized - Performance tier: {self.capabilities.performance_tier}")
+    
+    @property
+    def fallback_db(self):
+        """Lazy initialization of fallback database."""
+        if self._fallback_db is None:
+            try:
+                self._fallback_db = DatabaseManager(use_pensieve_api=False)
+                logger.debug("Initialized fallback SQLite database")
+            except Exception as e:
+                logger.warning(f"Failed to initialize fallback database: {e}")
+                # Return a mock that will gracefully fail
+                self._fallback_db = None
+        return self._fallback_db
     
     def _detect_capabilities(self) -> PostgreSQLCapabilities:
         """Detect PostgreSQL and pgvector capabilities."""
@@ -86,8 +99,8 @@ class PostgreSQLAdapter:
             response = self.pensieve_client.session.get(f"{self.pensieve_client.base_url}/api/health/detailed")
             if response.status_code == 200:
                 return response.json()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to get detailed health info: {e}")
         
         # Fallback to config-based detection
         return {
@@ -133,19 +146,19 @@ class PostgreSQLAdapter:
                 
                 metadata = self.pensieve_client.get_metadata(frame.id)
                 
-                if 'tasks' in metadata:
+                if "tasks" in metadata:
                     task_data = {
                         'id': frame.id,
                         'timestamp': frame.created_at,
                         'filepath': frame.filepath,
-                        'tasks': self._parse_tasks_safely(metadata.get('tasks')),
-                        'category': metadata.get('category', 'Other'),
-                        'window_title': metadata.get('active_window', ''),
-                        'ocr_text': self.pensieve_client.get_ocr_result(frame.id)
+                        "tasks": self._parse_tasks_safely(metadata.get("tasks")),
+                        "category": metadata.get("category", 'Other'),
+                        "active_window": metadata.get("active_window", ''),
+                        "ocr_result": self.pensieve_client.get_ocr_result(frame.id)
                     }
                     
                     # Apply category filter if specified
-                    if not categories or task_data['category'] in categories:
+                    if not categories or task_data["category"] in categories:
                         tasks.append(task_data)
             
             logger.info(f"Retrieved {len(tasks)} tasks using pgvector optimization")
@@ -177,18 +190,18 @@ class PostgreSQLAdapter:
                 
                 metadata = self.pensieve_client.get_metadata(frame.id)
                 
-                if 'tasks' in metadata:
+                if "tasks" in metadata:
                     task_data = {
                         'id': frame.id,
                         'timestamp': frame.created_at,
                         'filepath': frame.filepath,
-                        'tasks': self._parse_tasks_safely(metadata.get('tasks')),
-                        'category': metadata.get('category', 'Other'),
-                        'window_title': metadata.get('active_window', ''),
-                        'ocr_text': self.pensieve_client.get_ocr_result(frame.id)
+                        "tasks": self._parse_tasks_safely(metadata.get("tasks")),
+                        "category": metadata.get("category", 'Other'),
+                        "active_window": metadata.get("active_window", ''),
+                        "ocr_result": self.pensieve_client.get_ocr_result(frame.id)
                     }
                     
-                    if not categories or task_data['category'] in categories:
+                    if not categories or task_data["category"] in categories:
                         tasks.append(task_data)
             
             logger.info(f"Retrieved {len(tasks)} tasks using PostgreSQL optimization")
@@ -207,6 +220,11 @@ class PostgreSQLAdapter:
     ) -> List[Dict[str, Any]]:
         """Get tasks using SQLite fallback."""
         try:
+            # Check if fallback database is available
+            if self.fallback_db is None:
+                logger.warning("SQLite fallback database not available")
+                return []
+            
             # Use direct database access as fallback
             from ..dashboards.data.repositories import TaskRepository
             
@@ -220,10 +238,10 @@ class PostgreSQLAdapter:
                     'id': task.id,
                     'timestamp': task.timestamp,
                     'filepath': task.screenshot_path,
-                    'tasks': [{'title': task.title, 'category': task.category}],
-                    'category': task.category,
-                    'window_title': task.window_title,
-                    'ocr_text': task.ocr_text
+                    "tasks": [{'title': task.title, "category": task.category}],
+                    "category": task.category,
+                    "active_window": task.window_title,
+                    "ocr_result": task.ocr_text
                 })
             
             logger.info(f"Retrieved {len(task_dicts)} tasks using SQLite fallback")
@@ -253,13 +271,13 @@ class PostgreSQLAdapter:
                 if isinstance(task, dict):
                     normalized_tasks.append({
                         'title': task.get('title', 'Unknown Task'),
-                        'category': task.get('category', 'Other'),
+                        "category": task.get("category", 'Other'),
                         'confidence': task.get('confidence', 0.5)
                     })
                 elif isinstance(task, str):
                     normalized_tasks.append({
                         'title': task,
-                        'category': 'Other',
+                        "category": 'Other',
                         'confidence': 0.5
                     })
             
@@ -355,7 +373,7 @@ class PostgreSQLAdapter:
                 'priority': 'high',
                 'action': 'Upgrade to PostgreSQL',
                 'benefit': 'Better performance and concurrent access',
-                'command': 'memos migrate --sqlite-url sqlite:///~/.memos/database.db --pg-url postgresql://user:pass@localhost/pensieve'
+                'command': f'memos migrate --sqlite-url sqlite:///{self.config.get_db_path()} --pg-url postgresql://user:pass@localhost/pensieve'
             })
             
             recommendations['recommendations'].append({

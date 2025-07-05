@@ -160,7 +160,7 @@ def extract_task_summary(ocr_text: Optional[str], active_window: Optional[str]) 
     """
     # Import task extractor
     try:
-        from .task_extractor import get_task_extractor
+        from autotasktracker.core.task_extractor import get_task_extractor
         extractor = get_task_extractor()
         
         # First try to get window title

@@ -7,12 +7,13 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import pandas as pd
 
-from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards import BaseDashboard
 from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
 from autotasktracker.pensieve.advanced_search import get_advanced_search, SearchQuery
 from autotasktracker.pensieve.vector_search import get_enhanced_vector_search, VectorSearchQuery
 from autotasktracker.pensieve.postgresql_adapter import get_postgresql_adapter
 from autotasktracker.pensieve.health_monitor import get_health_monitor
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class RealTimeDashboard(BaseDashboard):
     """Real-time dashboard with event-driven updates from Pensieve."""
     
     def __init__(self):
-        super().__init__(title="Real-Time AutoTaskTracker", icon="⚡", port=8506)
+        super().__init__(title="Real-Time AutoTaskTracker", icon="⚡", port=get_config().NOTIFICATIONS_PORT)
         
         # Event processing
         self.event_processor = get_event_processor()
@@ -509,11 +510,11 @@ class RealTimeDashboard(BaseDashboard):
                     st.write(f"**Entity {entity_id} Details:**")
                     st.write(f"- **File:** {frame.filepath}")
                     st.write(f"- **Timestamp:** {frame.timestamp}")
-                    st.write(f"- **Window Title:** {metadata.get('window_title', 'N/A')}")
+                    st.write(f"- **Window Title:** {metadata.get('active_window', 'N/A')}")
                     if ocr_text:
                         st.write(f"- **OCR Text:** {ocr_text[:200]}...")
                     
-                    tasks = metadata.get('extracted_tasks', {}).get('tasks', [])
+                    tasks = metadata.get('extracted_tasks', {}).get("tasks", [])
                     if tasks:
                         st.write(f"- **Tasks:** {', '.join(tasks)}")
         

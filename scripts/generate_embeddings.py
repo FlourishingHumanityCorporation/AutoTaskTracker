@@ -19,7 +19,9 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.config import get_config
+
+from autotasktracker.core import DatabaseManager
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 from autotasktracker.pensieve.health_monitor import is_pensieve_healthy
 from autotasktracker.pensieve.advanced_search import get_advanced_search
@@ -117,9 +119,9 @@ class PensieveEmbeddingsGenerator:
                         'id': frame.id,
                         'filepath': frame.filepath,
                         'created_at': frame.created_at,
-                        'window_title': all_metadata.get('window_title', ''),
-                        'ai_task': all_metadata.get('extracted_tasks', {}).get('tasks', []),
-                        'ocr_text': ocr_text or ''
+                        "active_window": all_metadata.get("active_window", ''),
+                        'ai_task': all_metadata.get('extracted_tasks', {}).get("tasks", []),
+                        "ocr_result": ocr_text or ''
                     })
             
             return screenshots
@@ -139,8 +141,8 @@ class PensieveEmbeddingsGenerator:
             m2.value as ai_task,
             m3.value as ocr_text
         FROM entities e
-        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'active_window'
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'tasks'
+        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "active_window"
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "tasks"
         LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'text'
         LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'embeddings'
         WHERE e.file_type_group = 'image'
@@ -288,7 +290,7 @@ def main():
     parser.add_argument('--limit', type=int, default=100, 
                        help='Number of embeddings to generate (default: 100)')
     parser.add_argument('--db-path', type=str, 
-                       default=str(Path.home() / '.memos' / 'database.db'),
+                       default=get_config().get_db_path(),
                        help='Path to database')
     parser.add_argument('--show-coverage', action='store_true',
                        help='Just show coverage statistics')

@@ -22,6 +22,7 @@ from .components import (
 )
 from .data import TaskRepository, MetricsRepository
 from .cache import cached_data, MetricsCache
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class AdvancedAnalyticsDashboard(BaseDashboard):
         super().__init__(
             title="Advanced Analytics - AutoTaskTracker",
             icon="🧠",
-            port=8507
+            port=get_config().ADVANCED_ANALYTICS_PORT
         )
         
     def init_session_state(self):

@@ -13,9 +13,9 @@ import signal
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
 from autotasktracker.core.task_extractor import get_task_extractor
-from autotasktracker.core.categorizer import ActivityCategorizer
+from autotasktracker.core import ActivityCategorizer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +28,7 @@ class RealtimeProcessor:
     """Process new screenshots in real-time."""
     
     def __init__(self, check_interval: int = 10):
-        self.db_manager = DatabaseManager()
+        self.db_manager = DatabaseManager(use_pensieve_api=True)
         self.check_interval = check_interval
         self.task_extractor = get_task_extractor()
         self.processed_ids: Set[int] = set()
@@ -54,7 +54,7 @@ class RealtimeProcessor:
             cursor.execute("""
                 SELECT DISTINCT entity_id 
                 FROM metadata_entries 
-                WHERE key = 'tasks'
+                WHERE key = "tasks"
             """)
             
             self.processed_ids = {row[0] for row in cursor.fetchall()}
@@ -68,11 +68,11 @@ class RealtimeProcessor:
             cursor.execute("""
                 SELECT e.id, m.value as window_title
                 FROM entities e
-                JOIN metadata_entries m ON e.id = m.entity_id AND m.key = 'active_window'
+                JOIN metadata_entries m ON e.id = m.entity_id AND m.key = "active_window"
                 WHERE e.id NOT IN (
                     SELECT DISTINCT entity_id 
                     FROM metadata_entries 
-                    WHERE key = 'tasks'
+                    WHERE key = "tasks"
                 )
                 AND e.created_at > datetime('now', '-1 hour')
                 ORDER BY e.created_at DESC
@@ -112,7 +112,7 @@ class RealtimeProcessor:
                 # Check if already processed (double check)
                 cursor.execute("""
                     SELECT 1 FROM metadata_entries 
-                    WHERE entity_id = ? AND key = 'tasks'
+                    WHERE entity_id = ? AND key = "tasks"
                 """, (entity_id,))
                 
                 if cursor.fetchone():
@@ -123,14 +123,14 @@ class RealtimeProcessor:
                 cursor.execute("""
                     INSERT INTO metadata_entries 
                     (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                    VALUES (?, 'tasks', ?, 'realtime_processor', 'text', datetime('now'), datetime('now'))
+                    VALUES (?, "tasks", ?, 'realtime_processor', 'text', datetime('now'), datetime('now'))
                 """, (entity_id, task))
                 
                 # Insert category
                 cursor.execute("""
                     INSERT INTO metadata_entries 
                     (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                    VALUES (?, 'category', ?, 'realtime_processor', 'text', datetime('now'), datetime('now'))
+                    VALUES (?, "category", ?, 'realtime_processor', 'text', datetime('now'), datetime('now'))
                 """, (entity_id, category))
                 
                 conn.commit()
@@ -206,7 +206,7 @@ class RealtimeProcessor:
             cursor.execute("""
                 SELECT COUNT(DISTINCT entity_id) 
                 FROM metadata_entries 
-                WHERE key = 'tasks'
+                WHERE key = "tasks"
             """)
             processed = cursor.fetchone()[0]
             

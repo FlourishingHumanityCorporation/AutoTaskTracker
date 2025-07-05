@@ -33,7 +33,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run full health check
+  # Run fast critical tests only (< 10 seconds)
+  python scripts/pensieve_health_check.py --fast
+  
+  # Run full health check (2-3 minutes)
   python scripts/pensieve_health_check.py
   
   # Auto-fix simple issues
@@ -47,6 +50,9 @@ Examples:
   
   # Generate JSON report with auto-fix
   python scripts/pensieve_health_check.py --fix --report json
+  
+  # Set custom timeout per test
+  python scripts/pensieve_health_check.py --timeout 60
         """
     )
     
@@ -88,6 +94,19 @@ Examples:
         help='Verbose output'
     )
     
+    parser.add_argument(
+        '--fast',
+        action='store_true',
+        help='Run only critical fast tests (completes in <10 seconds)'
+    )
+    
+    parser.add_argument(
+        '--timeout',
+        type=int,
+        default=30,
+        help='Timeout per test in seconds (default: 30)'
+    )
+    
     args = parser.parse_args()
     
     # Set environment variables based on arguments
@@ -107,12 +126,66 @@ Examples:
     # Run the health test
     print("\n🏥 Running Pensieve Integration Health Check...\n")
     
+    # Fast tests that always complete quickly
+    fast_tests = [
+        'test_no_direct_sqlite_access',
+        'test_metadata_key_consistency',
+        'test_memos_command_usage', 
+        'test_pensieve_service_checks',
+        'test_pensieve_api_client_existence',
+        'test_generate_summary_report'
+    ]
+    
+    # Slow tests that analyze many files
+    slow_tests = [
+        'test_error_handling_patterns',
+        'test_n_plus_one_query_patterns', 
+        'test_bulk_operation_opportunities',
+        'test_file_operation_validation'
+    ]
+    
+    # For incremental or fast mode, run only fast tests
+    if args.incremental or args.fast:
+        mode_name = "incremental" if args.incremental else "fast"
+        print(f"Running in {mode_name} mode - executing only critical tests\n")
+        
+        # Run all fast tests in a single pytest call for efficiency
+        test_names = ' or '.join(fast_tests)
+        cmd = [
+            sys.executable, '-m', 'pytest',
+            'tests/health/test_pensieve_integration_health.py',
+            '-k', test_names,
+            '-v' if args.verbose else '-q',
+            '--tb=short',
+            f'--timeout={args.timeout}',
+            '-x'  # Stop on first failure
+        ]
+        
+        result = subprocess.run(cmd, capture_output=not args.verbose)
+        
+        if result.returncode != 0:
+            print("❌ Some tests FAILED")
+            if not args.verbose:
+                print(result.stdout.decode('utf-8'))
+                print(result.stderr.decode('utf-8'))
+            return 1
+        else:
+            print(f"\n✅ All {mode_name} health checks passed!")
+            if args.fast and not args.incremental:
+                print("\n💡 Run without --fast to execute comprehensive analysis (takes 2-3 minutes)")
+        
+        return 0
+    
+    # Full mode - limit files analyzed for slow tests
+    os.environ['PENSIEVE_MAX_FILES'] = '50'  # Limit files for performance
+    
     cmd = [
         sys.executable, '-m', 'pytest',
         'tests/health/test_pensieve_integration_health.py',
         '-v' if args.verbose else '-q',
         '--tb=short',
-        '--timeout=300'
+        '--timeout=300',
+        '-x'  # Stop on first failure
     ]
     
     if args.report == 'json':

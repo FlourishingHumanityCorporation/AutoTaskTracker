@@ -1,6 +1,6 @@
 # 📊 AutoTaskTracker Dashboards
 
-> **Refactored Architecture (2025)**: This documentation reflects the completely refactored dashboard system with intelligent task grouping, smart filtering, and component-based architecture. See changelog for migration details.
+> **Dashboard System (2025)**: This documentation describes the dashboard system with intelligent task grouping, smart filtering, and component-based architecture.
 
 Comprehensive documentation for the AutoTaskTracker dashboard ecosystem featuring AI-powered insights, intelligent data processing, and modern component-based architecture.
 

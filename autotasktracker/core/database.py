@@ -17,6 +17,23 @@ from autotasktracker.config import get_config
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 from autotasktracker.pensieve.config_reader import get_pensieve_config
 
+# Import performance monitoring (with fallback if not available)
+try:
+    from autotasktracker.pensieve.performance_monitor import record_database_query, start_timer, end_timer
+    PERFORMANCE_MONITORING_AVAILABLE = True
+except ImportError:
+    logger.debug("Performance monitoring not available")
+    PERFORMANCE_MONITORING_AVAILABLE = False
+    
+    def record_database_query(duration_ms: float, query_type: str = "unknown"):
+        pass
+    
+    def start_timer(timer_name: str):
+        pass
+    
+    def end_timer(timer_name: str, metadata=None) -> float:
+        return 0.0
+
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +51,13 @@ class DatabaseManager:
         """
         self.use_pensieve_api = use_pensieve_api
         self._pensieve_client = None
+        self._api_healthy = False
+        self._last_health_check = 0
+        self._health_check_interval = 30  # Check API health every 30 seconds
+        
+        # Initialize intelligent caching
+        from autotasktracker.pensieve.cache_manager import get_cache_manager
+        self.cache = get_cache_manager()
         
         if db_path is None:
             if use_pensieve_api:
@@ -41,7 +65,8 @@ class DatabaseManager:
                     pensieve_config = get_pensieve_config()
                     self.db_path = pensieve_config.database_path
                     self._pensieve_client = get_pensieve_client()
-                    logger.info("Using Pensieve API for database access")
+                    self._api_healthy = self._pensieve_client.is_healthy()
+                    logger.info(f"Using Pensieve API for database access (healthy: {self._api_healthy})")
                 except Exception as e:
                     logger.warning(f"Failed to initialize Pensieve client, falling back to direct DB: {e}")
                     config = get_config()
@@ -60,11 +85,13 @@ class DatabaseManager:
         self._pool_lock = threading.Lock()
         self._wal_mode_enabled = False
         
-        # Initialize database with optimizations
-        self._initialize_database()
-        
-        # Create initial connections
-        self._warm_up_pool()
+        # Initialize database with optimizations (skip if using Pensieve API)
+        if not (self.use_pensieve_api and self._pensieve_client):
+            self._initialize_database()
+            # Create initial connections
+            self._warm_up_pool()
+        else:
+            logger.info("Skipping SQLite initialization - using Pensieve API")
     
     def _initialize_database(self):
         """Initialize database with performance optimizations."""
@@ -195,8 +222,8 @@ class DatabaseManager:
             # Connection invalid or pool full, close it
             try:
                 conn.close()
-            except sqlite3.Error:
-                pass
+            except sqlite3.Error as e:
+                logger.debug(f"Failed to close connection: {e}")
             with self._pool_lock:
                 self._active_connections = max(0, self._active_connections - 1)
     
@@ -229,8 +256,8 @@ class DatabaseManager:
                     # For write connections, close immediately to avoid transaction issues
                     try:
                         conn.close()
-                    except sqlite3.Error:
-                        pass
+                    except sqlite3.Error as e:
+                        logger.debug(f"Failed to close write connection: {e}")
                     with self._pool_lock:
                         self._active_connections = max(0, self._active_connections - 1)
     
@@ -261,24 +288,144 @@ class DatabaseManager:
             try:
                 conn = self._readonly_pool.get_nowait()
                 conn.close()
-            except (sqlite3.Error, Exception):
-                pass
+            except (sqlite3.Error, Exception) as e:
+                logger.debug(f"Failed to close readonly pool connection: {e}")
         
         # Close read-write pool
         while not self._readwrite_pool.empty():
             try:
                 conn = self._readwrite_pool.get_nowait()
                 conn.close()
-            except (sqlite3.Error, Exception):
-                pass
+            except (sqlite3.Error, Exception) as e:
+                logger.debug(f"Failed to close readwrite pool connection: {e}")
         
         with self._pool_lock:
             self._active_connections = 0
         
         logger.info("Closed all database connections")
     
+    def _check_api_health(self) -> bool:
+        """Check API health with caching to avoid excessive calls."""
+        current_time = time.time()
+        
+        # Use cached health status if within interval
+        if current_time - self._last_health_check < self._health_check_interval:
+            return self._api_healthy
+        
+        # Check health and update cache
+        if self._pensieve_client:
+            self._api_healthy = self._pensieve_client.is_healthy()
+            self._last_health_check = current_time
+            
+        return self._api_healthy
+    
+    def get_entities_via_api(self, limit: int = 100, processed_only: bool = False) -> List[Dict[str, Any]]:
+        """Get entities using Pensieve API with intelligent caching.
+        
+        Args:
+            limit: Maximum number of entities to return
+            processed_only: Only return processed entities
+            
+        Returns:
+            List of entity dictionaries
+        """
+        if not self.use_pensieve_api or not self._pensieve_client:
+            return []
+        
+        # Create cache key
+        cache_key = f"entities_limit_{limit}_processed_{processed_only}"
+        
+        # Try cache first
+        cached_result = self.cache.get(cache_key)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for entities (limit={limit}, processed_only={processed_only})")
+            return cached_result
+        
+        try:
+            if not self._check_api_health():
+                logger.warning("Pensieve service not healthy, falling back to direct DB access")
+                return []
+            
+            entities = self._pensieve_client.get_entities(limit=limit)
+            
+            # Convert to dict format compatible with existing code
+            result = []
+            for entity in entities:
+                entity_dict = {
+                    'id': entity.id,
+                    'filepath': entity.filepath,
+                    'filename': entity.filename,
+                    'created_at': entity.created_at,
+                    'file_created_at': entity.file_created_at,
+                    'last_scan_at': entity.last_scan_at,
+                    'file_type_group': entity.file_type_group,
+                    'metadata': entity.metadata or {}
+                }
+                result.append(entity_dict)
+                
+                # Cache individual entities for faster access
+                self.cache.set(f"entity_{entity.id}", entity_dict, ttl=600)
+            
+            # Filter for processed entities if requested
+            if processed_only:
+                result = [e for e in result if e['last_scan_at'] is not None]
+            
+            # Cache the result
+            self.cache.set(cache_key, result, ttl=300)  # 5-minute cache
+            
+            # Warm cache with entity data
+            self.cache.warm_cache(result)
+            
+            logger.info(f"Retrieved {len(result)} entities via Pensieve API")
+            return result
+            
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error: {e.message}")
+            return []
+        except Exception as e:
+            logger.error(f"Error getting entities via API: {e}")
+            return []
+    
+    def get_entities_objects_via_api(self, limit: int = 100, processed_only: bool = False):
+        """Get entities as proper entity objects using Pensieve API.
+        
+        Args:
+            limit: Maximum number of entities to return
+            processed_only: Only return processed entities
+            
+        Returns:
+            List of PensieveEntity objects
+        """
+        from autotasktracker.pensieve.api_client import PensieveEntity
+        
+        if not self.use_pensieve_api or not self._pensieve_client:
+            return []
+        
+        try:
+            if not self._check_api_health():
+                logger.warning("Pensieve service not healthy, falling back to direct DB access")
+                return []
+            
+            entities = self._pensieve_client.get_entities(limit=limit)
+            
+            # Filter for processed entities if requested
+            if processed_only:
+                entities = [e for e in entities if e.last_scan_at is not None]
+            
+            logger.info(f"Retrieved {len(entities)} entity objects via Pensieve API")
+            return entities
+            
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error: {e.message}")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to get entities via API: {e}")
+            return []
+    
     def get_frames_via_api(self, limit: int = 100, processed_only: bool = False) -> List[Dict[str, Any]]:
-        """Get frames using Pensieve API when available.
+        """Get frames using Pensieve API (legacy wrapper).
+        
+        DEPRECATED: Use get_entities_via_api() instead for better alignment with Pensieve API.
         
         Args:
             limit: Maximum number of frames to return
@@ -287,42 +434,29 @@ class DatabaseManager:
         Returns:
             List of frame dictionaries
         """
-        if not self.use_pensieve_api or not self._pensieve_client:
-            return []
+        logger.warning("get_frames_via_api() is deprecated, use get_entities_via_api() for better API alignment")
         
-        try:
-            if not self._pensieve_client.is_healthy():
-                logger.warning("Pensieve service not healthy, falling back to direct DB access")
-                return []
-            
-            frames = self._pensieve_client.get_frames(limit=limit, processed_only=processed_only)
-            
-            # Convert to dict format compatible with existing code
-            result = []
-            for frame in frames:
-                result.append({
-                    'id': frame.id,
-                    'filepath': frame.filepath,
-                    'timestamp': frame.timestamp,
-                    'created_at': frame.created_at,
-                    'processed_at': frame.processed_at,
-                    'metadata': frame.metadata or {}
-                })
-            
-            return result
-            
-        except PensieveAPIError as e:
-            logger.error(f"Pensieve API error: {e.message}")
-            return []
-        except Exception as e:
-            logger.error(f"Failed to get frames via API: {e}")
-            return []
+        entities = self.get_entities_via_api(limit=limit, processed_only=processed_only)
+        
+        # Convert entities to frame format for backward compatibility
+        frames = []
+        for entity in entities:
+            frames.append({
+                'id': entity['id'],
+                'filepath': entity['filepath'],
+                'timestamp': entity['created_at'],
+                'created_at': entity['created_at'],
+                'processed_at': entity['last_scan_at'],
+                'metadata': entity['metadata']
+            })
+        
+        return frames
     
-    def get_frame_metadata_via_api(self, frame_id: int, key: Optional[str] = None) -> Dict[str, Any]:
-        """Get frame metadata using Pensieve API.
+    def get_entity_metadata_via_api(self, entity_id: int, key: Optional[str] = None) -> Dict[str, Any]:
+        """Get entity metadata using Pensieve API.
         
         Args:
-            frame_id: Frame ID
+            entity_id: Entity ID
             key: Specific metadata key
             
         Returns:
@@ -332,16 +466,31 @@ class DatabaseManager:
             return {}
         
         try:
-            return self._pensieve_client.get_metadata(frame_id, key)
+            return self._pensieve_client.get_entity_metadata(entity_id, key)
         except Exception as e:
             logger.error(f"Failed to get metadata via API: {e}")
             return {}
     
-    def store_frame_metadata_via_api(self, frame_id: int, key: str, value: Any) -> bool:
-        """Store frame metadata using Pensieve API.
+    def get_frame_metadata_via_api(self, frame_id: int, key: Optional[str] = None) -> Dict[str, Any]:
+        """Get frame metadata using Pensieve API (legacy wrapper).
+        
+        DEPRECATED: Use get_entity_metadata_via_api() instead for better alignment with Pensieve API.
         
         Args:
             frame_id: Frame ID
+            key: Specific metadata key
+            
+        Returns:
+            Metadata dictionary
+        """
+        logger.warning("get_frame_metadata_via_api() is deprecated, use get_entity_metadata_via_api() for better API alignment")
+        return self.get_entity_metadata_via_api(frame_id, key)
+    
+    def store_entity_metadata_via_api(self, entity_id: int, key: str, value: Any) -> bool:
+        """Store entity metadata using Pensieve API.
+        
+        Args:
+            entity_id: Entity ID
             key: Metadata key
             value: Metadata value
             
@@ -352,10 +501,26 @@ class DatabaseManager:
             return False
         
         try:
-            return self._pensieve_client.store_metadata(frame_id, key, value)
+            return self._pensieve_client.store_entity_metadata(entity_id, key, value)
         except Exception as e:
             logger.error(f"Failed to store metadata via API: {e}")
             return False
+    
+    def store_frame_metadata_via_api(self, frame_id: int, key: str, value: Any) -> bool:
+        """Store frame metadata using Pensieve API (legacy wrapper).
+        
+        DEPRECATED: Use store_entity_metadata_via_api() instead for better alignment with Pensieve API.
+        
+        Args:
+            frame_id: Frame ID
+            key: Metadata key
+            value: Metadata value
+            
+        Returns:
+            True if successful
+        """
+        logger.warning("store_frame_metadata_via_api() is deprecated, use store_entity_metadata_via_api() for better API alignment")
+        return self.store_entity_metadata_via_api(frame_id, key, value)
     
     def fetch_tasks(self, 
                    start_date: Optional[datetime] = None,
@@ -363,7 +528,7 @@ class DatabaseManager:
                    limit: int = 100,
                    offset: int = 0) -> pd.DataFrame:
         """
-        Fetch tasks (screenshots with metadata) from the database.
+        Fetch tasks (screenshots with metadata) with API-first approach and intelligent caching.
         
         Args:
             start_date: Start date filter
@@ -374,33 +539,66 @@ class DatabaseManager:
         Returns:
             DataFrame with task data
         """
-        query = """
-        SELECT
-            e.id,
-            e.filepath,
-            e.filename,
-            datetime(e.created_at, 'localtime') as created_at,
-            e.file_created_at,
-            e.last_scan_at,
-            me.value as ocr_text,
-            me2.value as active_window
-        FROM
-            entities e
-            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
-            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
-        WHERE
-            e.file_type_group = 'image'
-        """
+        # Create cache key for this query
+        cache_key = f"fetch_tasks_{start_date}_{end_date}_{limit}_{offset}"
         
+        # Try cache first for exact same query
+        cached_df = self.cache.get(cache_key)
+        if cached_df is not None:
+            logger.debug(f"Cache hit for fetch_tasks query")
+            return cached_df
+        
+        # Try API-first approach (if no date filters for better API compatibility)
+        if self.use_pensieve_api and not start_date and not end_date and offset == 0:
+            try:
+                entities = self.get_entities_via_api(limit=limit, processed_only=False)
+                if entities:
+                    # Convert entities to DataFrame format
+                    df_data = []
+                    for entity in entities:
+                        # Extract metadata for compatibility
+                        metadata = entity.get('metadata', {})
+                        ocr_text = metadata.get('ocr_result', '')
+                        active_window = metadata.get('active_window', '')
+                        
+                        df_data.append({
+                            'id': entity['id'],
+                            'filepath': entity['filepath'],
+                            'filename': entity.get('filename', ''),
+                            'created_at': entity['created_at'],
+                            'file_created_at': entity.get('file_created_at'),
+                            'last_scan_at': entity.get('last_scan_at'),
+                            'file_type_group': entity.get('file_type_group', 'image'),
+                            'ocr_text': ocr_text,
+                            'active_window': active_window
+                        })
+                    
+                    df = pd.DataFrame(df_data)
+                    
+                    # Apply schema adaptation
+                    from autotasktracker.core import PensieveSchemaAdapter
+                    df = PensieveSchemaAdapter.adapt_dataframe(df)
+                    
+                    # Cache the result
+                    self.cache.set(cache_key, df, ttl=300)
+                    
+                    logger.info(f"Fetched {len(df)} tasks via Pensieve API")
+                    return df
+                    
+            except Exception as e:
+                logger.warning(f"API fetch failed, falling back to SQLite: {e}")
+        
+        # Fallback to SQLite with Pensieve schema adapter
+        from autotasktracker.core import PensieveSchemaAdapter
+        
+        query = PensieveSchemaAdapter.adapt_fetch_tasks_query()
         params = []
         
         if start_date:
-            # Convert start_date to UTC for comparison with e.created_at (which is stored in UTC)
             query += " AND e.created_at >= ?"
             params.append(start_date.isoformat())
         
         if end_date:
-            # Convert end_date to UTC for comparison with e.created_at (which is stored in UTC)
             query += " AND e.created_at <= ?"
             params.append(end_date.isoformat())
         
@@ -410,7 +608,15 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 df = pd.read_sql_query(query, conn, params=params)
+                # Apply schema adaptation to add missing columns
+                df = PensieveSchemaAdapter.adapt_dataframe(df)
+                
+                # Cache the result
+                self.cache.set(cache_key, df, ttl=300)
+                
+                logger.info(f"Fetched {len(df)} tasks via SQLite fallback")
                 return df
+                
         except pd.io.sql.DatabaseError as e:
             logger.error(f"Error fetching tasks: {e}")
             return pd.DataFrame()
@@ -454,18 +660,18 @@ class DatabaseManager:
         if date is None:
             date = datetime.now()
         
-        query = """
-        SELECT COUNT(*) as count
-        FROM entities 
-        WHERE file_type_group = 'image' 
-        AND date(created_at, 'localtime') = date(?, 'localtime')
-        """
+        # Use Pensieve schema adapter
+        from autotasktracker.core import PensieveSchemaAdapter
+        query = PensieveSchemaAdapter.get_screenshot_count_query()
         
         try:
+            start_timer("screenshot_count_query")
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(query, (date.isoformat(),))
                 result = cursor.fetchone()
+                duration = end_timer("screenshot_count_query")
+                record_database_query(duration, "count")
                 return result['count'] if result else 0
         except sqlite3.Error as e:
             logger.error(f"Error getting screenshot count: {e}")
@@ -482,20 +688,15 @@ class DatabaseManager:
         Returns:
             List of unique application names
         """
-        query = """
-        SELECT DISTINCT me.value as active_window
-        FROM entities e
-        JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'active_window'
-        WHERE e.file_type_group = 'image'
-        AND datetime(e.created_at, 'localtime') BETWEEN ? AND ?
-        AND me.value IS NOT NULL
-        """
+        # Use Pensieve schema adapter
+        from autotasktracker.core import PensieveSchemaAdapter
+        query = PensieveSchemaAdapter.get_unique_applications_query()
         
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(query, (start_date.isoformat(), end_date.isoformat()))
-                return [row['active_window'] for row in cursor.fetchall()]
+                return [row["active_window"] for row in cursor.fetchall()]
         except sqlite3.Error as e:
             logger.error(f"Error getting unique applications: {e}")
             return []
@@ -517,14 +718,9 @@ class DatabaseManager:
         screenshot_count = self.get_screenshot_count(date)
         
         # Get time range
-        query = """
-        SELECT 
-            MIN(datetime(created_at, 'localtime')) as first_activity,
-            MAX(datetime(created_at, 'localtime')) as last_activity
-        FROM entities
-        WHERE file_type_group = 'image'
-        AND date(created_at, 'localtime') = date(?, 'localtime')
-        """
+        # Use Pensieve schema adapter
+        from autotasktracker.core import PensieveSchemaAdapter
+        query = PensieveSchemaAdapter.get_activity_summary_query()
         
         try:
             with self.get_connection() as conn:
@@ -583,9 +779,9 @@ class DatabaseManager:
             CASE WHEN me4.value IS NOT NULL THEN 1 ELSE 0 END as has_embedding
         FROM
             entities e
-            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
-            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
-            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key IN ('minicpm_v_result', 'vlm_structured')
+            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = "ocr_result"
+            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = "active_window"
+            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key IN ('minicpm_v_result', "vlm_structured")
             LEFT JOIN metadata_entries me4 ON e.id = me4.entity_id AND me4.key = 'embedding'
         WHERE
             e.file_type_group = 'image'
@@ -620,18 +816,9 @@ class DatabaseManager:
             Dictionary with coverage statistics
         """
         # Optimized query using indexes
-        query = """
-        SELECT 
-            COUNT(DISTINCT e.id) as total_screenshots,
-            COUNT(DISTINCT me_ocr.entity_id) as with_ocr,
-            COUNT(DISTINCT me_vlm.entity_id) as with_vlm,
-            COUNT(DISTINCT me_emb.entity_id) as with_embeddings
-        FROM entities e
-        LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
-        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key IN ('minicpm_v_result', 'vlm_structured')
-        LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb.key = 'embedding'
-        WHERE e.file_type_group = 'image'
-        """
+        # Use Pensieve schema adapter
+        from autotasktracker.core import PensieveSchemaAdapter
+        query = PensieveSchemaAdapter.get_ai_coverage_query()
         
         try:
             with self.get_connection() as conn:
@@ -666,24 +853,9 @@ class DatabaseManager:
         Returns:
             DataFrame with matching activities
         """
-        query = """
-        SELECT
-            e.id,
-            e.filepath,
-            datetime(e.created_at, 'localtime') as created_at,
-            me.value as ocr_text,
-            me2.value as active_window
-        FROM entities e
-        LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
-        LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
-        WHERE e.file_type_group = 'image'
-        AND (
-            me.value LIKE ? OR 
-            me2.value LIKE ?
-        )
-        ORDER BY e.created_at DESC
-        LIMIT ?
-        """
+        # Use Pensieve schema adapter
+        from autotasktracker.core import PensieveSchemaAdapter
+        query = PensieveSchemaAdapter.get_search_activities_query()
         
         search_pattern = f'%{search_term}%'
         

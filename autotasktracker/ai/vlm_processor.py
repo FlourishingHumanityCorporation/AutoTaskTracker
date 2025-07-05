@@ -17,7 +17,11 @@ import imagehash
 import requests
 from autotasktracker.config import get_config
 from autotasktracker.core.error_handler import (
-    vlm_error_handler, measure_latency, get_error_handler, get_metrics, get_health_monitor
+    vlm_error_handler, 
+    measure_latency, 
+    get_error_handler, 
+    get_metrics, 
+    get_health_monitor
 )
 from autotasktracker.ai.sensitive_filter import get_sensitive_filter
 
@@ -237,7 +241,7 @@ class SmartVLMProcessor:
     
     def _has_existing_vlm_results(self, entity_id: str) -> bool:
         """Check if entity already has VLM results (non-atomic check)."""
-        from autotasktracker.core.database import DatabaseManager
+        from autotasktracker.core import DatabaseManager
         
         try:
             db = DatabaseManager()
@@ -247,7 +251,7 @@ class SmartVLMProcessor:
                 # Check for existing VLM results (excluding processing flags)
                 cursor.execute("""
                     SELECT 1 FROM metadata_entries 
-                    WHERE entity_id = ? AND key IN ('minicpm_v_result', 'vlm_structured', 'vlm_description')
+                    WHERE entity_id = ? AND key IN ('minicpm_v_result', "vlm_structured", 'vlm_description')
                     LIMIT 1
                 """, (entity_id,))
                 
@@ -259,7 +263,7 @@ class SmartVLMProcessor:
     
     def _try_acquire_processing_lock(self, entity_id: str) -> bool:
         """Atomically try to acquire processing lock for entity."""
-        from autotasktracker.core.database import DatabaseManager
+        from autotasktracker.core import DatabaseManager
         
         try:
             db = DatabaseManager()
@@ -269,7 +273,7 @@ class SmartVLMProcessor:
                 # Check for existing VLM results first
                 cursor.execute("""
                     SELECT 1 FROM metadata_entries 
-                    WHERE entity_id = ? AND key IN ('minicpm_v_result', 'vlm_structured', 'vlm_description')
+                    WHERE entity_id = ? AND key IN ('minicpm_v_result', "vlm_structured", 'vlm_description')
                     LIMIT 1
                 """, (entity_id,))
                 
@@ -305,7 +309,7 @@ class SmartVLMProcessor:
     
     def _mark_processing_complete(self, entity_id: str, success: bool = True):
         """Mark processing as complete and remove processing flag."""
-        from autotasktracker.core.database import DatabaseManager
+        from autotasktracker.core import DatabaseManager
         
         try:
             db = DatabaseManager()
@@ -333,7 +337,7 @@ class SmartVLMProcessor:
     
     def _save_vlm_result_to_db(self, entity_id: str, structured_result: Dict):
         """Save VLM result to database."""
-        from autotasktracker.core.database import DatabaseManager
+        from autotasktracker.core import DatabaseManager
         import json
         
         try:
@@ -554,7 +558,7 @@ class SmartVLMProcessor:
                 
                 # Call Ollama API with session
                 response = self.session.post(
-                    f'http://localhost:{self.vlm_port}/api/generate',
+                    f'http://{get_config().SERVER_HOST}:{self.vlm_port}/api/generate',
                     json=payload,
                     timeout=timeout,
                     headers={'Content-Type': 'application/json'}
@@ -626,7 +630,7 @@ class SmartVLMProcessor:
         
         structured = {
             "tasks": task,
-            'category': category,
+            "category": category,
             'description': raw_result,
             'visual_context': raw_result,  # For compatibility
             'app_type': app_type,
@@ -933,8 +937,8 @@ class CircuitBreaker:
                 'process_memory_mb': memory_info.rss / (1024 * 1024),
                 'process_memory_percent': process.memory_percent()
             })
-        except ImportError:
-            pass
+        except ImportError as e:
+            logger.debug(f"Optional dependency not available for stats: {e}")
         
         # Add rate limiting and circuit breaker stats
         base_stats.update({

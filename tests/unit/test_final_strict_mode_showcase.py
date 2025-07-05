@@ -145,31 +145,31 @@ class TestFinalStrictModeShowcase:
             # Integrated workflow testing with comprehensive validation
             test_scenarios = [
                 {
-                    'window_title': 'main.py - Visual Studio Code',
+                    "active_window": 'main.py - Visual Studio Code',
                     'filepath': '/test/screenshots/coding1.png',
                     'expected_category': 'development',
                     'expected_keywords': ['coding', 'programming', 'development']
                 },
                 {
-                    'window_title': 'Terminal - bash',
+                    "active_window": 'Terminal - bash',
                     'filepath': '/test/screenshots/terminal1.png', 
                     'expected_category': 'development',
                     'expected_keywords': ['terminal', 'command', 'development']
                 },
                 {
-                    'window_title': 'Slack | #general',
+                    "active_window": 'Slack | #general',
                     'filepath': '/test/screenshots/slack1.png',
                     'expected_category': 'communication',
                     'expected_keywords': ['communication', 'chat', 'team']
                 },
                 {
-                    'window_title': 'README.md - Editor',
+                    "active_window": 'README.md - Editor',
                     'filepath': '/test/screenshots/docs1.png',
                     'expected_category': 'documentation',
                     'expected_keywords': ['documentation', 'writing', 'readme']
                 },
                 {
-                    'window_title': 'Google Chrome - Research',
+                    "active_window": 'Google Chrome - Research',
                     'filepath': '/test/screenshots/browser1.png',
                     'expected_category': 'research',
                     'expected_keywords': ['research', 'browsing', 'learning']
@@ -186,7 +186,7 @@ class TestFinalStrictModeShowcase:
                 
                 try:
                     # Step 1: Task extraction with validation
-                    extracted_task = task_extractor.extract_task(scenario['window_title'], None)
+                    extracted_task = task_extractor.extract_task(scenario["active_window"], None)
                     assert extracted_task is not None, f"Should extract task for scenario {i}"
                     assert isinstance(extracted_task, str), f"Extracted task should be string for scenario {i}"
                     assert len(extracted_task) > 3, f"Extracted task should be meaningful for scenario {i}"
@@ -199,7 +199,7 @@ class TestFinalStrictModeShowcase:
                         cursor.execute("""
                             INSERT INTO integration_test_entities (filepath, window_title, processing_status) 
                             VALUES (?, ?, ?)
-                        """, (scenario['filepath'], scenario['window_title'], 'processing'))
+                        """, (scenario['filepath'], scenario["active_window"], 'processing'))
                         entity_id = cursor.lastrowid
                         total_database_operations += 1
                         
@@ -216,7 +216,7 @@ class TestFinalStrictModeShowcase:
                         cursor.execute("""
                             INSERT INTO integration_test_metadata (entity_id, key, value, confidence) 
                             VALUES (?, ?, ?, ?)
-                        """, (entity_id, 'category', scenario['expected_category'], 0.7))
+                        """, (entity_id, "category", scenario['expected_category'], 0.7))
                         total_database_operations += 1
                         
                         # Update processing status

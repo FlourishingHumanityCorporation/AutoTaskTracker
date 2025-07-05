@@ -121,17 +121,16 @@ def test_python_environments():
     except ImportError:
         print(f"   ❌ memos not importable in current Python")
     
-    # Try venv Python
-    if venv_python.exists():
-        cmd = [str(venv_python), "-c", "import memos; print('memos found')"]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                print(f"   ✅ memos importable in venv Python")
-            else:
-                print(f"   ❌ memos not importable in venv Python")
-                logger.error(f"   Error: {result.stderr}")
-        except:
+    # Try checking memos availability via command
+    try:
+        cmd = ["memos", "--version"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print(f"   ✅ memos command available")
+        else:
+            print(f"   ❌ memos command not available")
+            logger.error(f"   Error: {result.stderr}")
+    except:
             print(f"   ❌ Failed to check memos in venv")
 
 

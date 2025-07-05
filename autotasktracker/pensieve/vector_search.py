@@ -177,7 +177,7 @@ class EnhancedVectorSearch:
             if self.pensieve_client and self.pensieve_client.is_healthy():
                 # This would use Pensieve's embedding API when available
                 # For now, use our existing embedding logic
-                pass
+                logger.debug("Pensieve embedding API not yet implemented, using fallback")
             
             # Fallback to basic embedding generation
             from ..ai.embeddings_search import generate_embedding
@@ -215,7 +215,7 @@ class EnhancedVectorSearch:
                 search_params['end_date'] = date_range[1].isoformat()
             
             if categories:
-                search_params['categories'] = categories
+                search_params["category"] = categories
             
             # Make API call (this would be pgvector-specific endpoint)
             frames = self.pensieve_client.get_frames(limit=limit)
@@ -285,9 +285,9 @@ class EnhancedVectorSearch:
             metadata = result['metadata']
             
             # Extract basic information
-            window_title = metadata.get('active_window', 'Unknown')
-            tasks = self._parse_tasks(metadata.get('tasks', []))
-            category = metadata.get('category', 'Other')
+            window_title = metadata.get("active_window", 'Unknown')
+            tasks = self._parse_tasks(metadata.get("tasks", []))
+            category = metadata.get("category", 'Other')
             
             # Get OCR text
             ocr_text = self.pensieve_client.get_ocr_result(frame.id)
@@ -346,34 +346,33 @@ class EnhancedVectorSearch:
                     vector_distance = 1.0 - vector_similarity
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
                     logger.warning(f"Failed to parse embeddings for task: {e}")
-                    pass
             
             # Determine embedding quality
             embedding_quality = self._assess_embedding_quality(task.get('embeddings'))
             
             # Extract task information
-            tasks = task.get('tasks', [])
+            tasks = task.get("tasks", [])
             if isinstance(tasks, str):
                 try:
                     tasks = json.loads(tasks)
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
                     logger.warning(f"Failed to parse tasks JSON, using string fallback: {e}")
-                    tasks = [{'title': tasks, 'category': 'Other'}]
+                    tasks = [{'title': tasks, "category": 'Other'}]
             
             # Create enhanced result
             enhanced_result = VectorSearchResult(
                 entity_id=task['id'],
-                window_title=task.get('window_title', 'Unknown'),
+                window_title=task.get("active_window", 'Unknown'),
                 timestamp=task['timestamp'],
                 relevance_score=max(relevance_score, vector_similarity),
                 search_method='postgresql_enhanced',
-                highlights=self._extract_highlights(task.get('ocr_text', ''), task.get('window_title', '')),
+                highlights=self._extract_highlights(task.get("ocr_result", ''), task.get("active_window", '')),
                 extracted_tasks=[t.get('title', str(t)) if isinstance(t, dict) else str(t) for t in tasks],
-                activity_category=task.get('category', 'Other'),
+                activity_category=task.get("category", 'Other'),
                 vector_similarity_score=vector_similarity,
                 vector_distance=vector_distance,
                 embedding_quality=embedding_quality,
-                semantic_cluster=self._determine_semantic_cluster(tasks, task.get('category', 'Other')),
+                semantic_cluster=self._determine_semantic_cluster(tasks, task.get("category", 'Other')),
                 similar_activities=[]
             )
             
@@ -390,12 +389,12 @@ class EnhancedVectorSearch:
             query_lower = query.text.lower()
             
             # Check window title
-            window_title = task.get('window_title', '').lower()
+            window_title = task.get("active_window", '').lower()
             if query_lower in window_title:
                 relevance += 0.3
             
             # Check tasks
-            tasks = task.get('tasks', [])
+            tasks = task.get("tasks", [])
             if isinstance(tasks, str):
                 if query_lower in tasks.lower():
                     relevance += 0.4
@@ -407,12 +406,12 @@ class EnhancedVectorSearch:
                         break
             
             # Check OCR text
-            ocr_text = task.get('ocr_text', '').lower()
+            ocr_text = task.get("ocr_result", '').lower()
             if query_lower in ocr_text:
                 relevance += 0.2
             
             # Check category match
-            if query.categories and task.get('category') in query.categories:
+            if query.categories and task.get("category") in query.categories:
                 relevance += 0.1
             
             return min(1.0, relevance)
@@ -502,7 +501,7 @@ class EnhancedVectorSearch:
                 if isinstance(task, dict):
                     parsed_tasks.append(task)
                 elif isinstance(task, str):
-                    parsed_tasks.append({'title': task, 'category': 'Other'})
+                    parsed_tasks.append({'title': task, "category": 'Other'})
             
             return parsed_tasks
             

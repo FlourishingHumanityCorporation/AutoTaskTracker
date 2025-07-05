@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple, Optional, Union
 import numpy as np
 from datetime import datetime, timedelta
 import pandas as pd
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +120,9 @@ class EmbeddingsSearchEngine:
             me_embed.value as embedding
         FROM entities e
         LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id 
-            AND me_ocr."key" = 'ocr_result'
+            AND me_ocr."key" = "ocr_result"
         LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id 
-            AND me_window."key" = 'active_window'
+            AND me_window."key" = "active_window"
         LEFT JOIN metadata_entries me_embed ON e.id = me_embed.entity_id 
             AND me_embed."key" = 'embedding'
         WHERE e.file_type_group = 'image' 
@@ -158,7 +158,7 @@ class EmbeddingsSearchEngine:
                             'filepath': row['filepath'],
                             'created_at': row['created_at'],
                             "ocr_result": row["ocr_result"],
-                            'active_window': row['active_window'],
+                            "active_window": row["active_window"],
                             'similarity_score': round(float(similarity), 6)
                         })
                 
@@ -198,9 +198,9 @@ class EmbeddingsSearchEngine:
             me_embed.value as embedding
         FROM entities e
         LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id 
-            AND me_ocr."key" = 'ocr_result'
+            AND me_ocr."key" = "ocr_result"
         LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id 
-            AND me_window."key" = 'active_window'
+            AND me_window."key" = "active_window"
         LEFT JOIN metadata_entries me_embed ON e.id = me_embed.entity_id 
             AND me_embed."key" = 'embedding'
         WHERE e.file_type_group = 'image' 
@@ -262,7 +262,7 @@ class EmbeddingsSearchEngine:
                                 'filepath': valid_df.iloc[idx]['filepath'],
                                 'created_at': valid_df.iloc[idx]['created_at'],
                                 "ocr_result": valid_df.iloc[idx]["ocr_result"],
-                                'active_window': valid_df.iloc[idx]['active_window'],
+                                "active_window": valid_df.iloc[idx]["active_window"],
                                 'similarity_to_first': round(float(similarity_matrix[i][idx]), 6)
                             })
                             used_indices.add(idx)

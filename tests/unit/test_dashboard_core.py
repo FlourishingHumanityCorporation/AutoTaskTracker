@@ -267,9 +267,9 @@ class TestTaskRepository:
             'created_at': ['2024-01-01 10:00:00', '2024-01-01 11:00:00'],
             'filepath': ['/path1.png', '/path2.png'],
             "ocr_result": ['Some text', 'Other text'],
-            'active_window': ['App1', 'App2'],
-            'tasks': [None, None],
-            'category': ['Development', 'Communication'],
+            "active_window": ['App1', 'App2'],
+            "tasks": [None, None],
+            "category": ['Development', 'Communication'],
             "active_window": ['VS Code', 'Slack']
         })
         
@@ -304,7 +304,7 @@ class TestTaskRepository:
             assert tasks == [], "Should return empty list on SQL error"
         
         # Test boundary condition - empty result set
-        empty_df = pd.DataFrame(columns=['id', 'created_at', 'filepath', "ocr_result", 'active_window', 'tasks', 'category', "active_window"])
+        empty_df = pd.DataFrame(columns=['id', 'created_at', 'filepath', "ocr_result", "active_window", "tasks", "category", "active_window"])
         with patch('pandas.read_sql_query', return_value=empty_df):
             tasks = repo.get_tasks_for_period(start_date, end_date)
             assert len(tasks) == 0, "Should handle empty result gracefully"
@@ -671,10 +671,10 @@ def test_task_and_metrics_repositories_work_together_in_integration():
                              '/screens/test.png', '/screens/deploy.png'],
                 "ocr_result": ['class UserModel:', 'def authenticate():', 'Debugging auth flow', 
                               'Running tests...', 'Deployment successful'],
-                'active_window': ['VS Code - models.py', 'VS Code - auth.py', 'Chrome - Debug Console',
+                "active_window": ['VS Code - models.py', 'VS Code - auth.py', 'Chrome - Debug Console',
                                  'Terminal - pytest', 'Terminal - Deploy'],
-                'tasks': [None, None, None, None, None],
-                'category': ['Development', 'Development', 'Development', 'Development', 'Development']
+                "tasks": [None, None, None, None, None],
+                "category": ['Development', 'Development', 'Development', 'Development', 'Development']
             }),
             'metrics_df': pd.DataFrame({
                 'total_activities': [5],
@@ -693,9 +693,9 @@ def test_task_and_metrics_repositories_work_together_in_integration():
                               '2024-01-02 10:30:00', '2024-01-02 11:15:00'],
                 'file_path': ['/screens/email.png', '/screens/code.png', '/screens/meeting.png', '/screens/docs.png'],
                 "ocr_result": ['Inbox (23 new)', 'function calculateMetrics', 'Team standup meeting', 'Writing documentation'],
-                'active_window': ['Outlook - Inbox', 'VS Code - analytics.py', 'Zoom - Team Meeting', 'Notion - Docs'],
-                'tasks': [None, None, None, None],
-                'category': ['Communication', 'Development', 'Meeting', 'Documentation']
+                "active_window": ['Outlook - Inbox', 'VS Code - analytics.py', 'Zoom - Team Meeting', 'Notion - Docs'],
+                "tasks": [None, None, None, None],
+                "category": ['Communication', 'Development', 'Meeting', 'Documentation']
             }),
             'metrics_df': pd.DataFrame({
                 'total_activities': [4],
@@ -714,7 +714,7 @@ def test_task_and_metrics_repositories_work_together_in_integration():
         # Mock the pandas read_sql_query method with realistic query handling
         def mock_read_sql_query(query, conn, params=None):
             query_log.append({
-                'query_type': 'tasks' if 'created_at' in query else 'metrics',
+                'query_type': "tasks" if 'created_at' in query else 'metrics',
                 'timestamp': time.time(),
                 'params': params,
                 'scenario': scenario['name']
@@ -725,7 +725,7 @@ def test_task_and_metrics_repositories_work_together_in_integration():
             elif 'unique_categories' in query:
                 return pd.DataFrame({'unique_categories': [scenario['expected_categories']]})
             elif 'unique_windows' in query:
-                return pd.DataFrame({'unique_windows': [len(scenario['task_df']['active_window'].unique())]})
+                return pd.DataFrame({'unique_windows': [len(scenario['task_df']["active_window"].unique())]})
             else:
                 return scenario['task_df']
         
@@ -749,7 +749,7 @@ def test_task_and_metrics_repositories_work_together_in_integration():
             # State changes: Verify task objects have proper attributes
             for task in tasks:
                 assert isinstance(task, Task), f"Task should be Task instance in {scenario['name']}"
-                assert hasattr(task, 'category'), f"Task should have category in {scenario['name']}"
+                assert hasattr(task, "category"), f"Task should have category in {scenario['name']}"
                 assert hasattr(task, 'timestamp'), f"Task should have timestamp in {scenario['name']}"
                 assert task.category in ['Development', 'Communication', 'Meeting', 'Documentation'], f"Invalid category in {scenario['name']}"
             
@@ -777,7 +777,7 @@ def test_task_and_metrics_repositories_work_together_in_integration():
     assert mock_db.get_connection.call_count >= len(scenarios) * 2, "Should use database manager multiple times"
     
     # Integration: Verify query patterns
-    task_queries = [q for q in query_log if q['query_type'] == 'tasks']
+    task_queries = [q for q in query_log if q['query_type'] == "tasks"]
     metrics_queries = [q for q in query_log if q['query_type'] == 'metrics']
     assert len(task_queries) >= len(scenarios), "Should execute task queries for each scenario"
     assert len(metrics_queries) >= len(scenarios), "Should execute metrics queries for each scenario"
@@ -806,7 +806,7 @@ def test_task_and_metrics_repositories_work_together_in_integration():
             mock_db.get_connection.side_effect = create_context_manager
     
     # Boundary condition: Test with empty datasets
-    empty_task_df = pd.DataFrame(columns=['id', 'created_at', 'file_path', 'ocr_result', 'active_window', 'tasks', 'category'])
+    empty_task_df = pd.DataFrame(columns=['id', 'created_at', 'file_path', "ocr_result", "active_window", "tasks", "category"])
     empty_metrics_df = pd.DataFrame({'total_activities': [0], 'active_days': [0], 'unique_windows': [0], 'unique_categories': [0]})
     
     def mock_empty_query(query, conn, params=None):

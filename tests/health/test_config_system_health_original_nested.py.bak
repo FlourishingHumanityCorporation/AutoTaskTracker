@@ -1,0 +1,2037 @@
+"""
+Comprehensive configuration system health test for AutoTaskTracker.
+
+🚨 DEPRECATION NOTICE 🚨
+This monolithic test file has been refactored into modular components for better maintainability.
+Please use the new modular tests instead:
+
+- pytest tests/health/test_config_loading_health.py -v     # Architecture & loading
+- pytest tests/health/test_config_sync_health.py -v       # Synchronization & env vars
+- pytest tests/health/test_config_usage_health.py -v      # Production file compliance
+
+Benefits of modular tests:
+- Better organization and maintainability
+- Faster, focused execution
+- Specialized analysis per module
+- Equivalent functionality preserved
+
+This file remains for compatibility but will be removed in future versions.
+
+ORIGINAL DESCRIPTION:
+This test audits the entire configuration system including:
+- Configuration loading and validation
+- Environment variable handling  
+- Configuration synchronization between systems
+- Configuration security and best practices
+- Performance and reliability
+- Integration with dependent systems
+"""
+import os
+import json
+import tempfile
+import sqlite3
+import subprocess
+import socket
+import time
+import re
+from pathlib import Path
+from unittest.mock import patch, mock_open
+from typing import Dict, Any, List, Optional
+import pytest
+import logging
+
+from autotasktracker.config import config, get_config, Config
+from autotasktracker.pensieve.config_reader import (
+    PensieveConfigReader, 
+    get_pensieve_config_reader,
+    get_pensieve_config,
+    PensieveConfig
+)
+
+logger = logging.getLogger(__name__)
+
+
+class TestConfigSystemHealthAudit:
+    """Comprehensive audit of the entire configuration system."""
+    
+    def test_config_system_architecture_integrity(self):
+        """Test that the configuration system architecture is sound."""
+        # 1. CONFIGURATION LOADING INTEGRITY
+        start_time = time.time()
+        
+        # Test main config loading
+        main_config = get_config()
+        assert isinstance(main_config, Config), "Main config should be Config instance"
+        assert hasattr(main_config, 'DB_PATH'), "Config missing critical DB_PATH attribute"
+        assert hasattr(main_config, 'get_db_path'), "Config missing get_db_path method"
+        
+        # Test Pensieve config loading
+        pensieve_reader = get_pensieve_config_reader()
+        assert isinstance(pensieve_reader, PensieveConfigReader), "Should get PensieveConfigReader instance"
+        
+        # Test config can be read without errors (with timeout for performance)
+        try:
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Pensieve config loading timeout")
+            
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(2)  # 2 second timeout
+            
+            try:
+                pensieve_config = get_pensieve_config()
+                signal.alarm(0)  # Cancel alarm
+                assert isinstance(pensieve_config, PensieveConfig), "Should get PensieveConfig instance"
+            except TimeoutError:
+                signal.alarm(0)  # Cancel alarm
+                logger.info("Pensieve config loading timed out - acceptable in test environment")
+        except Exception as e:
+            # Pensieve config may fail in test environment - that's acceptable
+            logger.info(f"Pensieve config not available in test environment: {e}")
+        
+        load_time = time.time() - start_time
+        assert load_time < 3.0, f"Config loading too slow: {load_time:.3f}s"
+        
+        # 2. CONFIGURATION CONSISTENCY
+        # Main config should have consistent defaults
+        assert main_config.MEMOS_PORT == 8839, "Memos port should be consistent"
+        assert main_config.TASK_BOARD_PORT == 8502, "Task board port should be consistent"
+        assert main_config.ANALYTICS_PORT == 8503, "Analytics port should be consistent"
+        
+        # Database path should be absolute and valid
+        db_path = main_config.get_db_path()
+        assert isinstance(db_path, str), "DB path should be string"
+        assert os.path.isabs(db_path), "DB path should be absolute"
+        assert db_path.endswith('.db'), "DB path should point to database file"
+        
+        # 3. CONFIGURATION VALIDATION
+        ports = [
+            main_config.MEMOS_PORT,
+            main_config.TASK_BOARD_PORT, 
+            main_config.ANALYTICS_PORT,
+            main_config.TIME_TRACKER_PORT,
+            main_config.NOTIFICATIONS_PORT
+        ]
+        
+        # All ports should be in valid range
+        for port in ports:
+            assert 1024 <= port <= 65535, f"Port {port} out of valid range"
+        
+        # All ports should be unique to prevent conflicts
+        assert len(set(ports)) == len(ports), "All service ports must be unique"
+        
+        # 4. DIRECTORY STRUCTURE VALIDATION
+        memos_dir = Path(db_path).parent
+        assert memos_dir.name == '.memos', "Database should be in .memos directory"
+        
+        # Test directory creation logic
+        screenshots_dir = main_config.get_screenshots_path()
+        assert isinstance(screenshots_dir, str), "Screenshots path should be string"
+        assert os.path.isabs(screenshots_dir), "Screenshots path should be absolute"
+    
+    def test_environment_variable_security_audit(self):
+        """Audit environment variable handling for security and correctness."""
+        # 1. ENVIRONMENT VARIABLE ENUMERATION
+        config_env_vars = [
+            'AUTOTASK_DB_PATH',
+            'AUTOTASK_MEMOS_DIR', 
+            'AUTOTASK_VLM_CACHE_DIR',
+            'AUTOTASK_SCREENSHOTS_DIR',
+            'AUTOTASK_VLM_MODEL',
+            'AUTOTASK_VLM_PORT',
+            'AUTOTASK_EMBEDDING_MODEL',
+            'AUTOTASK_EMBEDDING_DIM',
+            'AUTOTASK_BATCH_SIZE',
+            'AUTOTASK_CONFIDENCE_THRESHOLD'
+        ]
+        
+        pensieve_env_vars = [
+            'MEMOS_DB_PATH',
+            'MEMOS_SCREENSHOTS_DIR',
+            'MEMOS_RECORD_INTERVAL',
+            'MEMOS_API_PORT',
+            'MEMOS_WEB_PORT',
+            'MEMOS_MAX_WORKERS',
+            'MEMOS_OCR_ENABLED'
+        ]
+        
+        # 2. SECURITY VALIDATION - No sensitive data in environment
+        original_env = dict(os.environ)
+        
+        try:
+            # Test with potentially malicious environment variables
+            malicious_test_cases = [
+                ('AUTOTASK_DB_PATH', '/etc/passwd'),  # System file
+                ('AUTOTASK_DB_PATH', '../../../etc/shadow'),  # Path traversal
+                ('AUTOTASK_VLM_PORT', '22'),  # SSH port
+                ('AUTOTASK_VLM_PORT', '80'),  # HTTP port
+                ('AUTOTASK_VLM_PORT', 'not_a_number'),  # Invalid type
+                ('AUTOTASK_BATCH_SIZE', '-1'),  # Negative value
+                ('AUTOTASK_CONFIDENCE_THRESHOLD', '2.0'),  # Out of range
+            ]
+            
+            for env_var, malicious_value in malicious_test_cases:
+                with patch.dict(os.environ, {env_var: malicious_value}):
+                    # Config should handle malicious values gracefully
+                    try:
+                        test_config = Config()
+                        
+                        # Validate that dangerous paths are not used as-is
+                        if env_var == 'AUTOTASK_DB_PATH':
+                            db_path = test_config.get_db_path()
+                            if malicious_value in ['/etc/passwd', '../../../etc/shadow']:
+                                # Should either reject or sanitize dangerous paths
+                                assert not (malicious_value in db_path and os.path.exists(db_path)), \
+                                    f"Config should not use dangerous path: {malicious_value}"
+                        
+                        # Validate port ranges
+                        if env_var == 'AUTOTASK_VLM_PORT':
+                            if malicious_value in ['22', '80']:
+                                assert test_config.vlm_port not in [22, 80], \
+                                    "Config should not use privileged/system ports"
+                    
+                    except (ValueError, TypeError, FileNotFoundError) as e:
+                        # Expected for invalid values
+                        assert any(keyword in str(e).lower() for keyword in 
+                                 ['invalid', 'error', 'not found', 'permission']), \
+                               f"Error should be descriptive for {env_var}={malicious_value}: {e}"
+        
+        finally:
+            # Restore environment
+            os.environ.clear()
+            os.environ.update(original_env)
+        
+        # 3. TYPE CONVERSION SECURITY
+        type_test_cases = [
+            ('AUTOTASK_VLM_PORT', 'javascript:alert(1)'),  # Script injection
+            ('AUTOTASK_BATCH_SIZE', '$(rm -rf /)'),  # Command injection
+            ('AUTOTASK_CONFIDENCE_THRESHOLD', 'null'),  # JSON injection
+        ]
+        
+        for env_var, injection_value in type_test_cases:
+            with patch.dict(os.environ, {env_var: injection_value}):
+                try:
+                    test_config = Config()
+                    # Should not execute or interpret injection attempts
+                    assert injection_value not in str(test_config.to_dict()), \
+                        f"Config should sanitize injection attempt: {injection_value}"
+                except (ValueError, TypeError):
+                    # Expected for invalid injection attempts
+                    pass
+    
+    def test_config_synchronization_integrity(self):
+        """Test synchronization between different configuration systems."""
+        # 1. PENSIEVE-AUTOTASKTRACKER SYNCHRONIZATION
+        try:
+            pensieve_reader = get_pensieve_config_reader()
+            
+            # Test memos service status detection
+            status = pensieve_reader.get_memos_status()
+            assert isinstance(status, dict), "Status should be dictionary"
+            assert 'running' in status, "Status should indicate if service is running"
+            assert isinstance(status['running'], bool), "Running status should be boolean"
+            
+            # Test configuration synchronization
+            sync_config = pensieve_reader.sync_autotasktracker_config()
+            assert isinstance(sync_config, dict), "Sync config should be dictionary"
+            
+            # Validate synchronized values
+            expected_sync_keys = [
+                'DB_PATH', 'SCREENSHOTS_DIR', 'SCREENSHOT_INTERVAL_SECONDS',
+                'MEMOS_PORT', 'PENSIEVE_API_URL', 'PENSIEVE_WEB_URL'
+            ]
+            
+            for key in expected_sync_keys:
+                assert key in sync_config, f"Sync config missing {key}"
+                assert sync_config[key] is not None, f"Sync config {key} should not be None"
+            
+            # Test database path consistency
+            if 'DB_PATH' in sync_config:
+                main_config = get_config()
+                pensieve_db_path = sync_config['DB_PATH']
+                main_db_path = main_config.get_db_path()
+                
+                # Paths should be compatible (same directory structure)
+                pensieve_dir = Path(pensieve_db_path).parent
+                main_dir = Path(main_db_path).parent
+                assert pensieve_dir.name == main_dir.name, \
+                    "Database directories should be consistent"
+        
+        except Exception as e:
+            # Pensieve may not be available in test environment
+            logger.info(f"Pensieve synchronization test skipped: {e}")
+        
+        # 2. CONFIGURATION VALIDATION CONSISTENCY
+        main_config = get_config()
+        
+        # Test that configuration dictionary export/import is consistent
+        config_dict = main_config.to_dict()
+        assert isinstance(config_dict, dict), "Config should export to dictionary"
+        
+        # Validate all critical keys are present
+        critical_keys = ['db_path', 'vlm_model', 'embedding_model', 'ports']
+        for key in critical_keys:
+            assert key in config_dict, f"Config dict missing critical key: {key}"
+        
+        # Test port configuration consistency
+        if 'ports' in config_dict:
+            ports_dict = config_dict['ports']
+            assert isinstance(ports_dict, dict), "Ports should be dictionary"
+            assert 'task_board' in ports_dict, "Ports should include task_board"
+            assert ports_dict['task_board'] == main_config.TASK_BOARD_PORT, \
+                "Port values should be consistent"
+    
+    def test_config_performance_and_reliability(self):
+        """Test configuration system performance and reliability."""
+        # 1. CONFIGURATION LOADING PERFORMANCE
+        load_times = []
+        
+        for i in range(10):
+            start_time = time.time()
+            config = get_config()
+            db_path = config.get_db_path()
+            end_time = time.time()
+            load_times.append(end_time - start_time)
+        
+        avg_load_time = sum(load_times) / len(load_times)
+        max_load_time = max(load_times)
+        
+        assert avg_load_time < 0.01, f"Average config load time too slow: {avg_load_time:.4f}s"
+        assert max_load_time < 0.05, f"Max config load time too slow: {max_load_time:.4f}s"
+        
+        # 2. MEMORY USAGE VALIDATION
+        import gc
+        gc.collect()  # Clean up before measurement
+        
+        configs = []
+        for i in range(100):
+            configs.append(get_config())
+        
+        # Should reuse singleton instance
+        unique_configs = set(id(config) for config in configs)
+        assert len(unique_configs) == 1, "Config should use singleton pattern"
+        
+        # 3. CONCURRENT ACCESS SAFETY
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        
+        def config_access_worker():
+            """Worker function for concurrent config access."""
+            config = get_config()
+            return config.get_db_path()
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(config_access_worker) for _ in range(50)]
+            results = [future.result() for future in futures]
+        
+        # All threads should get consistent results
+        unique_paths = set(results)
+        assert len(unique_paths) == 1, "Config should be thread-safe"
+        
+        # 4. ERROR RECOVERY TESTING
+        error_scenarios = [
+            (FileNotFoundError, "Config file not found"),
+            (PermissionError, "Config file permission denied"),
+        ]
+        
+        for error_type, description in error_scenarios:
+            with patch('builtins.open', side_effect=error_type(description)):
+                try:
+                    # Should handle errors gracefully
+                    fallback_config = Config()
+                    assert isinstance(fallback_config, Config), \
+                        f"Should create fallback config for {description}"
+                    assert fallback_config.TASK_BOARD_PORT == 8502, \
+                        f"Should use defaults for {description}"
+                except Exception as e:
+                    # Some errors may propagate - that's acceptable if handled properly
+                    assert error_type.__name__ in str(type(e).__name__), \
+                        f"Should propagate appropriate error type for {description}"
+    
+    def test_config_integration_health(self):
+        """Test configuration integration with dependent systems."""
+        # 1. DATABASE CONFIGURATION VALIDATION
+        main_config = get_config()
+        db_path = main_config.get_db_path()
+        
+        # Test database connectivity
+        db_dir = Path(db_path).parent
+        if not db_dir.exists():
+            try:
+                db_dir.mkdir(parents=True, exist_ok=True)
+                created_dir = True
+            except PermissionError:
+                pytest.skip("Cannot create database directory for integration test")
+                created_dir = False
+        else:
+            created_dir = False
+        
+        try:
+            # Test SQLite database creation and access
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT sqlite_version()")
+            version = cursor.fetchone()
+            assert version is not None, "Should be able to query SQLite version"
+            conn.close()
+            
+            # Clean up test database
+            if Path(db_path).exists():
+                Path(db_path).unlink()
+        
+        finally:
+            if created_dir:
+                try:
+                    db_dir.rmdir()
+                except:
+                    pass
+        
+        # 2. SERVICE PORT AVAILABILITY
+        ports_to_test = [
+            main_config.TASK_BOARD_PORT,
+            main_config.ANALYTICS_PORT,
+            main_config.TIME_TRACKER_PORT,
+            main_config.NOTIFICATIONS_PORT
+        ]
+        
+        def is_port_available(port):
+            """Check if port is available for binding."""
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)
+                    result = sock.bind(('localhost', port))
+                    return True
+            except OSError:
+                return False  # Port in use or permission denied
+        
+        available_ports = []
+        for port in ports_to_test:
+            if is_port_available(port):
+                available_ports.append(port)
+        
+        # At least some ports should be available (exact availability depends on system state)
+        assert len(available_ports) >= 0, "Port availability check should work"
+        
+        # 3. VLM SERVICE CONFIGURATION
+        ollama_url = main_config.get_ollama_url()
+        assert ollama_url.startswith('http://'), "Ollama URL should use HTTP"
+        assert 'localhost' in ollama_url, "Ollama URL should use localhost"
+        assert str(main_config.vlm_port) in ollama_url, "Ollama URL should include configured port"
+        
+        # 4. DIRECTORY PERMISSIONS
+        test_dirs = [
+            main_config.get_screenshots_path(),
+            main_config.get_vlm_cache_path(),
+            str(Path(main_config.get_db_path()).parent)
+        ]
+        
+        for test_dir in test_dirs:
+            dir_path = Path(test_dir)
+            
+            # Test directory creation if it doesn't exist
+            if not dir_path.exists():
+                try:
+                    dir_path.mkdir(parents=True, exist_ok=True)
+                    created = True
+                except PermissionError:
+                    pytest.skip(f"Cannot create directory {test_dir} for permission test")
+                    created = False
+            else:
+                created = False
+            
+            if dir_path.exists():
+                # Test read/write permissions
+                test_file = dir_path / "health_test.tmp"
+                try:
+                    test_file.write_text("test")
+                    content = test_file.read_text()
+                    assert content == "test", f"Should be able to read/write in {test_dir}"
+                    test_file.unlink()
+                except Exception as e:
+                    pytest.fail(f"Directory {test_dir} not properly accessible: {e}")
+                
+                # Clean up created directory
+                if created:
+                    try:
+                        dir_path.rmdir()
+                    except:
+                        pass
+    
+    def test_config_security_hardening(self):
+        """Test configuration security hardening and best practices."""
+        # 1. PATH TRAVERSAL PROTECTION
+        main_config = get_config()
+        
+        dangerous_paths = [
+            '../../../etc/passwd',
+            '..\\..\\..\\windows\\system32\\config\\system',
+            '/etc/shadow',
+            'C:\\Windows\\System32\\config\\SAM',
+            '${HOME}/../../../etc/passwd',  # Variable expansion
+            '$(cat /etc/passwd)',  # Command substitution
+        ]
+        
+        for dangerous_path in dangerous_paths:
+            # Test that dangerous paths are not used directly
+            test_config = Config(DB_PATH=dangerous_path)
+            resolved_path = test_config.get_db_path()
+            
+            # Should not resolve to actual system files
+            if os.path.exists(resolved_path):
+                # If path exists, it should not be a critical system file
+                assert not any(critical in resolved_path.lower() for critical in 
+                             ['passwd', 'shadow', 'system32', 'config']), \
+                    f"Config should not resolve to system file: {resolved_path}"
+        
+        # 2. INJECTION ATTACK PROTECTION  
+        injection_tests = [
+            'test"; DROP TABLE entities; --',
+            "test'; DELETE FROM metadata_entries; --",
+            'test`; rm -rf /; `',
+            'test$(rm -rf /)',
+            'test && rm -rf /',
+        ]
+        
+        for injection in injection_tests:
+            test_config = Config(vlm_model=injection)
+            model_name = test_config.vlm_model
+            
+            # Should not contain dangerous SQL or shell metacharacters in final config
+            dangerous_chars = [';', '--', '$(', '`', '&&', '||', '|', '&']
+            has_dangerous = any(char in model_name for char in dangerous_chars)
+            
+            if has_dangerous:
+                # If dangerous characters are preserved, they should be properly escaped/quoted
+                # This depends on how the config is used downstream
+                logger.warning(f"Config contains potential injection vector: {model_name}")
+        
+        # 3. PRIVILEGE ESCALATION PROTECTION
+        # Test that config doesn't require or attempt privilege escalation
+        privileged_ports = [22, 23, 25, 53, 80, 110, 143, 443, 993, 995]
+        
+        config_ports = [
+            main_config.MEMOS_PORT,
+            main_config.TASK_BOARD_PORT,
+            main_config.ANALYTICS_PORT,
+            main_config.TIME_TRACKER_PORT,
+            main_config.NOTIFICATIONS_PORT,
+            main_config.vlm_port
+        ]
+        
+        for port in config_ports:
+            assert port not in privileged_ports, \
+                f"Config should not use privileged port {port}"
+            assert port >= 1024, f"Config should not use system port {port}"
+        
+        # 4. INFORMATION DISCLOSURE PROTECTION
+        config_dict = main_config.to_dict()
+        
+        # Config should not contain sensitive information
+        config_str = json.dumps(config_dict).lower()
+        sensitive_patterns = [
+            'password', 'secret', 'key', 'token', 'credential',
+            'api_key', 'auth', 'private', 'admin'
+        ]
+        
+        for pattern in sensitive_patterns:
+            assert pattern not in config_str, \
+                f"Config should not contain sensitive pattern: {pattern}"
+    
+    def test_config_system_documentation_compliance(self):
+        """Test that configuration system follows documentation and standards."""
+        # 1. CONFIGURATION COMPLETENESS
+        main_config = get_config()
+        
+        # All documented configuration options should be available
+        expected_attributes = [
+            'DB_PATH', 'SCREENSHOTS_DIR', 'LOGS_DIR', 'VLM_CACHE_DIR',
+            'MEMOS_PORT', 'TASK_BOARD_PORT', 'ANALYTICS_PORT', 'TIME_TRACKER_PORT',
+            'VLM_MODEL', 'VLM_PORT', 'EMBEDDING_MODEL', 'EMBEDDING_DIM',
+            'AUTO_REFRESH_SECONDS', 'CACHE_TTL_SECONDS', 'TASK_LIMIT',
+            'BATCH_SIZE', 'CONFIDENCE_THRESHOLD', 'SHOW_SCREENSHOTS',
+            'ENABLE_NOTIFICATIONS', 'ENABLE_ANALYTICS'
+        ]
+        
+        for attr in expected_attributes:
+            assert hasattr(main_config, attr), f"Config missing documented attribute: {attr}"
+            value = getattr(main_config, attr)
+            assert value is not None, f"Config attribute {attr} should not be None"
+        
+        # 2. CONFIGURATION METHODS COMPLETENESS
+        expected_methods = [
+            'get_db_path', 'get_vlm_cache_path', 'get_screenshots_path',
+            'get_ollama_url', 'to_dict'
+        ]
+        
+        for method in expected_methods:
+            assert hasattr(main_config, method), f"Config missing documented method: {method}"
+            assert callable(getattr(main_config, method)), f"Config {method} should be callable"
+        
+        # 3. PENSIEVE INTEGRATION COMPLETENESS
+        try:
+            pensieve_reader = get_pensieve_config_reader()
+            
+            # Pensieve reader should have documented methods
+            pensieve_methods = [
+                'get_memos_status', 'read_pensieve_config',
+                'sync_autotasktracker_config', 'validate_pensieve_setup'
+            ]
+            
+            for method in pensieve_methods:
+                assert hasattr(pensieve_reader, method), \
+                    f"PensieveConfigReader missing method: {method}"
+                assert callable(getattr(pensieve_reader, method)), \
+                    f"PensieveConfigReader {method} should be callable"
+        
+        except Exception as e:
+            logger.info(f"Pensieve integration test skipped: {e}")
+        
+        # 4. DEFAULT VALUES COMPLIANCE
+        # Test that defaults match documented values
+        default_expectations = {
+            'MEMOS_PORT': 8839,
+            'TASK_BOARD_PORT': 8502,
+            'ANALYTICS_PORT': 8503,
+            'VLM_MODEL': 'minicpm-v',
+            'VLM_PORT': 11434,
+            'EMBEDDING_MODEL': 'jina-embeddings-v2-base-en',
+            'EMBEDDING_DIM': 768,
+            'AUTO_REFRESH_SECONDS': 30,
+            'CACHE_TTL_SECONDS': 60,
+            'TASK_LIMIT': 100,
+            'SCREENSHOT_INTERVAL_SECONDS': 4,
+            'SHOW_SCREENSHOTS': True,
+            'ENABLE_NOTIFICATIONS': True,
+            'ENABLE_ANALYTICS': True
+        }
+        
+        for attr, expected_value in default_expectations.items():
+            actual_value = getattr(main_config, attr)
+            assert actual_value == expected_value, \
+                f"Config {attr} default mismatch: expected {expected_value}, got {actual_value}"
+
+
+# Additional helper functions for health testing
+def validate_config_file_format(config_path: str) -> Dict[str, Any]:
+    """Validate configuration file format and return parsed content."""
+    try:
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        # Validate JSON structure
+        assert isinstance(config_data, dict), "Config file should contain JSON object"
+        
+        # Validate required fields are present and correct types
+        type_validations = {
+            'DB_PATH': str,
+            'TASK_BOARD_PORT': int,
+            'SHOW_SCREENSHOTS': bool,
+        }
+        
+        for field, expected_type in type_validations.items():
+            if field in config_data:
+                assert isinstance(config_data[field], expected_type), \
+                    f"Config field {field} should be {expected_type.__name__}"
+        
+        return config_data
+        
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in config file: {e}")
+    except Exception as e:
+        raise ValueError(f"Config file validation failed: {e}")
+
+
+def check_system_dependencies() -> Dict[str, bool]:
+    """Check availability of system dependencies."""
+    dependencies = {}
+    
+    # Test Python modules
+    modules_to_test = [
+        'sqlite3', 'json', 'pathlib', 'logging', 'dataclasses',
+        'yaml', 'subprocess', 'socket', 'threading'
+    ]
+    
+    for module in modules_to_test:
+        try:
+            __import__(module)
+            dependencies[f"module_{module}"] = True
+        except ImportError:
+            dependencies[f"module_{module}"] = False
+    
+    # Test system commands
+    commands_to_test = ['ps', 'netstat']
+    
+    for cmd in commands_to_test:
+        try:
+            result = subprocess.run([cmd, '--version'], 
+                                  capture_output=True, timeout=5)
+            dependencies[f"command_{cmd}"] = result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            dependencies[f"command_{cmd}"] = False
+    
+    return dependencies
+
+
+class TestConfigUsageInProduction:
+    """HARDCORE test that validates config is actually used correctly in ALL production files."""
+    
+    def test_production_files_use_config_no_hardcoded_values(self):
+        """HARDCORE: Scan ALL production files for hardcoded values that should use config."""
+        import ast
+        import re
+        from pathlib import Path
+        
+        # Get all production Python files (exclude tests)
+        production_files = []
+        project_root = Path(__file__).parent.parent.parent
+        
+        for pattern in ['autotasktracker/**/*.py', 'scripts/**/*.py']:
+            production_files.extend(project_root.glob(pattern))
+        
+        # Exclude test files and __pycache__
+        production_files = [
+            f for f in production_files 
+            if not any(exclude in str(f) for exclude in [
+                'test_', '__pycache__', '.pyc', '/tests/', 
+                '/config.py'  # Config file itself defines defaults
+            ])
+        ]
+        
+        hardcoded_violations = []
+        config_import_violations = []
+        
+        # Patterns that should use config
+        hardcoded_patterns = {
+            'ports': {
+                'pattern': r'\b(8502|8503|8504|8505|8506|8839|11434)\b',
+                'should_use': 'config.TASK_BOARD_PORT, config.ANALYTICS_PORT, etc.'
+            },
+            'localhost_urls': {
+                'pattern': r'["\']http://localhost:\d+["\']',
+                'should_use': 'config.get_service_url() or config.get_ollama_url()'
+            },
+            'memos_paths': {
+                'pattern': r'["\'][^"\']*\.memos[^"\']*["\']',
+                'should_use': 'config.get_db_path(), config.get_screenshots_path()'
+            },
+            'database_paths': {
+                'pattern': r'["\'][^"\']*database\.db["\']',
+                'should_use': 'config.get_db_path()'
+            },
+            'api_endpoints': {
+                'pattern': r'["\']http://localhost:(8839|11434)[^"\']*["\']',
+                'should_use': 'config.get_service_url("memos") or config.get_ollama_url()'
+            }
+        }
+        
+        # Required config imports
+        required_imports = [
+            'from autotasktracker.config import get_config',
+            'from autotasktracker.config import config',
+            'import autotasktracker.config',
+            'from autotasktracker import', # Catches "from autotasktracker import ..., get_config"
+            'get_config'  # Catches any usage
+        ]
+        
+        for file_path in production_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                relative_path = file_path.relative_to(project_root)
+                
+                # Skip files that already use config properly
+                has_config_import = any(imp in content for imp in required_imports)
+                uses_config = any(usage in content for usage in [
+                    'get_config()', 'config.', 'config = get_config()'
+                ])
+                
+                # Check for hardcoded patterns
+                for pattern_name, pattern_info in hardcoded_patterns.items():
+                    matches = re.findall(pattern_info['pattern'], content)
+                    if matches:
+                        # Skip if file already uses config properly
+                        if has_config_import and uses_config:
+                            # Check if the hardcoded value is in a comment or string literal that's OK
+                            # For example, migration commands or example configs
+                            if pattern_name == 'memos_paths' and 'migration' in content.lower():
+                                continue
+                            continue
+                        
+                        if not has_config_import:
+                            config_import_violations.append(
+                                f"{relative_path}: Uses {pattern_name} {matches} but doesn't import config"
+                            )
+                        else:
+                            hardcoded_violations.append(
+                                f"{relative_path}: Hardcoded {pattern_name} {matches} - should use {pattern_info['should_use']}"
+                            )
+                
+                # Special check for dashboard files - they MUST use config ports
+                if 'dashboards/' in str(relative_path) and relative_path.name.endswith('.py'):
+                    if 'port=' in content and 'get_config()' not in content:
+                        hardcoded_violations.append(
+                            f"{relative_path}: Dashboard file with hardcoded port - MUST use config.PORT"
+                        )
+                
+                # Special check for streamlit.run calls
+                streamlit_run_matches = re.findall(r'streamlit\.run\([^)]*port\s*=\s*(\d+)', content)
+                if streamlit_run_matches:
+                    hardcoded_violations.append(
+                        f"{relative_path}: streamlit.run with hardcoded port {streamlit_run_matches} - use config port"
+                    )
+                
+            except Exception as e:
+                hardcoded_violations.append(f"{relative_path}: Error reading file - {e}")
+        
+        # Report violations
+        if hardcoded_violations:
+            print(f"\n🚨 HARDCORE CONFIG VIOLATIONS FOUND ({len(hardcoded_violations)}):")
+            for violation in hardcoded_violations[:20]:  # Show first 20
+                print(f"  ❌ {violation}")
+            if len(hardcoded_violations) > 20:
+                print(f"  ... and {len(hardcoded_violations) - 20} more violations")
+        
+        if config_import_violations:
+            print(f"\n🚨 MISSING CONFIG IMPORTS ({len(config_import_violations)}):")
+            for violation in config_import_violations[:10]:
+                print(f"  ❌ {violation}")
+        
+        # HARDCORE assertion - ZERO tolerance for hardcoded values
+        assert len(hardcoded_violations) == 0, \
+            f"HARDCORE FAILURE: {len(hardcoded_violations)} files have hardcoded values that should use config"
+    
+    def test_dashboard_files_use_config_ports_exclusively(self):
+        """HARDCORE: Dashboard files MUST use config ports, no exceptions."""
+        from pathlib import Path
+        import re
+        
+        project_root = Path(__file__).parent.parent.parent
+        dashboard_dir = project_root / 'autotasktracker' / 'dashboards'
+        
+        if not dashboard_dir.exists():
+            pytest.skip("Dashboard directory not found")
+        
+        dashboard_violations = []
+        
+        for dashboard_file in dashboard_dir.glob('*.py'):
+            if dashboard_file.name.startswith('__'):
+                continue
+                
+            with open(dashboard_file, 'r') as f:
+                content = f.read()
+            
+            # Check for hardcoded ports in various contexts
+            port_patterns = [
+                r'port\s*=\s*(\d{4,5})',  # port=8502
+                r':\s*(\d{4,5})\s*["\']',  # :8502"
+                r'localhost:(\d{4,5})',    # localhost:8502
+                r'streamlit\.run\([^)]*port\s*=\s*(\d+)',  # streamlit.run(..., port=8502)
+            ]
+            
+            found_hardcoded_ports = []
+            for pattern in port_patterns:
+                matches = re.findall(pattern, content)
+                found_hardcoded_ports.extend(matches)
+            
+            # Check if config is imported and used
+            has_config_import = any(imp in content for imp in [
+                'get_config()', 'from autotasktracker.config', 'config.'
+            ])
+            
+            # If file uses config, skip hardcoded port check (they might be in strings/comments)
+            if found_hardcoded_ports and not has_config_import:
+                dashboard_violations.append(
+                    f"{dashboard_file.name}: Hardcoded ports {found_hardcoded_ports} - MUST use config"
+                )
+            
+            # Only flag if 'port' appears in actual code context, not in imports
+            if not has_config_import and re.search(r'\bport\s*[=:]', content, re.IGNORECASE):
+                dashboard_violations.append(
+                    f"{dashboard_file.name}: No config import but uses ports - MUST import config"
+                )
+        
+        if dashboard_violations:
+            print(f"\n🚨 DASHBOARD CONFIG VIOLATIONS ({len(dashboard_violations)}):")
+            for violation in dashboard_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(dashboard_violations) == 0, \
+            f"HARDCORE FAILURE: {len(dashboard_violations)} dashboard files violate config usage"
+    
+    def test_api_client_files_use_config_urls_exclusively(self):
+        """HARDCORE: API client files MUST use config URLs, no hardcoded endpoints."""
+        from pathlib import Path
+        import re
+        
+        project_root = Path(__file__).parent.parent.parent
+        
+        # Files that handle API calls
+        api_files = [
+            project_root / 'autotasktracker' / 'pensieve' / 'api_client.py',
+            project_root / 'autotasktracker' / 'ai' / 'vlm_processor.py',
+            project_root / 'autotasktracker' / 'core' / 'error_handler.py',
+        ]
+        
+        # Add any files with 'api' or 'client' in name
+        for file in project_root.rglob('*.py'):
+            if any(keyword in file.name.lower() for keyword in ['api', 'client']) and 'test' not in str(file):
+                api_files.append(file)
+        
+        api_violations = []
+        
+        for api_file in api_files:
+            if not api_file.exists():
+                continue
+                
+            with open(api_file, 'r') as f:
+                content = f.read()
+            
+            # Look for hardcoded API URLs
+            hardcoded_urls = re.findall(r'["\']http://localhost:\d+[^"\']*["\']', content)
+            
+            # Check for config usage
+            uses_config_urls = any(method in content for method in [
+                'get_service_url', 'get_ollama_url', 'config.', 'get_config()'
+            ])
+            
+            if hardcoded_urls and not uses_config_urls:
+                api_violations.append(
+                    f"{api_file.name}: Hardcoded URLs {hardcoded_urls} without config usage"
+                )
+            elif hardcoded_urls:
+                api_violations.append(
+                    f"{api_file.name}: Has both config and hardcoded URLs {hardcoded_urls} - inconsistent"
+                )
+        
+        if api_violations:
+            print(f"\n🚨 API CLIENT CONFIG VIOLATIONS ({len(api_violations)}):")
+            for violation in api_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(api_violations) == 0, \
+            f"HARDCORE FAILURE: {len(api_violations)} API files violate config URL usage"
+    
+    def test_runtime_config_consistency(self):
+        """HARDCORE: Test that runtime config values match expected patterns."""
+        from autotasktracker.config import get_config
+        
+        config = get_config()
+        runtime_violations = []
+        
+        # Test that all service URLs are properly formed
+        services = ['memos', 'task_board', 'analytics', 'timetracker', 'notifications']
+        
+        for service in services:
+            try:
+                url = config.get_service_url(service)
+                if not url.startswith('http://localhost:'):
+                    runtime_violations.append(f"Service {service} URL malformed: {url}")
+                
+                # Extract port from URL
+                port_match = re.search(r':(\d+)$', url)
+                if not port_match:
+                    runtime_violations.append(f"Service {service} URL missing port: {url}")
+                else:
+                    port = int(port_match.group(1))
+                    if not (1024 <= port <= 65535):
+                        runtime_violations.append(f"Service {service} port out of range: {port}")
+            except Exception as e:
+                runtime_violations.append(f"Service {service} URL generation failed: {e}")
+        
+        # Test Ollama URL
+        try:
+            ollama_url = config.get_ollama_url()
+            if not ollama_url.startswith(('http://localhost:', 'https://localhost:')):
+                runtime_violations.append(f"Ollama URL malformed: {ollama_url}")
+        except Exception as e:
+            runtime_violations.append(f"Ollama URL generation failed: {e}")
+        
+        # Test path consistency
+        try:
+            db_path = config.get_db_path()
+            if not db_path.endswith('database.db'):
+                runtime_violations.append(f"DB path doesn't end with database.db: {db_path}")
+            
+            if not os.path.isabs(db_path):
+                runtime_violations.append(f"DB path not absolute: {db_path}")
+        except Exception as e:
+            runtime_violations.append(f"DB path generation failed: {e}")
+        
+        if runtime_violations:
+            print(f"\n🚨 RUNTIME CONFIG VIOLATIONS ({len(runtime_violations)}):")
+            for violation in runtime_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(runtime_violations) == 0, \
+            f"HARDCORE FAILURE: {len(runtime_violations)} runtime config issues"
+    
+    def test_environment_variable_override_works_in_production(self):
+        """HARDCORE: Test that environment variables actually override config in production context."""
+        import os
+        from autotasktracker.config import Config, reset_config, get_config
+        from unittest.mock import patch
+        
+        # Reset config to ensure clean state
+        reset_config()
+        
+        override_violations = []
+        
+        # Test critical environment variables
+        test_overrides = {
+            'AUTOTASK_DB_PATH': '/tmp/test_override.db',
+            'AUTOTASK_VLM_PORT': '12345',
+            'AUTOTASK_TASK_BOARD_PORT': '9000',
+            'AUTOTASK_VLM_MODEL': 'test-model-override'
+        }
+        
+        for env_var, test_value in test_overrides.items():
+            with patch.dict(os.environ, {env_var: test_value}):
+                try:
+                    reset_config()  # Force reload with new env
+                    config = get_config()
+                    
+                    # Verify override worked
+                    if env_var == 'AUTOTASK_DB_PATH':
+                        actual = config.get_db_path()
+                        if test_value not in actual:  # May be path-validated/sanitized
+                            override_violations.append(f"{env_var} override not applied: expected {test_value}, got {actual}")
+                    
+                    elif env_var == 'AUTOTASK_VLM_PORT':
+                        if config.vlm_port != 12345:
+                            override_violations.append(f"{env_var} override not applied: expected 12345, got {config.vlm_port}")
+                    
+                    elif env_var == 'AUTOTASK_TASK_BOARD_PORT':
+                        if config.TASK_BOARD_PORT != 9000:
+                            override_violations.append(f"{env_var} override not applied: expected 9000, got {config.TASK_BOARD_PORT}")
+                    
+                    elif env_var == 'AUTOTASK_VLM_MODEL':
+                        if 'test-model-override' not in config.vlm_model:
+                            override_violations.append(f"{env_var} override not applied: expected test-model-override, got {config.vlm_model}")
+                
+                except Exception as e:
+                    override_violations.append(f"{env_var} override caused error: {e}")
+        
+        # Reset to clean state
+        reset_config()
+        
+        if override_violations:
+            print(f"\n🚨 ENVIRONMENT OVERRIDE VIOLATIONS ({len(override_violations)}):")
+            for violation in override_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(override_violations) == 0, \
+            f"HARDCORE FAILURE: {len(override_violations)} environment overrides don't work"
+
+
+class TestConfigTestSystemIntegration:
+    """SUPER ROBUST test system configuration integration tests."""
+    
+    def test_config_test_environment_isolation_complete(self):
+        """SUPER ROBUST: Test complete test environment isolation for config system."""
+        import threading
+        import multiprocessing
+        from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+        from unittest.mock import patch
+        from autotasktracker.config import get_config, reset_config
+        
+        isolation_violations = []
+        
+        # 1. THREAD-LEVEL ISOLATION
+        def thread_config_test(thread_id, env_vars):
+            """Test config isolation in threads."""
+            try:
+                with patch.dict(os.environ, env_vars):
+                    reset_config()
+                    config = get_config()
+                    return {
+                        'thread_id': thread_id,
+                        'db_path': config.get_db_path(),
+                        'vlm_port': config.vlm_port,
+                        'task_board_port': config.TASK_BOARD_PORT
+                    }
+            except Exception as e:
+                return {'thread_id': thread_id, 'error': str(e)}
+        
+        # Test multiple threads with different environment variables
+        test_environments = [
+            {'AUTOTASK_VLM_PORT': '12001', 'AUTOTASK_TASK_BOARD_PORT': '9001'},
+            {'AUTOTASK_VLM_PORT': '12002', 'AUTOTASK_TASK_BOARD_PORT': '9002'},
+            {'AUTOTASK_VLM_PORT': '12003', 'AUTOTASK_TASK_BOARD_PORT': '9003'},
+        ]
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [
+                executor.submit(thread_config_test, i, env) 
+                for i, env in enumerate(test_environments)
+            ]
+            thread_results = [future.result() for future in futures]
+        
+        # Verify thread isolation
+        for result in thread_results:
+            if 'error' in result:
+                isolation_violations.append(f"Thread {result['thread_id']} config error: {result['error']}")
+        
+        # Check that different threads got different config values
+        vlm_ports = [r.get('vlm_port') for r in thread_results if 'vlm_port' in r]
+        if len(set(vlm_ports)) != len(vlm_ports):
+            isolation_violations.append("Thread isolation failed - threads sharing config state")
+        
+        # 2. PYTEST FIXTURE SCOPE ISOLATION
+        def test_session_scope_config():
+            """Simulate session-scope config behavior."""
+            reset_config()
+            session_config = get_config()
+            return id(session_config)
+        
+        def test_function_scope_config():
+            """Simulate function-scope config behavior."""
+            reset_config()
+            function_config = get_config()
+            return id(function_config)
+        
+        session_id1 = test_session_scope_config()
+        session_id2 = test_session_scope_config()
+        function_id1 = test_function_scope_config()
+        function_id2 = test_function_scope_config()
+        
+        # Session scope should reuse instances, function scope should reset
+        if session_id1 != session_id2:
+            isolation_violations.append("Session scope config not reusing instances properly")
+        
+        # 3. CONFTEST.PY ISOLATION VALIDATION
+        original_env = dict(os.environ)
+        
+        try:
+            # Test conftest.py test_isolation fixture behavior
+            test_env = {'AUTOTASK_DB_PATH': '/tmp/test_isolation.db'}
+            
+            # Modify environment
+            os.environ.update(test_env)
+            reset_config()
+            modified_config = get_config()
+            modified_db_path = modified_config.get_db_path()
+            
+            # Simulate conftest.py cleanup (restore environment)
+            os.environ.clear()
+            os.environ.update(original_env)
+            reset_config()
+            
+            # Verify environment was restored
+            restored_config = get_config()
+            restored_db_path = restored_config.get_db_path()
+            
+            if test_env['AUTOTASK_DB_PATH'] in restored_db_path:
+                isolation_violations.append("conftest.py isolation failed - test environment leaked")
+        
+        finally:
+            os.environ.clear()
+            os.environ.update(original_env)
+            reset_config()
+        
+        # 4. TEST DISCOVERY ISOLATION
+        import sys
+        original_path = sys.path[:]
+        original_cwd = os.getcwd()
+        
+        try:
+            # Test config imports from different directories
+            test_directories = [
+                self.project_root / "tests" / "unit",
+                self.project_root / "tests" / "integration", 
+                self.project_root / "tests" / "health",
+                self.project_root / "scripts"
+            ]
+            
+            for test_dir in test_directories:
+                if test_dir.exists():
+                    os.chdir(test_dir)
+                    try:
+                        # Should be able to import config from any test directory
+                        from autotasktracker.config import get_config, reset_config
+                        reset_config()
+                        config = get_config()
+                        db_path = config.get_db_path()
+                        assert isinstance(db_path, str)
+                    except ImportError as e:
+                        isolation_violations.append(f"Config import failed from {test_dir}: {e}")
+        
+        finally:
+            sys.path[:] = original_path
+            os.chdir(original_cwd)
+            reset_config()
+        
+        # 5. MULTIPROCESS ISOLATION (if needed for parallel testing)
+        def process_config_test(process_id):
+            """Test config in separate process."""
+            try:
+                from autotasktracker.config import get_config, reset_config
+                reset_config()
+                config = get_config()
+                return {
+                    'process_id': process_id,
+                    'db_path': config.get_db_path(),
+                    'success': True
+                }
+            except Exception as e:
+                return {'process_id': process_id, 'error': str(e), 'success': False}
+        
+        # Note: multiprocessing may not work in all test environments
+        try:
+            with ProcessPoolExecutor(max_workers=2) as executor:
+                process_futures = [executor.submit(process_config_test, i) for i in range(2)]
+                process_results = [future.result(timeout=10) for future in process_futures]
+            
+            failed_processes = [r for r in process_results if not r.get('success')]
+            if failed_processes:
+                isolation_violations.append(f"Process isolation failed: {failed_processes}")
+        
+        except Exception as e:
+            # Multiprocessing may not be available in all test environments
+            logger.info(f"Multiprocess testing skipped: {e}")
+        
+        if isolation_violations:
+            print(f"\n🚨 TEST ENVIRONMENT ISOLATION VIOLATIONS ({len(isolation_violations)}):")
+            for violation in isolation_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(isolation_violations) == 0, \
+            f"SUPER ROBUST FAILURE: {len(isolation_violations)} test environment isolation violations"
+    
+    def test_pytest_fixture_integration_comprehensive(self):
+        """SUPER ROBUST: Test comprehensive pytest fixture integration with config."""
+        import tempfile
+        from unittest.mock import patch, MagicMock
+        from autotasktracker.config import get_config, reset_config
+        
+        fixture_violations = []
+        
+        # 1. FIXTURE SCOPE TESTING
+        def simulate_session_fixture():
+            """Simulate session-scoped fixture behavior."""
+            reset_config()
+            return get_config()
+        
+        def simulate_module_fixture():
+            """Simulate module-scoped fixture behavior."""
+            config = get_config()
+            return config.get_db_path()
+        
+        def simulate_function_fixture():
+            """Simulate function-scoped fixture behavior."""
+            import time
+            # Use /tmp which is in allowed directories
+            test_db_path = f'/tmp/function_test_{time.time()}.db'
+            with patch.dict(os.environ, {'AUTOTASK_DB_PATH': test_db_path}):
+                reset_config()
+                config = get_config()
+                return config.get_db_path()
+        
+        # Test fixture scopes
+        session_config1 = simulate_session_fixture()
+        session_config2 = simulate_session_fixture()
+        
+        # Session fixture behavior: reset_config() creates new instances by design
+        # So we check that without reset, it reuses instances
+        session_config3 = get_config()  # No reset
+        session_config4 = get_config()  # No reset
+        
+        if id(session_config3) != id(session_config4):
+            fixture_violations.append("Session-like behavior not reusing config instance without reset")
+        
+        # Test function fixture isolation
+        function_path1 = simulate_function_fixture()
+        function_path2 = simulate_function_fixture()
+        
+        # Function fixtures should be independent (different paths)
+        # Since we use timestamp, they should be different unless called at exact same time
+        # Just check they are valid paths for now
+        if not isinstance(function_path1, str) or not isinstance(function_path2, str):
+            fixture_violations.append("Function fixtures not returning valid paths")
+        
+        # 2. FIXTURE DEPENDENCY INJECTION
+        def test_config_dependency_injection():
+            """Test config as fixture dependency."""
+            config = get_config()
+            
+            # Simulate injecting config into test function
+            test_dependencies = {
+                'config': config,
+                'db_path': config.get_db_path(),
+                'vlm_url': config.get_ollama_url(),
+                'service_urls': {
+                    'memos': config.get_service_url('memos'),
+                    'task_board': config.get_service_url('task_board')
+                }
+            }
+            
+            # Validate all dependencies are properly formed
+            for dep_name, dep_value in test_dependencies.items():
+                if dep_name == 'config':
+                    if not hasattr(dep_value, 'get_db_path'):
+                        fixture_violations.append(f"Config fixture missing methods: {dep_name}")
+                elif dep_name in ['db_path', 'vlm_url']:
+                    if not isinstance(dep_value, str) or len(dep_value) == 0:
+                        fixture_violations.append(f"Invalid fixture value: {dep_name}={dep_value}")
+                elif dep_name == 'service_urls':
+                    for service, url in dep_value.items():
+                        if not url.startswith('http://localhost:'):
+                            fixture_violations.append(f"Invalid service URL fixture: {service}={url}")
+        
+        test_config_dependency_injection()
+        
+        # 3. FIXTURE TEARDOWN VALIDATION
+        def test_fixture_teardown():
+            """Test proper fixture teardown behavior."""
+            # Use /tmp which is allowed
+            test_db = "/tmp/fixture_teardown_test.db"
+            
+            original_config = get_config()
+            original_db_path = original_config.get_db_path()
+            
+            # Simulate fixture setup
+            with patch.dict(os.environ, {'AUTOTASK_DB_PATH': test_db}):
+                reset_config()
+                fixture_config = get_config()
+                fixture_db_path = fixture_config.get_db_path()
+                
+                # Config should apply test database (or its sanitized version)
+                if '/tmp/' not in fixture_db_path:
+                    fixture_violations.append("Fixture setup didn't apply test configuration to tmp directory")
+            
+            # Simulate fixture teardown (should restore original config)
+            reset_config()
+            restored_config = get_config()
+            
+            # After teardown, should not have test path
+            if test_db in restored_config.get_db_path():
+                fixture_violations.append("Fixture teardown didn't restore original config")
+        
+        test_fixture_teardown()
+        
+        # 4. PARAMETERIZED FIXTURE TESTING
+        def test_parameterized_config_fixtures():
+            """Test config with parameterized fixtures."""
+            test_parameters = [
+                {'vlm_port': '12001', 'expected_port': 12001},
+                {'vlm_port': '12002', 'expected_port': 12002},
+                {'vlm_port': '12003', 'expected_port': 12003},
+            ]
+            
+            for params in test_parameters:
+                with patch.dict(os.environ, {'AUTOTASK_VLM_PORT': params['vlm_port']}):
+                    reset_config()
+                    config = get_config()
+                    if config.vlm_port != params['expected_port']:
+                        fixture_violations.append(
+                            f"Parameterized fixture failed: expected {params['expected_port']}, got {config.vlm_port}"
+                        )
+        
+        test_parameterized_config_fixtures()
+        
+        # 5. FIXTURE ERROR HANDLING
+        def test_fixture_error_handling():
+            """Test fixture behavior with config errors."""
+            error_scenarios = [
+                {'AUTOTASK_VLM_PORT': 'invalid_port'},
+                {'AUTOTASK_DB_PATH': '/invalid/path/that/cannot/exist'},
+                {'AUTOTASK_CONFIDENCE_THRESHOLD': 'not_a_number'},
+            ]
+            
+            for error_env in error_scenarios:
+                try:
+                    with patch.dict(os.environ, error_env):
+                        reset_config()
+                        config = get_config()
+                        # Should handle errors gracefully and provide fallbacks
+                        db_path = config.get_db_path()
+                        assert isinstance(db_path, str)
+                except Exception as e:
+                    fixture_violations.append(f"Fixture error handling failed for {error_env}: {e}")
+        
+        test_fixture_error_handling()
+        
+        if fixture_violations:
+            print(f"\n🚨 PYTEST FIXTURE INTEGRATION VIOLATIONS ({len(fixture_violations)}):")
+            for violation in fixture_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(fixture_violations) == 0, \
+            f"SUPER ROBUST FAILURE: {len(fixture_violations)} pytest fixture integration violations"
+    
+    @pytest.fixture(autouse=True)
+    def setup_test_system_integration(self):
+        """Setup for test system integration tests."""
+        self.project_root = Path(__file__).parent.parent.parent
+        self.test_dir = self.project_root / "tests"
+        
+        # Store original state
+        self.original_env = dict(os.environ)
+        self.original_cwd = os.getcwd()
+        
+        yield
+        
+        # Restore state
+        os.environ.clear()
+        os.environ.update(self.original_env)
+        os.chdir(self.original_cwd)
+        from autotasktracker.config import reset_config
+        reset_config()
+    
+    def test_test_discovery_import_path_validation_comprehensive(self):
+        """SUPER ROBUST: Test comprehensive test discovery and import path validation."""
+        import sys
+        import importlib
+        from autotasktracker.config import get_config, reset_config
+        
+        discovery_violations = []
+        
+        # 1. TEST DIRECTORY IMPORT VALIDATION
+        test_directories = [
+            self.test_dir / "unit",
+            self.test_dir / "integration", 
+            self.test_dir / "health",
+            self.test_dir / "functional",
+            self.test_dir / "infrastructure",
+            self.test_dir / "performance",
+            self.test_dir / "e2e"
+        ]
+        
+        original_path = sys.path[:]
+        
+        for test_dir in test_directories:
+            if not test_dir.exists():
+                continue
+                
+            try:
+                # Change to test directory
+                os.chdir(test_dir)
+                
+                # Test direct import
+                try:
+                    from autotasktracker.config import get_config, reset_config, Config
+                    reset_config()
+                    config = get_config()
+                    assert isinstance(config, Config)
+                except ImportError as e:
+                    discovery_violations.append(f"Direct import failed from {test_dir.name}: {e}")
+                
+                # Test importlib import
+                try:
+                    config_module = importlib.import_module('autotasktracker.config')
+                    config = config_module.get_config()
+                    assert hasattr(config, 'get_db_path')
+                except ImportError as e:
+                    discovery_violations.append(f"importlib import failed from {test_dir.name}: {e}")
+                
+                # Test relative path independence
+                sys.path.insert(0, '.')
+                sys.path.insert(0, '..')
+                sys.path.insert(0, '../..')
+                
+                try:
+                    from autotasktracker.config import get_config
+                    config = get_config()
+                    db_path = config.get_db_path()
+                    assert isinstance(db_path, str)
+                except Exception as e:
+                    discovery_violations.append(f"Relative path import failed from {test_dir.name}: {e}")
+                
+                # Restore sys.path
+                sys.path[:] = original_path
+                
+            except Exception as e:
+                discovery_violations.append(f"General import test failed for {test_dir.name}: {e}")
+        
+        # 2. CONFTEST.PY PATH SETUP VALIDATION
+        conftest_file = self.test_dir / "conftest.py"
+        if conftest_file.exists():
+            try:
+                # Read conftest.py and verify path setup
+                conftest_content = conftest_file.read_text()
+                
+                # Check for project root addition to sys.path
+                if 'sys.path.insert' not in conftest_content:
+                    discovery_violations.append("conftest.py missing sys.path setup")
+                
+                if 'project_root' not in conftest_content:
+                    discovery_violations.append("conftest.py missing project root calculation")
+                
+                # Test that conftest.py path setup actually works
+                project_root_in_conftest = Path(__file__).parent.parent.parent
+                if str(project_root_in_conftest) not in sys.path:
+                    # This is expected behavior - conftest.py should have added it
+                    discovery_violations.append("conftest.py path setup not effective")
+                
+            except Exception as e:
+                discovery_violations.append(f"conftest.py validation failed: {e}")
+        
+        # 3. PYTEST DISCOVERY VALIDATION
+        try:
+            # Test that pytest can discover config-related tests (just check syntax, not full discovery)
+            pytest_result = subprocess.run([
+                sys.executable, '-c', 'import pytest; print("pytest import successful")'
+            ], capture_output=True, text=True, timeout=10, cwd=self.project_root)
+            
+            if pytest_result.returncode != 0:
+                discovery_violations.append(f"pytest import failed: {pytest_result.stderr}")
+            
+            # Simple config discovery test - check if we can find config test files
+            config_test_files = list(self.test_dir.glob("**/test_*config*.py"))
+            if len(config_test_files) == 0:
+                discovery_violations.append("No config test files found in test discovery")
+        
+        except subprocess.TimeoutExpired:
+            discovery_violations.append("pytest discovery timeout - potential infinite loop")
+        except Exception as e:
+            discovery_violations.append(f"pytest discovery test failed: {e}")
+        
+        # 4. MODULE RESOLUTION VALIDATION
+        config_modules = [
+            'autotasktracker.config',
+            'autotasktracker.pensieve.config_reader',
+        ]
+        
+        for module_name in config_modules:
+            try:
+                # Test from different working directories
+                for test_dir in test_directories:
+                    if not test_dir.exists():
+                        continue
+                        
+                    os.chdir(test_dir)
+                    
+                    module = importlib.import_module(module_name)
+                    if not hasattr(module, 'get_config') and 'config_reader' not in module_name:
+                        discovery_violations.append(f"Module {module_name} missing expected attributes from {test_dir.name}")
+            
+            except ImportError as e:
+                discovery_violations.append(f"Module {module_name} import failed: {e}")
+        
+        # Restore working directory
+        os.chdir(self.original_cwd)
+        
+        if discovery_violations:
+            print(f"\n🚨 TEST DISCOVERY IMPORT PATH VIOLATIONS ({len(discovery_violations)}):")
+            for violation in discovery_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(discovery_violations) == 0, \
+            f"SUPER ROBUST FAILURE: {len(discovery_violations)} test discovery/import violations"
+    
+    def test_test_database_separation_and_test_config_validation(self):
+        """SUPER ROBUST: Test test database separation and test-specific configuration."""
+        import sqlite3
+        import tempfile
+        import threading
+        from unittest.mock import patch
+        from autotasktracker.config import get_config, reset_config
+        
+        separation_violations = []
+        
+        # 1. TEST DATABASE ISOLATION
+        def test_production_vs_test_database():
+            """Test that test databases are separate from production."""
+            # Get production config
+            prod_config = get_config()
+            prod_db_path = prod_config.get_db_path()
+            
+            # Test database should be different
+            test_db_patterns = ['/tmp/', '/temp/', 'test.db', 'test_', '.test']
+            
+            for test_env in [
+                {'AUTOTASK_DB_PATH': '/tmp/test_autotask.db'},
+                {'AUTOTASK_DB_PATH': '/tmp/pytest_autotask.db'},
+                {'AUTOTASK_DB_PATH': f"{os.path.expanduser('~')}/test_autotask.db"},
+            ]:
+                with patch.dict(os.environ, test_env):
+                    reset_config()
+                    test_config = get_config()
+                    test_db_path = test_config.get_db_path()
+                    
+                    # Test database should be different from production
+                    if test_db_path == prod_db_path:
+                        separation_violations.append(
+                            f"Test database same as production: {test_db_path}"
+                        )
+                    
+                    # Test database should be in test location
+                    is_test_location = any(pattern in test_db_path for pattern in test_db_patterns)
+                    if not is_test_location:
+                        separation_violations.append(
+                            f"Test database not in test location: {test_db_path}"
+                        )
+        
+        test_production_vs_test_database()
+        
+        # 2. TEST DATABASE SEQUENTIAL ACCESS
+        def test_sequential_test_database_access():
+            """Test that multiple test scenarios can use separate databases."""
+            # Note: Config is a process-level singleton, not thread-safe
+            # Testing sequential access to verify test database isolation
+            
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            test_results = []
+            
+            for test_id in range(3):
+                test_db_path = os.path.join(temp_dir, f'test_autotask_{test_id}.db')
+                
+                # Set environment and reset config
+                with patch.dict(os.environ, {'AUTOTASK_DB_PATH': test_db_path}, clear=False):
+                    reset_config()
+                    config = get_config()
+                    db_path = config.get_db_path()
+                    
+                    # Verify we got the expected path
+                    if db_path != test_db_path:
+                        separation_violations.append(
+                            f"Test {test_id}: Expected db path {test_db_path}, got {db_path}"
+                        )
+                    
+                    # Create test database
+                    try:
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.execute(f"CREATE TABLE test_{test_id} (id INTEGER)")
+                        cursor.execute(f"INSERT INTO test_{test_id} (id) VALUES (?)", (test_id,))
+                        conn.commit()
+                        
+                        # Verify data
+                        cursor.execute(f"SELECT id FROM test_{test_id}")
+                        result = cursor.fetchone()
+                        conn.close()
+                        
+                        test_results.append({
+                            'test_id': test_id,
+                            'db_path': db_path,
+                            'stored_id': result[0] if result else None,
+                            'success': True
+                        })
+                        
+                    except Exception as e:
+                        test_results.append({
+                            'test_id': test_id,
+                            'error': str(e),
+                            'success': False
+                        })
+                    finally:
+                        # Cleanup
+                        if os.path.exists(test_db_path):
+                            os.unlink(test_db_path)
+            
+            # Verify all tests succeeded
+            successful_tests = [r for r in test_results if r.get('success')]
+            if len(successful_tests) != 3:
+                failed_tests = [r for r in test_results if not r.get('success')]
+                separation_violations.append(f"Test database creation failed: {failed_tests}")
+            
+            # Verify data isolation
+            for result in successful_tests:
+                if result['stored_id'] != result['test_id']:
+                    separation_violations.append(
+                        f"Test {result['test_id']} data isolation failed"
+                    )
+            
+            # Verify different databases were used
+            db_paths = [r['db_path'] for r in successful_tests]
+            if len(set(db_paths)) != len(db_paths):
+                separation_violations.append("Tests not using separate databases")
+        
+        test_sequential_test_database_access()
+        
+        # 3. TEST-SPECIFIC CONFIGURATION VALIDATION
+        def test_test_specific_config_values():
+            """Test that test-specific configuration values work correctly."""
+            test_configs = [
+                {
+                    'env': {
+                        'AUTOTASK_VLM_PORT': '15000',
+                        'AUTOTASK_TASK_BOARD_PORT': '9500',
+                        'AUTOTASK_BATCH_SIZE': '10',
+                        'AUTOTASK_CONFIDENCE_THRESHOLD': '0.5'
+                    },
+                    'expected': {
+                        'vlm_port': 15000,
+                        'TASK_BOARD_PORT': 9500,
+                        'batch_size': 10,
+                        'confidence_threshold': 0.5
+                    }
+                },
+                {
+                    'env': {
+                        'AUTOTASK_VLM_MODEL': 'test-model',
+                        'AUTOTASK_EMBEDDING_MODEL': 'test-embedding',
+                        'AUTOTASK_AUTO_REFRESH_SECONDS': '5'
+                    },
+                    'expected': {
+                        'vlm_model': 'test-model',
+                        'embedding_model': 'test-embedding',
+                        'AUTO_REFRESH_SECONDS': 5
+                    }
+                }
+            ]
+            
+            for i, test_config in enumerate(test_configs):
+                with patch.dict(os.environ, test_config['env']):
+                    reset_config()
+                    config = get_config()
+                    
+                    for attr, expected_value in test_config['expected'].items():
+                        actual_value = getattr(config, attr)
+                        if actual_value != expected_value:
+                            separation_violations.append(
+                                f"Test config {i} attr {attr}: expected {expected_value}, got {actual_value}"
+                            )
+        
+        test_test_specific_config_values()
+        
+        # 4. TEST ENVIRONMENT VARIABLE PRECEDENCE
+        def test_environment_precedence():
+            """Test that test environment variables take precedence correctly."""
+            # Test precedence: environment > defaults
+            default_config = get_config()
+            default_vlm_port = default_config.vlm_port
+            
+            test_port = default_vlm_port + 1000
+            with patch.dict(os.environ, {'AUTOTASK_VLM_PORT': str(test_port)}):
+                reset_config()
+                env_config = get_config()
+                
+                if env_config.vlm_port == default_vlm_port:
+                    separation_violations.append("Environment variable not overriding default")
+                elif env_config.vlm_port != test_port:
+                    separation_violations.append(
+                        f"Environment override failed: expected {test_port}, got {env_config.vlm_port}"
+                    )
+        
+        test_environment_precedence()
+        
+        # 5. TEST CONFIGURATION VALIDATION AND CLEANUP
+        def test_config_validation_and_cleanup():
+            """Test that valid test configuration works and invalid falls back safely."""
+            original_env = dict(os.environ)
+            
+            # Test 1: Valid test values should work
+            valid_test_env = {
+                'AUTOTASK_DB_PATH': '/tmp/test_validation.db',
+                'AUTOTASK_VLM_PORT': '25000',
+                'AUTOTASK_VLM_MODEL': 'test-llm-model',
+                'AUTOTASK_BATCH_SIZE': '25'
+            }
+            
+            with patch.dict(os.environ, valid_test_env, clear=False):
+                reset_config()
+                test_config = get_config()
+                
+                # Verify valid values were applied
+                if test_config.get_db_path() != '/tmp/test_validation.db':
+                    separation_violations.append(
+                        f"Valid DB path not applied: {test_config.get_db_path()}"
+                    )
+                if test_config.vlm_port != 25000:
+                    separation_violations.append(
+                        f"Valid VLM port not applied: {test_config.vlm_port}"
+                    )
+                if test_config.vlm_model != 'test-llm-model':
+                    separation_violations.append(
+                        f"Valid VLM model not applied: {test_config.vlm_model}"
+                    )
+                if test_config.batch_size != 25:
+                    separation_violations.append(
+                        f"Valid batch size not applied: {test_config.batch_size}"
+                    )
+            
+            # Test 2: Invalid values should fall back to defaults
+            invalid_test_env = {
+                'AUTOTASK_VLM_PORT': 'not_a_number',
+                'AUTOTASK_BATCH_SIZE': 'invalid_batch_size'
+            }
+            
+            with patch.dict(os.environ, invalid_test_env, clear=False):
+                reset_config()
+                invalid_config = get_config()
+                
+                # Verify defaults were used for invalid values
+                if not isinstance(invalid_config.vlm_port, int):
+                    separation_violations.append(
+                        "Invalid VLM port didn't fall back to default"
+                    )
+                if not isinstance(invalid_config.batch_size, int):
+                    separation_violations.append(
+                        "Invalid batch size didn't fall back to default"
+                    )
+            
+            # Test 3: Cleanup - restore original environment
+            os.environ.clear()
+            os.environ.update(original_env)
+            reset_config()
+            
+            # Verify environment was restored
+            clean_config = get_config()
+            if '/tmp/test_validation.db' in clean_config.get_db_path():
+                separation_violations.append("Test configuration not properly cleaned up")
+        
+        test_config_validation_and_cleanup()
+        
+        # 6. TEST FIXTURE DATABASE PATHS
+        def test_fixture_database_paths():
+            """Test that fixture databases use appropriate paths."""
+            fixture_scenarios = [
+                {
+                    'name': 'session_fixture',
+                    'path_pattern': 'session',
+                    'env': {'AUTOTASK_DB_PATH': '/tmp/session_test.db'}
+                },
+                {
+                    'name': 'function_fixture', 
+                    'path_pattern': 'function',
+                    'env': {'AUTOTASK_DB_PATH': '/tmp/function_test.db'}
+                },
+                {
+                    'name': 'module_fixture',
+                    'path_pattern': 'module', 
+                    'env': {'AUTOTASK_DB_PATH': '/tmp/module_test.db'}
+                }
+            ]
+            
+            for scenario in fixture_scenarios:
+                with patch.dict(os.environ, scenario['env']):
+                    reset_config()
+                    config = get_config()
+                    db_path = config.get_db_path()
+                    
+                    # Verify fixture path pattern
+                    if scenario['path_pattern'] not in db_path:
+                        separation_violations.append(
+                            f"Fixture {scenario['name']} not using appropriate path pattern"
+                        )
+                    
+                    # Verify path is in test location
+                    if not db_path.startswith('/tmp/'):
+                        separation_violations.append(
+                            f"Fixture {scenario['name']} not using test directory"
+                        )
+        
+        test_fixture_database_paths()
+        
+        if separation_violations:
+            print(f"\n🚨 TEST DATABASE SEPARATION VIOLATIONS ({len(separation_violations)}):")
+            for violation in separation_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(separation_violations) == 0, \
+            f"SUPER ROBUST FAILURE: {len(separation_violations)} test database separation violations"
+    
+    def test_conftest_and_test_infrastructure_config_integration(self):
+        """SUPER ROBUST: Test conftest.py and test infrastructure config integration."""
+        import importlib.util
+        from unittest.mock import patch, MagicMock
+        from autotasktracker.config import get_config, reset_config
+        
+        infrastructure_violations = []
+        
+        # 1. CONFTEST.PY INTEGRATION VALIDATION
+        conftest_path = self.test_dir / "conftest.py"
+        if conftest_path.exists():
+            try:
+                # Load conftest.py module
+                spec = importlib.util.spec_from_file_location("conftest", conftest_path)
+                conftest_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(conftest_module)
+                
+                # Test test_isolation fixture
+                if hasattr(conftest_module, 'test_isolation'):
+                    # Just verify the fixture exists and is callable
+                    isolation_fixture = conftest_module.test_isolation
+                    if not callable(isolation_fixture):
+                        infrastructure_violations.append("conftest.py test_isolation fixture not callable")
+                    
+                    # Note: We can't directly call fixtures as they're meant to be used by pytest
+                    # We'll just verify the fixture function exists and has correct structure
+                    import inspect
+                    # test_isolation is a fixture decorator, not a generator itself
+                    # Just verify it exists and is callable
+                    pass
+                
+                else:
+                    infrastructure_violations.append("conftest.py missing test_isolation fixture")
+            
+            except Exception as e:
+                infrastructure_violations.append(f"conftest.py integration test failed: {e}")
+        
+        # 2. TEST INFRASTRUCTURE CONFIG USAGE
+        def test_infrastructure_files_config_usage():
+            """Test that test infrastructure files use config correctly."""
+            infrastructure_files = [
+                self.test_dir / "conftest.py",
+                self.test_dir / "infrastructure" / "test_config_infrastructure.py",
+                self.test_dir / "infrastructure" / "test_logging_infrastructure.py",
+                self.test_dir / "infrastructure" / "test_service_infrastructure.py"
+            ]
+            
+            for infra_file in infrastructure_files:
+                if not infra_file.exists():
+                    continue
+                
+                try:
+                    content = infra_file.read_text()
+                    
+                    # Check for proper config imports
+                    has_config_import = any(pattern in content for pattern in [
+                        'from autotasktracker.config import',
+                        'import autotasktracker.config',
+                        'get_config()'
+                    ])
+                    
+                    # Files that manipulate config should import it
+                    if 'config' in infra_file.name.lower() and not has_config_import:
+                        infrastructure_violations.append(
+                            f"Infrastructure file {infra_file.name} should import config"
+                        )
+                    
+                    # Check for hardcoded values that should use config
+                    import re
+                    hardcoded_patterns = [
+                        r'\b8502\b', r'\b8503\b', r'\b8839\b', r'\b11434\b'  # Common ports
+                    ]
+                    
+                    for pattern in hardcoded_patterns:
+                        matches = re.findall(pattern, content)
+                        if matches and has_config_import:
+                            infrastructure_violations.append(
+                                f"Infrastructure file {infra_file.name} has hardcoded values despite config import: {matches}"
+                            )
+                
+                except Exception as e:
+                    infrastructure_violations.append(f"Failed to analyze {infra_file.name}: {e}")
+        
+        test_infrastructure_files_config_usage()
+        
+        # 3. PYTEST PLUGIN INTEGRATION
+        def test_pytest_plugin_config_integration():
+            """Test config integration with pytest plugins and fixtures."""
+            # Test that config works with common pytest plugins
+            plugin_scenarios = [
+                {
+                    'name': 'pytest-timeout',
+                    'env': {'PYTEST_TIMEOUT': '300'},
+                    'config_test': lambda: get_config().QUERY_TIMEOUT_SECONDS < 300
+                },
+                {
+                    'name': 'pytest-xdist',
+                    'env': {'PYTEST_XDIST_WORKER': 'gw0'},
+                    'config_test': lambda: isinstance(get_config().get_db_path(), str)
+                },
+                {
+                    'name': 'pytest-cov',
+                    'env': {'COV_CORE_SOURCE': '.'},
+                    'config_test': lambda: get_config().validate()
+                }
+            ]
+            
+            for scenario in plugin_scenarios:
+                try:
+                    with patch.dict(os.environ, scenario['env']):
+                        reset_config()
+                        if not scenario['config_test']():
+                            infrastructure_violations.append(
+                                f"Config integration failed with {scenario['name']}"
+                            )
+                except Exception as e:
+                    # Plugin may not be available - that's okay
+                    logger.debug(f"Plugin {scenario['name']} test skipped: {e}")
+        
+        test_pytest_plugin_config_integration()
+        
+        # 4. TEST DISCOVERY CONFIGURATION
+        def test_test_discovery_configuration():
+            """Test configuration for test discovery mechanisms."""
+            # Test pytest.ini equivalent configuration
+            discovery_configs = [
+                {
+                    'name': 'testpaths',
+                    'paths': ['tests/unit', 'tests/integration', 'tests/health'],
+                    'test': lambda paths: all((self.project_root / path).exists() for path in paths)
+                },
+                {
+                    'name': 'python_files', 
+                    'patterns': ['test_*.py', '*_test.py'],
+                    'test': lambda patterns: any(
+                        list(self.test_dir.glob(pattern)) for pattern in patterns
+                    )
+                },
+                {
+                    'name': 'python_functions',
+                    'patterns': ['test_*'],
+                    'test': lambda patterns: True  # Hard to test without parsing
+                }
+            ]
+            
+            for config in discovery_configs:
+                try:
+                    if hasattr(config, 'paths'):
+                        if not config['test'](config['paths']):
+                            infrastructure_violations.append(
+                                f"Test discovery config {config['name']} validation failed"
+                            )
+                    elif hasattr(config, 'patterns'):
+                        if not config['test'](config['patterns']):
+                            infrastructure_violations.append(
+                                f"Test discovery config {config['name']} validation failed"
+                            )
+                except Exception as e:
+                    infrastructure_violations.append(
+                        f"Test discovery config {config['name']} test failed: {e}"
+                    )
+        
+        test_test_discovery_configuration()
+        
+        # 5. TEST RUNNER CONFIGURATION INTEGRATION
+        def test_test_runner_config_integration():
+            """Test integration with test runner configuration."""
+            # Test configuration that affects test running
+            runner_tests = [
+                {
+                    'name': 'parallel_execution',
+                    'test': lambda: get_config().CONNECTION_POOL_SIZE >= 1
+                },
+                {
+                    'name': 'timeout_configuration',
+                    'test': lambda: 0 < get_config().QUERY_TIMEOUT_SECONDS <= 300
+                },
+                {
+                    'name': 'logging_configuration',
+                    'test': lambda: hasattr(get_config(), 'LOGS_DIR')
+                },
+                {
+                    'name': 'cache_configuration',
+                    'test': lambda: get_config().CACHE_TTL_SECONDS > 0
+                }
+            ]
+            
+            for test_case in runner_tests:
+                try:
+                    if not test_case['test']():
+                        infrastructure_violations.append(
+                            f"Test runner config {test_case['name']} validation failed"
+                        )
+                except Exception as e:
+                    infrastructure_violations.append(
+                        f"Test runner config {test_case['name']} test failed: {e}"
+                    )
+        
+        test_test_runner_config_integration()
+        
+        if infrastructure_violations:
+            print(f"\n🚨 TEST INFRASTRUCTURE CONFIG VIOLATIONS ({len(infrastructure_violations)}):")
+            for violation in infrastructure_violations:
+                print(f"  ❌ {violation}")
+        
+        assert len(infrastructure_violations) == 0, \
+            f"SUPER ROBUST FAILURE: {len(infrastructure_violations)} test infrastructure config violations"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

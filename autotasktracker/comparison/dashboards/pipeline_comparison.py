@@ -8,7 +8,7 @@ import os
 from PIL import Image
 import json
 
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
 from autotasktracker.comparison.pipelines import BasicPipeline, OCRPipeline, AIFullPipeline
 
 # Page config
@@ -38,8 +38,8 @@ def load_screenshot_data(limit=50):
         me_vlm.value as vlm_description,
         CASE WHEN me_emb.value IS NOT NULL THEN 1 ELSE 0 END as has_embedding
     FROM entities e
-    LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr."key" = 'ocr_result'
-    LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window."key" = 'active_window'
+    LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr."key" = "ocr_result"
+    LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window."key" = "active_window"
     LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm."key" = "vlm_structured"
     LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb."key" = 'embedding'
     WHERE e.file_type_group = 'image'
@@ -114,7 +114,7 @@ def render_pipeline_interface(pipeline, screenshots_df, tab_name):
     # Process with pipeline
     with st.spinner(f"Processing with {pipeline.name}..."):
         screenshot_data = {
-            'active_window': selected_screenshot.get('active_window', ''),
+            "active_window": selected_screenshot.get("active_window", ''),
             "ocr_result": selected_screenshot.get("ocr_result", ''),
             'vlm_description': selected_screenshot.get('vlm_description', ''),
             'id': selected_screenshot.get('id')
@@ -154,7 +154,7 @@ def render_pipeline_interface(pipeline, screenshots_df, tab_name):
     with col3:
         st.metric(
             label="Category",
-            value=result['category'],
+            value=result["category"],
             help="Activity category classification"
         )
     

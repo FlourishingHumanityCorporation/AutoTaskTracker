@@ -122,8 +122,8 @@ class PensieveAdvancedSearch:
                 ocr_text = self.pensieve_client.get_ocr_result(frame.id)
                 
                 # Extract relevant data
-                window_title = metadata.get('window_title', '')
-                extracted_tasks = metadata.get('extracted_tasks', {}).get('tasks', [])
+                window_title = metadata.get("active_window", '')
+                extracted_tasks = metadata.get('extracted_tasks', {}).get("tasks", [])
                 activity_category = metadata.get('activity_category', '')
                 
                 # Calculate relevance score (semantic similarity)
@@ -178,8 +178,8 @@ class PensieveAdvancedSearch:
                 ocr_text = self.pensieve_client.get_ocr_result(frame.id)
                 
                 # Extract relevant data
-                window_title = metadata.get('window_title', '')
-                extracted_tasks = metadata.get('extracted_tasks', {}).get('tasks', [])
+                window_title = metadata.get("active_window", '')
+                extracted_tasks = metadata.get('extracted_tasks', {}).get("tasks", [])
                 activity_category = metadata.get('activity_category', '')
                 
                 # Calculate keyword relevance score
@@ -215,7 +215,7 @@ class PensieveAdvancedSearch:
         logger.info("Using fallback search (direct database)")
         
         try:
-            from autotasktracker.core.database import DatabaseManager
+            from autotasktracker.core import DatabaseManager
             
             db = DatabaseManager(use_pensieve_api=False)
             with db.get_connection(readonly=True) as conn:
@@ -228,7 +228,7 @@ class PensieveAdvancedSearch:
                            m2.value as extracted_tasks,
                            m3.value as activity_category
                     FROM entities e
-                    LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'window_title'
+                    LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "active_window"
                     LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'extracted_tasks'
                     LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'activity_category'
                     WHERE (m1.value LIKE ? OR m2.value LIKE ?)
@@ -250,10 +250,10 @@ class PensieveAdvancedSearch:
                         try:
                             import json
                             tasks_data = json.loads(extracted_tasks_json)
-                            if isinstance(tasks_data, dict) and 'tasks' in tasks_data:
-                                extracted_tasks = tasks_data['tasks']
-                        except (json.JSONDecodeError, TypeError):
-                            pass
+                            if isinstance(tasks_data, dict) and "tasks" in tasks_data:
+                                extracted_tasks = tasks_data["tasks"]
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logger.debug(f"Failed to parse extracted tasks JSON: {e}")
                     
                     # Calculate simple relevance
                     relevance_score = self._calculate_keyword_relevance(

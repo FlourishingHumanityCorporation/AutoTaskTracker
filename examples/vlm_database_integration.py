@@ -39,8 +39,8 @@ class VLMEnabledDatabaseManager(DatabaseManager):
             me3.value as vlm_description
         FROM
             entities e
-            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'ocr_result'
-            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
+            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = "ocr_result"
+            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = "active_window"
             LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key = "vlm_structured"
         WHERE
             e.file_type_group = 'image'
@@ -67,7 +67,7 @@ class VLMEnabledDatabaseManager(DatabaseManager):
                 if not df.empty and 'vlm_description' in df.columns:
                     df['enhanced_task'] = df.apply(
                         lambda row: get_enhanced_task(
-                            row['active_window'], 
+                            row["active_window"], 
                             row["ocr_result"], 
                             row['vlm_description']
                         ), 
@@ -76,7 +76,7 @@ class VLMEnabledDatabaseManager(DatabaseManager):
                     
                     df['enhanced_category'] = df.apply(
                         lambda row: get_enhanced_category(
-                            row['active_window'],
+                            row["active_window"],
                             row["ocr_result"],
                             row['vlm_description']
                         ),
@@ -103,7 +103,7 @@ class VLMEnabledDatabaseManager(DatabaseManager):
             COUNT(DISTINCT CASE WHEN me_vlm.value IS NOT NULL THEN e.id END) as with_vlm,
             COUNT(DISTINCT CASE WHEN me_ocr.value IS NULL AND me_vlm.value IS NOT NULL THEN e.id END) as vlm_only
         FROM entities e
-        LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
+        LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = "ocr_result"
         LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = "vlm_structured"
         WHERE e.file_type_group = 'image'
         AND date(e.created_at, 'localtime') >= date('now', '-7 days')
@@ -167,7 +167,7 @@ def display_vlm_enhanced_tasks():
             # Show original vs enhanced task
             from autotasktracker.core.task_extractor import get_task_extractor
             extractor = get_task_extractor()
-            original_task = extractor.extract_task(row['active_window'], row["ocr_result"])
+            original_task = extractor.extract_task(row["active_window"], row["ocr_result"])
             
             print(f"Original Task: {original_task}")
             
@@ -196,9 +196,9 @@ def compare_task_quality():
         me_ocr.value as ocr_text,
         me_vlm.value as vlm_description
     FROM entities e
-    JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
+    JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = "ocr_result"
     JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = "vlm_structured"
-    LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window.key = 'active_window'
+    LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window.key = "active_window"
     WHERE e.file_type_group = 'image'
     ORDER BY e.created_at DESC
     LIMIT 20
@@ -219,11 +219,11 @@ def compare_task_quality():
                     # Extract without VLM
                     from autotasktracker.core.task_extractor import get_task_extractor
                     extractor = get_task_extractor()
-                    task_without_vlm = extractor.extract_task(row['active_window'], row["ocr_result"])
+                    task_without_vlm = extractor.extract_task(row["active_window"], row["ocr_result"])
                     
                     # Extract with VLM
                     task_with_vlm = get_enhanced_task(
-                        row['active_window'], 
+                        row["active_window"], 
                         row["ocr_result"],
                         row['vlm_description']
                     )

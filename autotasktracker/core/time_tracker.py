@@ -16,8 +16,8 @@ import pandas as pd
 from collections import defaultdict
 import logging
 
-from autotasktracker.core.categorizer import ActivityCategorizer, extract_window_title
-from autotasktracker.utils.config import get_config
+from autotasktracker.core import ActivityCategorizer, extract_window_title
+from autotasktracker.config import get_config
 
 
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ class TimeTracker:
         
         for idx, row in df.iterrows():
             timestamp = row['created_at']
-            window_title = extract_window_title(row['active_window']) or 'Unknown'
+            window_title = extract_window_title(row["active_window"]) or 'Unknown'
             category = ActivityCategorizer.categorize(window_title, row.get("ocr_result", ''))
             
             # Simplify task name (remove redundant app names)
@@ -259,7 +259,7 @@ class TimeTracker:
             'total_minutes': 0,
             'active_minutes': 0,
             'session_count': 0,
-            'category': '',
+            "category": '',
             'first_seen': None,
             'last_seen': None,
             'average_confidence': 0
@@ -270,7 +270,7 @@ class TimeTracker:
             group['total_minutes'] += session.duration_minutes
             group['active_minutes'] += session.active_time_minutes
             group['session_count'] += 1
-            group['category'] = session.category
+            group["category"] = session.category
             
             if group['first_seen'] is None or session.start_time < group['first_seen']:
                 group['first_seen'] = session.start_time

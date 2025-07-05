@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from autotasktracker.core.database import DatabaseManager
+from autotasktracker.config import get_config
 
 # Setup logging
 logging.basicConfig(
@@ -22,7 +23,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(Path.home() / '.memos' / 'logs' / 'pipeline_monitor.log')
+        logging.FileHandler(get_config().memos_dir_property / 'logs' / 'pipeline_monitor.log')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class PipelineMonitor:
     """Monitor and maintain the AutoTaskTracker pipeline."""
     
     def __init__(self, check_interval=300):  # 5 minutes
-        self.db = DatabaseManager()
+        self.db = DatabaseManager(use_pensieve_api=True)
         self.check_interval = check_interval
         self.running = False
         
@@ -88,13 +89,13 @@ class PipelineMonitor:
             total_entities = cursor.fetchone()[0]
             
             # Processed entities
-            cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = 'tasks'")
+            cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = "tasks"")
             processed_entities = cursor.fetchone()[0]
             
             # Recent processing (last hour)
             cursor.execute("""
                 SELECT COUNT(*) FROM metadata_entries 
-                WHERE key = 'tasks' AND created_at >= datetime('now', '-1 hour')
+                WHERE key = "tasks" AND created_at >= datetime('now', '-1 hour')
             """)
             recent_processed = cursor.fetchone()[0]
             
@@ -119,9 +120,10 @@ class PipelineMonitor:
             except Exception:
                 return False
                 
+        config = get_config()
         return {
-            'task_board_running': is_port_open(8502),
-            'analytics_running': is_port_open(8503)
+            'task_board_running': is_port_open(config.TASK_BOARD_PORT),
+            'analytics_running': is_port_open(config.ANALYTICS_PORT)
         }
         
     def _restart_task_processor(self):

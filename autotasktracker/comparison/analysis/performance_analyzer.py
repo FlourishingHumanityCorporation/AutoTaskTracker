@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, List, Any
 
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
 from autotasktracker.comparison.pipelines import BasicPipeline, OCRPipeline, AIFullPipeline
 
 
@@ -37,8 +37,8 @@ class PerformanceAnalyzer:
             me_vlm.value as vlm_description,
             CASE WHEN me_emb.value IS NOT NULL THEN 1 ELSE 0 END as has_embedding
         FROM entities e
-        LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr."key" = 'ocr_result'
-        LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window."key" = 'active_window'
+        LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr."key" = "ocr_result"
+        LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window."key" = "active_window"
         LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm."key" = "vlm_structured"
         LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb."key" = 'embedding'
         WHERE e.file_type_group = 'image'
@@ -65,7 +65,7 @@ class PerformanceAnalyzer:
     def process_single_screenshot(self, row: pd.Series) -> Dict[str, Any]:
         """Process a single screenshot with all pipelines."""
         screenshot_data = {
-            'active_window': row.get('active_window', ''),
+            "active_window": row.get("active_window", ''),
             "ocr_result": row.get("ocr_result", ''),
             'vlm_description': row.get('vlm_description', ''),
             'id': row.get('id')
@@ -89,7 +89,7 @@ class PerformanceAnalyzer:
                 print(f"Error processing with {pipeline_name}: {e}")
                 results[pipeline_name] = {
                     "tasks": 'Processing failed',
-                    'category': 'Error',
+                    "category": 'Error',
                     'confidence': 0.0,
                     'features_used': [],
                     'details': {'error': str(e)}
@@ -143,7 +143,7 @@ class PerformanceAnalyzer:
             
             confidences = [pr['confidence'] for pr in pipeline_results]
             tasks = [pr["tasks"] for pr in pipeline_results]
-            categories = [pr['category'] for pr in pipeline_results]
+            categories = [pr["category"] for pr in pipeline_results]
             
             report['method_performance'][pipeline_name] = {
                 'avg_confidence': sum(confidences) / len(confidences) if confidences else 0,
@@ -212,7 +212,7 @@ class PerformanceAnalyzer:
                     row.update({
                         'pipeline': pipeline_name,
                         "tasks": pipeline_data["tasks"],
-                        'category': pipeline_data['category'],
+                        "category": pipeline_data["category"],
                         'confidence': pipeline_data['confidence'],
                         'features_used': ', '.join(pipeline_data['features_used'])
                     })

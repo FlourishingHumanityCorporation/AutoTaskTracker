@@ -1,0 +1,76 @@
+# Pre-commit hooks for AutoTaskTracker
+# Install with: pre-commit install
+
+repos:
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  # Import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  # Flake8 linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args: ["--max-line-length=100", "--ignore=E203,W503"]
+
+  # Custom compliance checks
+  - repo: local
+    hooks:
+      # Config compliance scanner
+      - id: config-compliance
+        name: Config Compliance Check
+        entry: python scripts/analysis/config_compliance_scanner.py --ci
+        language: system
+        types: [python]
+        stages: [commit]
+        
+      # Enterprise compliance scanner (critical/error only)
+      - id: enterprise-compliance
+        name: Enterprise Compliance Check
+        entry: python scripts/analysis/enterprise_compliance_scanner.py --ci
+        language: system
+        types: [python]
+        stages: [commit]
+        
+      # Health tests (fast subset)
+      - id: critical-health-tests
+        name: Critical Health Tests
+        entry: pytest tests/health/test_codebase_health.py::TestCodebaseHealth::test_bare_except_clauses tests/health/test_codebase_health.py::TestCodebaseHealth::test_database_connection_patterns tests/health/test_codebase_health.py::TestCodebaseHealth::test_no_sys_path_hacks -x --tb=short
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ["-r", "autotasktracker/", "-x", "tests/"]
+
+  # YAML validation
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        args: ["-d", "relaxed"]
+
+  # End of file fixes
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1000']

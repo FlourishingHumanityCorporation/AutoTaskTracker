@@ -13,8 +13,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from autotasktracker.core.task_extractor import get_task_extractor
-from autotasktracker.core.categorizer import ActivityCategorizer
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import ActivityCategorizer
+from autotasktracker.core import DatabaseManager
 from autotasktracker.pensieve.health_monitor import is_pensieve_healthy
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 
@@ -58,7 +58,7 @@ def _process_via_pensieve_api(limit=None):
                 continue  # Already processed
             
             # Get window title and OCR text
-            window_title = client.get_metadata(frame.id, 'window_title').get('window_title', '')
+            window_title = client.get_metadata(frame.id, "active_window").get("active_window", '')
             ocr_text = client.get_ocr_result(frame.id) or ''
             
             if not window_title and not ocr_text:
@@ -69,7 +69,7 @@ def _process_via_pensieve_api(limit=None):
             if tasks:
                 # Store results via API
                 client.store_metadata(frame.id, 'extracted_tasks', {
-                    'tasks': tasks,
+                    "tasks": tasks,
                     'extracted_at': datetime.now().isoformat(),
                     'method': 'pensieve_api'
                 })
@@ -97,9 +97,9 @@ def _process_via_pensieve_api(limit=None):
 
 
 def _process_via_database(limit=None):
-    """Process screenshots using direct database access (fallback)."""
+    """Process screenshots using DatabaseManager (fallback when API unavailable)."""
     try:
-        db = DatabaseManager(use_pensieve_api=False)
+        db = DatabaseManager()
         extractor = get_task_extractor()
         categorizer = ActivityCategorizer()
         
@@ -110,8 +110,8 @@ def _process_via_database(limit=None):
             query = """
                 SELECT DISTINCT e.id, m.value as window_title
                 FROM entities e
-                JOIN metadata_entries m ON e.id = m.entity_id AND m.key = 'active_window'
-                LEFT JOIN metadata_entries t ON e.id = t.entity_id AND t.key = 'tasks'
+                JOIN metadata_entries m ON e.id = m.entity_id AND m.key = "active_window"
+                LEFT JOIN metadata_entries t ON e.id = t.entity_id AND t.key = "tasks"
                 WHERE t.id IS NULL
                 ORDER BY e.created_at DESC
             """
@@ -142,14 +142,14 @@ def _process_via_database(limit=None):
                     cursor.execute("""
                         INSERT INTO metadata_entries 
                         (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                        VALUES (?, 'tasks', ?, 'task_processor', 'text', datetime('now'), datetime('now'))
+                        VALUES (?, "tasks", ?, 'task_processor', 'text', datetime('now'), datetime('now'))
                     """, (entity_id, task))
                     
                     # Insert category
                     cursor.execute("""
                         INSERT INTO metadata_entries 
                         (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                        VALUES (?, 'category', ?, 'task_processor', 'text', datetime('now'), datetime('now'))
+                        VALUES (?, "category", ?, 'task_processor', 'text', datetime('now'), datetime('now'))
                     """, (entity_id, category))
                     
                     conn.commit()
@@ -173,15 +173,15 @@ def _process_via_database(limit=None):
 def show_sample_results():
     """Show sample of extracted tasks."""
     try:
-        db = DatabaseManager(use_pensieve_api=False)
+        db = DatabaseManager()
         with db.get_connection(readonly=True) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT e.created_at, m1.value as window_title, m2.value as task, m3.value as category
                 FROM entities e
-                JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'active_window'
-                JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'tasks'
-                JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'category'
+                JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "active_window"
+                JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "tasks"
+                JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "category"
                 WHERE m2.source_type = 'task_processor'
                 ORDER BY e.created_at DESC
                 LIMIT 10

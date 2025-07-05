@@ -82,7 +82,7 @@ class ComparisonMetrics:
             
             confidences = [r['confidence'] for r in results]
             tasks = [r["tasks"] for r in results]
-            categories = [r['category'] for r in results]
+            categories = [r["category"] for r in results]
             features = [r['features_used'] for r in results]
             
             comparison[pipeline_name] = {

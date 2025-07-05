@@ -375,7 +375,7 @@ class TestUltraStrictComplianceExamples:
                 else:
                     # Unexpected errors should be meaningful
                     assert len(str(e)) > 0, f"Error message should not be empty for {description}"
-                    assert "extract" in str(e).lower() or "task" in str(e).lower(), \
+                    assert "extract" in str(e).lower() or "tasks" in str(e).lower(), \
                         f"Error should be task extraction related for {description}"
         
         # Validate overall extraction performance and accuracy

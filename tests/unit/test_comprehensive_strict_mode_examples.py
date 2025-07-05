@@ -384,7 +384,7 @@ class TestComprehensiveStrictModeExamples:
             except Exception as e:
                 # Some edge cases might raise exceptions - validate error handling
                 assert len(str(e)) > 0, f"Error message should not be empty for {window_title}"
-                assert any(term in str(e).lower() for term in ["extract", "task", "input", "invalid"]), \
+                assert any(term in str(e).lower() for term in ["extract", "tasks", "input", "invalid"]), \
                     f"Error should be extraction-related for {window_title}: {e}"
         
         # Overall performance and accuracy validation

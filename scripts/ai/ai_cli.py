@@ -13,7 +13,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 sys.path.append(project_root)
 
 from generate_embeddings_simple import EmbeddingGenerator
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
+from autotasktracker.config import get_config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -50,7 +51,7 @@ def check_ai_status():
     
     try:
         import requests
-        response = requests.get("http://localhost:11434", timeout=2)
+        response = requests.get(get_config().get_ollama_url(), timeout=2)
         print("✅ Ollama server running")
     except:
         print("⚠️  Ollama server not running (VLM features disabled)")
@@ -80,7 +81,7 @@ def generate_embeddings(limit=None):
 
 def enable_vlm():
     """Enable VLM in Pensieve configuration."""
-    config_path = os.path.expanduser("~/.memos/config.yaml")
+    config_path = get_config().memos_dir_property / "config.yaml"
     
     if not os.path.exists(config_path):
         print("❌ Memos config not found. Initialize memos first with: memos init")
@@ -107,7 +108,7 @@ def enable_vlm():
 
 def disable_vlm():
     """Disable VLM in Pensieve configuration."""
-    config_path = os.path.expanduser("~/.memos/config.yaml")
+    config_path = get_config().memos_dir_property / "config.yaml"
     
     if not os.path.exists(config_path):
         print("❌ Memos config not found")
@@ -149,7 +150,7 @@ def setup_ai():
     print("\n3. Checking VLM setup...")
     try:
         import requests
-        response = requests.get("http://localhost:11434", timeout=2)
+        response = requests.get(get_config().get_ollama_url(), timeout=2)
         print("✅ Ollama server detected")
         
         # Check for minicpm-v model

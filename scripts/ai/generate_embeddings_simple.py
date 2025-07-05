@@ -12,7 +12,8 @@ from typing import List, Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
+from autotasktracker.config import get_config
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -29,7 +30,7 @@ class EmbeddingGenerator:
     """Generate embeddings for task descriptions."""
     
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
-        self.db_path = os.path.expanduser("~/.memos/database.db")
+        self.db_path = get_config().get_db_path()
         
         if EMBEDDINGS_AVAILABLE:
             logger.info(f"Loading embedding model: {model_name}")
@@ -42,7 +43,7 @@ class EmbeddingGenerator:
     
     def get_unembedded_tasks(self, limit: int = 1000) -> List[Dict]:
         """Get tasks that don't have embeddings yet."""
-        db = DatabaseManager(self.db_path)
+        db = DatabaseManager(use_pensieve_api=True)
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
@@ -53,9 +54,9 @@ class EmbeddingGenerator:
                     m_window.value as window_title,
                     m_cat.value as category
                 FROM entities e
-                JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = 'tasks'
-                LEFT JOIN metadata_entries m_window ON e.id = m_window.entity_id AND m_window.key = 'active_window'
-                LEFT JOIN metadata_entries m_cat ON e.id = m_cat.entity_id AND m_cat.key = 'category'
+                JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = "tasks"
+                LEFT JOIN metadata_entries m_window ON e.id = m_window.entity_id AND m_window.key = "active_window"
+                LEFT JOIN metadata_entries m_cat ON e.id = m_cat.entity_id AND m_cat.key = "category"
                 LEFT JOIN metadata_entries m_emb ON e.id = m_emb.entity_id AND m_emb.key = 'task_embedding'
                 WHERE m_emb.id IS NULL
                 ORDER BY e.created_at DESC
@@ -68,7 +69,7 @@ class EmbeddingGenerator:
                     'id': row[0],
                     "tasks": row[1],
                     "active_window": row[2],
-                    'category': row[3]
+                    "category": row[3]
                 })
             
             return tasks
@@ -85,7 +86,7 @@ class EmbeddingGenerator:
         
         for task in tasks:
             # Combine task and category for richer embedding
-            text = f"{task["tasks"]} ({task['category']})"
+            text = f"{task['tasks']} ({task['category']})"
             texts.append(text)
             task_ids.append(task['id'])
         
@@ -102,7 +103,7 @@ class EmbeddingGenerator:
     
     def save_embeddings(self, embeddings: Dict[int, List[float]]) -> int:
         """Save embeddings to database."""
-        db = DatabaseManager(self.db_path)
+        db = DatabaseManager(use_pensieve_api=True)
         
         saved = 0
         with db.get_connection(readonly=False) as conn:
@@ -152,17 +153,18 @@ class EmbeddingGenerator:
         query_embedding = self.model.encode([query])[0]
         
         # Get all embeddings from database
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        try:
+        from autotasktracker.core import DatabaseManager
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
             cursor.execute("""
                 SELECT 
                     e.id,
                     m_task.value as task,
                     m_emb.value as embedding
                 FROM entities e
-                JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = 'tasks'
+                JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = "tasks"
                 JOIN metadata_entries m_emb ON e.id = m_emb.entity_id AND m_emb.key = 'task_embedding'
                 ORDER BY e.created_at DESC
                 LIMIT 1000
@@ -194,9 +196,6 @@ class EmbeddingGenerator:
                 })
             
             return results
-            
-        finally:
-            conn.close()
 
 
 def main():
@@ -225,7 +224,7 @@ def main():
         
         print(f"\n=== Similar tasks to '{args.search}' ===")
         for result in results:
-            print(f"[{result['similarity']:.3f}] {result["tasks"]}")
+            print(f"[{result['similarity']:.3f}] {result['tasks']}")
     
     elif args.all:
         # Process all unembedded tasks

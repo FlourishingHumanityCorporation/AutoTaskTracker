@@ -10,6 +10,7 @@ import re
 from ...core.database import DatabaseManager
 from ...core.categorizer import extract_window_title
 from ...pensieve.postgresql_adapter import get_postgresql_adapter, PostgreSQLAdapter
+from ...pensieve.cache_manager import get_cache_manager
 from .models import Task, Activity, TaskGroup, DailyMetrics
 
 logger = logging.getLogger(__name__)
@@ -22,18 +23,65 @@ class BaseRepository:
         self.db = db_manager or DatabaseManager()
         self.use_pensieve = use_pensieve
         self.pg_adapter = get_postgresql_adapter() if use_pensieve else None
+        self.cache = get_cache_manager()  # Integrate cache manager
         
-    def _execute_query(self, query: str, params: tuple = ()) -> pd.DataFrame:
-        """Execute query with error handling."""
+    def _execute_query(self, query: str, params: tuple = (), cache_ttl: int = 300) -> pd.DataFrame:
+        """Execute query with intelligent caching and error handling.
+        
+        Args:
+            query: SQL query to execute
+            params: Query parameters
+            cache_ttl: Cache time-to-live in seconds (default: 5 minutes)
+        """
+        import hashlib
+        
+        # Create cache key from query and params
+        cache_key = f"query_{hashlib.md5(f'{query}_{params}'.encode()).hexdigest()}"
+        
+        # Try cache first
+        cached_result = self.cache.get(cache_key)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for query: {query[:50]}...")
+            # Convert back to DataFrame if it was serialized
+            if isinstance(cached_result, dict) and 'data' in cached_result:
+                return pd.DataFrame(cached_result['data'])
+            return cached_result
+        
         try:
             # Use the DatabaseManager's connection context manager
             with self.db.get_connection() as conn:
-                return pd.read_sql_query(query, conn, params=params)
+                result = pd.read_sql_query(query, conn, params=params)
+                
+                # Cache the result (serialize DataFrame for caching)
+                cache_data = {
+                    'data': result.to_dict('records'),
+                    'columns': list(result.columns),
+                    'shape': result.shape
+                }
+                self.cache.set(cache_key, cache_data, ttl=cache_ttl)
+                logger.debug(f"Cached query result: {result.shape} rows")
+                
+                return result
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
             return pd.DataFrame()
     
-            
+    def invalidate_cache(self, pattern: str = None):
+        """Invalidate cached query results.
+        
+        Args:
+            pattern: Pattern to match for selective invalidation (default: all queries)
+        """
+        if pattern:
+            count = self.cache.invalidate_pattern(pattern)
+            logger.info(f"Invalidated {count} cached queries matching pattern: {pattern}")
+        else:
+            count = self.cache.invalidate_pattern("query_")
+            logger.info(f"Invalidated {count} cached queries")
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics for monitoring."""
+        return self.cache.get_stats()
 
 class TaskRepository(BaseRepository):
     """Repository for task-related data access."""
@@ -74,7 +122,7 @@ class TaskRepository(BaseRepository):
         categories: Optional[List[str]] = None,
         limit: int = 1000
     ) -> List[Task]:
-        """Fallback SQLite implementation."""
+        """Fallback SQLite implementation with intelligent caching."""
         query = """
         SELECT 
             e.id,
@@ -85,10 +133,10 @@ class TaskRepository(BaseRepository):
             m3.value as tasks,
             m4.value as category
         FROM entities e
-        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'ocr_result'
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
-        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
-        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
+        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "ocr_result"
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
+        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
+        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
         WHERE e.created_at >= ? AND e.created_at <= ?
         """
         
@@ -111,13 +159,15 @@ class TaskRepository(BaseRepository):
         query += " ORDER BY e.created_at DESC LIMIT ?"
         params.append(limit)
         
-        df = self._execute_query(query, tuple(params))
+        # Use shorter cache TTL for recent data (60 seconds), longer for historical (5 minutes)
+        cache_ttl = 60 if (datetime.now() - end_date).days < 1 else 300
+        df = self._execute_query(query, tuple(params), cache_ttl=cache_ttl)
         
         tasks = []
         for _, row in df.iterrows():
             # Use extracted task if available, fallback to window title
-            window_title = extract_window_title(row.get('active_window', '')) or row.get("active_window", 'Unknown')
-            task_title = row.get('tasks') or window_title
+            window_title = extract_window_title(row.get("active_window", '')) or row.get("active_window", 'Unknown')
+            task_title = row.get("tasks") or window_title
             
             # Convert UTC timestamp from database to local time for display
             utc_timestamp = pd.to_datetime(row['created_at'])
@@ -126,11 +176,11 @@ class TaskRepository(BaseRepository):
             task = Task(
                 id=row['id'],
                 title=task_title,
-                category=row.get('category', 'Other'),
+                category=row.get("category", 'Other'),
                 timestamp=local_timestamp,
                 duration_minutes=5,  # Default 5 min per capture
                 window_title=window_title,
-                ocr_text=row.get("ocr_text"),
+                ocr_text=row.get("ocr_result"),
                 screenshot_path=row.get('filepath')
             )
             tasks.append(task)
@@ -145,17 +195,17 @@ class TaskRepository(BaseRepository):
         tasks = []
         for task_dict in task_dicts:
             # Extract task title from tasks array or use window title
-            task_title = task_dict.get('window_title', 'Unknown')
-            if task_dict.get('tasks'):
+            task_title = task_dict.get("active_window", 'Unknown')
+            if task_dict.get("tasks"):
                 # Use first task title if available
-                first_task = task_dict['tasks'][0] if isinstance(task_dict['tasks'], list) else task_dict['tasks']
+                first_task = task_dict["tasks"][0] if isinstance(task_dict["tasks"], list) else task_dict["tasks"]
                 if isinstance(first_task, dict) and 'title' in first_task:
                     task_title = first_task['title']
                 elif isinstance(first_task, str):
                     task_title = first_task
             
             # Extract window title
-            window_title = extract_window_title(task_dict.get('window_title', '')) or task_dict.get('window_title', 'Unknown')
+            window_title = extract_window_title(task_dict.get("active_window", '')) or task_dict.get("active_window", 'Unknown')
             
             # Handle timestamp conversion
             timestamp = task_dict.get('timestamp')
@@ -170,11 +220,11 @@ class TaskRepository(BaseRepository):
             task = Task(
                 id=task_dict.get('id'),
                 title=task_title,
-                category=task_dict.get('category', 'Other'),
+                category=task_dict.get("category", 'Other'),
                 timestamp=local_timestamp,
                 duration_minutes=5,  # Default 5 min per capture
                 window_title=window_title,
-                ocr_text=task_dict.get('ocr_text'),
+                ocr_text=task_dict.get("ocr_result"),
                 screenshot_path=task_dict.get('filepath')
             )
             tasks.append(task)
@@ -333,52 +383,52 @@ class TaskRepository(BaseRepository):
                 current_group = {
                     "active_window": task.window_title,
                     "normalized_window": normalized_window,
-                    'category': task.category,
+                    "category": task.category,
                     'start_time': task.timestamp,
                     'end_time': task.timestamp,
-                    'tasks': [task]
+                    "tasks": [task]
                 }
             elif (normalized_window == current_group["normalized_window"] and
                   (task.timestamp - current_group['end_time']).total_seconds() / 60 <= gap_threshold_minutes):
                 # Continue current group (using normalized window for comparison)
                 current_group['end_time'] = task.timestamp
-                current_group['tasks'].append(task)
+                current_group["tasks"].append(task)
             else:
                 # Save current group and start new one
                 duration = (current_group['end_time'] - current_group['start_time']).total_seconds() / 60
-                if duration >= min_duration_minutes or len(current_group['tasks']) >= 3:  # Include if has many activities
+                if duration >= min_duration_minutes or len(current_group["tasks"]) >= 3:  # Include if has many activities
                     groups.append(TaskGroup(
                         window_title=current_group["normalized_window"],  # Use normalized title
-                        category=current_group['category'],
+                        category=current_group["category"],
                         start_time=current_group['start_time'],
                         end_time=current_group['end_time'],
-                        duration_minutes=max(duration, len(current_group['tasks']) * 0.25),  # Minimum duration based on activity count
-                        task_count=len(current_group['tasks']),
-                        tasks=current_group['tasks']
+                        duration_minutes=max(duration, len(current_group["tasks"]) * 0.25),  # Minimum duration based on activity count
+                        task_count=len(current_group["tasks"]),
+                        tasks=current_group["tasks"]
                     ))
                     
                 # Start new group
                 current_group = {
                     "active_window": task.window_title,
                     "normalized_window": normalized_window,
-                    'category': task.category,
+                    "category": task.category,
                     'start_time': task.timestamp,
                     'end_time': task.timestamp,
-                    'tasks': [task]
+                    "tasks": [task]
                 }
                 
         # Don't forget last group
         if current_group:
             duration = (current_group['end_time'] - current_group['start_time']).total_seconds() / 60
-            if duration >= min_duration_minutes or len(current_group['tasks']) >= 3:
+            if duration >= min_duration_minutes or len(current_group["tasks"]) >= 3:
                 groups.append(TaskGroup(
                     window_title=current_group["normalized_window"],
-                    category=current_group['category'],
+                    category=current_group["category"],
                     start_time=current_group['start_time'],
                     end_time=current_group['end_time'],
-                    duration_minutes=max(duration, len(current_group['tasks']) * 0.25),
-                    task_count=len(current_group['tasks']),
-                    tasks=current_group['tasks']
+                    duration_minutes=max(duration, len(current_group["tasks"]) * 0.25),
+                    task_count=len(current_group["tasks"]),
+                    tasks=current_group["tasks"]
                 ))
                 
         return groups
@@ -434,10 +484,10 @@ class ActivityRepository(BaseRepository):
             m3.value as tasks,
             m4.value as category
         FROM entities e
-        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'ocr_result'
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'  
-        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
-        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
+        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "ocr_result"
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"  
+        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
+        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
         WHERE 1=1
         """
         
@@ -458,12 +508,12 @@ class ActivityRepository(BaseRepository):
             activity = Activity(
                 id=row['id'],
                 timestamp=pd.to_datetime(row['created_at']),
-                window_title=extract_window_title(row.get('active_window', '')) or row.get("active_window", 'Unknown'),
-                category=row.get('category', 'Other'),
-                ocr_text=row.get("ocr_text"),
+                window_title=extract_window_title(row.get("active_window", '')) or row.get("active_window", 'Unknown'),
+                category=row.get("category", 'Other'),
+                ocr_text=row.get("ocr_result"),
                 tasks=None,  # TODO: Parse tasks safely from JSON/string
                 screenshot_path=row.get('filepath'),
-                active_window=row.get('active_window')
+                active_window=row.get("active_window")
             )
             activities.append(activity)
             
@@ -487,17 +537,17 @@ class ActivityRepository(BaseRepository):
                 local_timestamp = timestamp or datetime.now()
             
             # Extract window title
-            window_title = extract_window_title(task_dict.get('window_title', '')) or task_dict.get('window_title', 'Unknown')
+            window_title = extract_window_title(task_dict.get("active_window", '')) or task_dict.get("active_window", 'Unknown')
             
             activity = Activity(
                 id=task_dict.get('id'),
                 timestamp=local_timestamp,
                 window_title=window_title,
-                category=task_dict.get('category', 'Other'),
-                ocr_text=task_dict.get('ocr_text'),
-                tasks=task_dict.get('tasks'),  # Keep tasks data if available
+                category=task_dict.get("category", 'Other'),
+                ocr_text=task_dict.get("ocr_result"),
+                tasks=task_dict.get("tasks"),  # Keep tasks data if available
                 screenshot_path=task_dict.get('filepath'),
-                active_window=task_dict.get('window_title')
+                active_window=task_dict.get("active_window")
             )
             activities.append(activity)
             
@@ -550,8 +600,8 @@ class MetricsRepository(BaseRepository):
             m2.value as active_window,
             m4.value as category
         FROM entities e
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
-        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
+        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
         WHERE e.created_at >= ? AND e.created_at <= ?
         ORDER BY e.created_at
         """
@@ -569,17 +619,17 @@ class MetricsRepository(BaseRepository):
         unique_windows = df["active_window"].nunique()
         
         # Category breakdown
-        categories = df['category'].value_counts().to_dict()
+        categories = df["category"].value_counts().to_dict()
         
         # Calculate productive time (Development + Productivity categories)
         productive_categories = ['Development', 'Productivity']
-        productive_tasks = df[df['category'].isin(productive_categories)]
+        productive_tasks = df[df["category"].isin(productive_categories)]
         productive_time_minutes = len(productive_tasks) * 5  # 5 min per capture
         
         # Most used apps (by time spent)
         app_time = defaultdict(float)
         for _, row in df.iterrows():
-            window = extract_window_title(row.get('active_window', '')) or row.get("active_window", 'Unknown')
+            window = extract_window_title(row.get("active_window", '')) or row.get("active_window", 'Unknown')
             app_time[window] += 5  # 5 min per capture
             
         most_used = sorted(app_time.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -614,10 +664,10 @@ class MetricsRepository(BaseRepository):
         hours = defaultdict(int)
         
         for task_dict in task_dicts:
-            category = task_dict.get('category', 'Other')
+            category = task_dict.get("category", 'Other')
             categories[category] += 1
             
-            window_title = task_dict.get('window_title', 'Unknown')
+            window_title = task_dict.get("active_window", 'Unknown')
             unique_windows.add(window_title)
             
             # Extract app name for time tracking
@@ -713,7 +763,7 @@ class MetricsRepository(BaseRepository):
         SELECT COUNT(DISTINCT m.value) as unique_categories
         FROM metadata_entries m 
         JOIN entities e ON m.entity_id = e.id 
-        WHERE m.key = 'category' 
+        WHERE m.key = "category" 
         AND DATE(e.created_at) >= DATE(?) 
         AND DATE(e.created_at) <= DATE(?)
         """
@@ -727,15 +777,18 @@ class MetricsRepository(BaseRepository):
         AND DATE(e.created_at) <= DATE(?)
         """
         
+        # Use longer cache TTL for aggregated metrics (10 minutes for historical, 2 minutes for today)
+        metrics_cache_ttl = 120 if (datetime.now().date() == start_date.date()) else 600
+        
         df_categories = self._execute_query(category_query, (
             start_date.strftime('%Y-%m-%d'),
             end_date.strftime('%Y-%m-%d')
-        ))
+        ), cache_ttl=metrics_cache_ttl)
         
         df_windows = self._execute_query(window_query, (
             start_date.strftime('%Y-%m-%d'),
             end_date.strftime('%Y-%m-%d')
-        ))
+        ), cache_ttl=metrics_cache_ttl)
         
         basic_row = df_basic.iloc[0]
         total_activities = basic_row['total_activities']
@@ -774,12 +827,12 @@ class MetricsRepository(BaseRepository):
         
         for task_dict in task_dicts:
             # Track unique categories
-            category = task_dict.get('category')
+            category = task_dict.get("category")
             if category:
                 unique_categories.add(category)
             
             # Track unique windows
-            window_title = task_dict.get('window_title')
+            window_title = task_dict.get("active_window")
             if window_title:
                 unique_windows.add(window_title)
             

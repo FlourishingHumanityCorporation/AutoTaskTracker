@@ -273,7 +273,8 @@ class TestSystemIntegration:
         # Test port checking functionality
         # Most ports should be available, but we can't guarantee specific ones
         available_ports = []
-        for port in [8502, 8503, 8504, 8505]:
+        config = get_config()
+        for port in [config.TASK_BOARD_PORT, config.ANALYTICS_PORT, config.TIMETRACKER_PORT, config.TIME_TRACKER_PORT]:
             if is_port_available(port):
                 available_ports.append(port)
         

@@ -3,8 +3,8 @@ Basic pattern matching pipeline.
 """
 from typing import Dict, Any
 
-from autotasktracker.core.task_extractor import TaskExtractor
-from autotasktracker.core.categorizer import ActivityCategorizer
+from autotasktracker.core import TaskExtractor
+from autotasktracker.core import ActivityCategorizer
 from .base import BasePipeline
 
 
@@ -19,7 +19,7 @@ class BasicPipeline(BasePipeline):
     
     def process_screenshot(self, screenshot_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process screenshot using basic pattern matching."""
-        window_title = screenshot_data.get('active_window', '')
+        window_title = screenshot_data.get("active_window", '')
         ocr_text = screenshot_data.get("ocr_result", '')
         
         task = self.extractor.extract_task(window_title) if window_title else "Unknown Activity"
@@ -27,7 +27,7 @@ class BasicPipeline(BasePipeline):
         
         return {
             "tasks": task,
-            'category': category,
+            "category": category,
             'confidence': 0.5,  # Fixed confidence for basic method
             'features_used': ['Window Title'],
             'details': {

@@ -81,7 +81,7 @@ class TimelineChart:
         """Render activity timeline.
         
         Args:
-            activities: List of activity dicts with 'start', 'end', "tasks", 'category'
+            activities: List of activity dicts with 'start', 'end', "tasks", "category"
             title: Chart title
             height: Chart height
             color_by: Field to color by

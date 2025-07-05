@@ -55,9 +55,9 @@ class TestVLMExtractionOnRealScreenshots:
                 m3.value as ai_task,
                 m4.value as vlm_description
             FROM entities e
-            LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'active_window'
+            LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "active_window"
             LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'text'
-            LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
+            LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
             LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'vlm_description'
             WHERE e.file_type_group = 'image'
             AND e.filepath IS NOT NULL
@@ -149,7 +149,7 @@ class TestVLMExtractionOnRealScreenshots:
         
         print(f"\n🔍 Testing VLM on single screenshot:")
         print(f"   File: {Path(test_screenshot['filepath']).name}")
-        print(f"   Window: {test_screenshot['active_window'][:60]}...")
+        print(f"   Window: {test_screenshot["active_window"][:60]}...")
         
         start_time = time.time()
         
@@ -252,7 +252,7 @@ class TestVLMExtractionOnRealScreenshots:
             # Show sample descriptions
             print(f"\n   Sample descriptions:")
             for result in results[:2]:
-                print(f"     Window: {result['screenshot']['active_window'][:50]}...")
+                print(f"     Window: {result['screenshot']["active_window"][:50]}...")
                 print(f"     VLM: {result['description'][:100]}...")
                 print()
             

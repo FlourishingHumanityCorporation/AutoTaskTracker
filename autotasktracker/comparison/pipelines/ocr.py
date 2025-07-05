@@ -7,9 +7,9 @@ from typing import Dict, Any
 
 # Import from package structure
 
-from autotasktracker.core.task_extractor import TaskExtractor
-from autotasktracker.core.categorizer import ActivityCategorizer
-from autotasktracker.ai.ocr_enhancement import OCREnhancer
+from autotasktracker.core import TaskExtractor
+from autotasktracker.core import ActivityCategorizer
+from autotasktracker.ai import OCREnhancer
 from .base import BasePipeline
 
 
@@ -25,7 +25,7 @@ class OCRPipeline(BasePipeline):
     
     def process_screenshot(self, screenshot_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process screenshot using OCR enhancement."""
-        window_title = screenshot_data.get('active_window', '')
+        window_title = screenshot_data.get("active_window", '')
         ocr_text = screenshot_data.get("ocr_result", '')
         
         basic_task = self.extractor.extract_task(window_title) if window_title else "Unknown Activity"
@@ -60,7 +60,7 @@ class OCRPipeline(BasePipeline):
         
         return {
             "tasks": task,
-            'category': category,
+            "category": category,
             'confidence': confidence,
             'features_used': features_used,
             'details': details

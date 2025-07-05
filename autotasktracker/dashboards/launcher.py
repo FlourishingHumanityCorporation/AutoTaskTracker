@@ -7,43 +7,44 @@ import time
 from pathlib import Path
 import logging
 
-from ..utils.config import get_config
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
 # Dashboard configurations
+config = get_config()
 DASHBOARD_CONFIGS = {
     'task_board': {
         'module': 'autotasktracker.dashboards.task_board',
-        'port': 8502,
+        'port': config.TASK_BOARD_PORT,
         'name': 'Task Board',
         'icon': '📋',
         'description': 'Main task tracking and visualization'
     },
     'analytics': {
         'module': 'autotasktracker.dashboards.analytics', 
-        'port': 8503,
+        'port': config.ANALYTICS_PORT,
         'name': 'Analytics',
         'icon': '📊',
         'description': 'Productivity analytics and insights'
     },
     'timetracker': {
         'module': 'autotasktracker.dashboards.timetracker',
-        'port': 8504,
+        'port': config.TIMETRACKER_PORT,
         'name': 'Time Tracker',
         'icon': '⏱️',
         'description': 'Detailed time tracking and sessions'
     },
     'notifications': {
         'module': 'autotasktracker.dashboards.notifications',
-        'port': 8505,
+        'port': config.TIME_TRACKER_PORT,
         'name': 'Notifications',
         'icon': '📬',
         'description': 'Task notifications and alerts'
     },
     'vlm_monitor': {
         'module': 'autotasktracker.dashboards.vlm_monitor',
-        'port': 8510,
+        'port': config.DAILY_SUMMARY_PORT,
         'name': 'VLM Monitor',
         'icon': '👁️',
         'description': 'Visual language model processing status'
@@ -63,7 +64,7 @@ class DashboardLauncher:
         try:
             import socket
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('localhost', port))
+                s.bind((get_config().SERVER_HOST, port))
                 return True
         except OSError:
             return False
@@ -140,7 +141,7 @@ class DashboardLauncher:
                 logger.error(f"stderr: {stderr}")
                 return False
                 
-            logger.info(f"✅ {config['name']} started successfully on http://localhost:{config['port']}")
+            logger.info(f"✅ {config['name']} started successfully on http://{get_config().SERVER_HOST}:{config['port']}")
             return True
             
         except Exception as e:
@@ -173,7 +174,7 @@ class DashboardLauncher:
             for dashboard_name, success in results.items():
                 if success:
                     config = DASHBOARD_CONFIGS[dashboard_name]
-                    logger.info(f"  {config['icon']} {config['name']}: http://localhost:{config['port']}")
+                    logger.info(f"  {config['icon']} {config['name']}: http://{get_config().SERVER_HOST}:{config['port']}")
                     
         return results
         
@@ -231,7 +232,7 @@ class DashboardLauncher:
                 'port': config['port'],
                 'running': is_running,
                 'port_available': port_available,
-                'url': f"http://localhost:{config['port']}" if is_running else None
+                'url': f"http://{get_config().SERVER_HOST}:{config['port']}" if is_running else None
             }
             
         return status

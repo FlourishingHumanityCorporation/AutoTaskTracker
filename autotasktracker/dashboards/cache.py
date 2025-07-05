@@ -185,9 +185,9 @@ class QueryCache:
             m5.value as window_title
         FROM entities e
         LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'text'
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
-        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
-        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
+        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
+        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
         LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = "active_window"
         WHERE e.created_at >= ? AND e.created_at <= ?
         ORDER BY e.created_at DESC
@@ -234,7 +234,7 @@ class MetricsCache:
             m.value as category,
             COUNT(*) as count
         FROM entities e
-        JOIN metadata_entries m ON e.id = m.entity_id AND m.key = 'category'
+        JOIN metadata_entries m ON e.id = m.entity_id AND m.key = "category"
         WHERE e.created_at >= ? AND e.created_at <= ?
         GROUP BY m.value
         ORDER BY count DESC
@@ -246,7 +246,7 @@ class MetricsCache:
                 end_date.strftime('%Y-%m-%d %H:%M:%S')
             ))
         
-        return df.set_index('category')['count'].to_dict() if not df.empty else {}
+        return df.set_index("category")['count'].to_dict() if not df.empty else {}
     
     @staticmethod
     @cached_data(ttl_seconds=600, key_prefix="metrics")

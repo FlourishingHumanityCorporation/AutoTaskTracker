@@ -250,7 +250,7 @@ def extract_vlm_enhanced_task(vlm_description: str,
     
     return {
         'task_title': vlm_task.task_title,
-        'category': vlm_task.category,
+        "category": vlm_task.category,
         'confidence': vlm_task.confidence,
         'ui_state': vlm_task.ui_state,
         'visual_context': vlm_task.visual_context,

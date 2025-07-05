@@ -40,3 +40,21 @@ def get_time_range(time_filter: str) -> Tuple[datetime, datetime]:
         end = now
         
     return start, end
+
+
+def format_datetime(dt: datetime) -> str:
+    """Format datetime for display."""
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def safe_divide(numerator: float, denominator: float) -> float:
+    """Safely divide two numbers, returning 0 if denominator is 0."""
+    return numerator / denominator if denominator != 0 else 0.0
+
+
+def get_color_palette():
+    """Get color palette for dashboard visualizations."""
+    return [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+    ]

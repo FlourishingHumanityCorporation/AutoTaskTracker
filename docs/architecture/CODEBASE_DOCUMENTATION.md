@@ -27,7 +27,7 @@ AutoTaskTracker is an AI-powered application that passively discovers and organi
 ### Technology Stack
 - **Backend**: Python + Pensieve (memos) for screenshot capture and processing
 - **Frontend**: Streamlit for web dashboards
-- **Database**: SQLite via Pensieve integration
+- **Database**: SQLite/PostgreSQL/pgvector via Pensieve integration
 - **AI/ML**: Sentence Transformers, Optional Ollama/VLM integration
 - **Image Processing**: PIL, OpenCV for screenshot handling
 - **Data Processing**: Pandas, NumPy for analytics
@@ -49,37 +49,13 @@ AutoTaskTracker is an AI-powered application that passively discovers and organi
 ```
 
 ### Component Architecture
-```
-autotasktracker/
-├── core/                    # Core business logic
-│   ├── database.py         # Database management
-│   ├── task_extractor.py   # Task extraction logic
-│   ├── categorizer.py      # Activity categorization
-│   └── vlm_integration.py  # VLM processing
-├── ai/                     # AI enhancement features
-│   ├── embeddings_search.py     # Semantic search
-│   ├── enhanced_task_extractor.py # AI-powered extraction
-│   ├── ocr_enhancement.py       # OCR quality analysis
-│   └── vlm_integration.py       # VLM task analysis
-├── dashboards/             # Streamlit interfaces
-│   ├── task_board.py       # Main task dashboard
-│   ├── analytics.py        # Analytics dashboard
-│   ├── achievement_board.py # Achievement board
-│   ├── timetracker.py      # Time tracking
-│   ├── notifications.py    # Notification system
-│   ├── base.py            # Base dashboard class
-│   ├── cache.py           # Caching utilities
-│   ├── components/        # Reusable UI components
-│   └── data/             # Data models and repositories
-└── utils/                  # Utility functions
-    └── config.py           # Configuration management
-```
+Main modules: core/ (business logic), ai/ (AI features), dashboards/ (Streamlit interfaces), and utils/ (utilities).
 
 ## Core Components
 
 ### 1. Database Manager (`autotasktracker/core/database.py`)
 
-**Purpose**: Centralized database access and query management for Pensieve SQLite database.
+**Purpose**: Centralized database access and query management for Pensieve database (SQLite/PostgreSQL/pgvector).
 
 **Key Features**:
 - Connection pooling and context management
@@ -88,17 +64,7 @@ autotasktracker/
 - AI coverage statistics
 - Time-based filtering and pagination
 
-**Key Methods**:
-```python
-class DatabaseManager:
-    def __init__(self, db_path: Optional[str] = None)
-    def get_connection(self, readonly: bool = True) -> sqlite3.Connection
-    def fetch_tasks(self, start_date, end_date, limit, offset) -> pd.DataFrame
-    def fetch_tasks_by_time_filter(self, time_filter: str) -> pd.DataFrame
-    def get_screenshot_count(self, date: datetime) -> int
-    def get_ai_coverage_stats(self) -> Dict[str, Any]
-    def search_activities(self, search_term: str) -> pd.DataFrame
-```
+**Key Methods**: Connection management, task retrieval, AI coverage analysis, and search functionality. See `autotasktracker/core/database.py` for complete API.
 
 **Database Schema Integration**:
 - `entities` table: Screenshot files and metadata
@@ -116,14 +82,7 @@ class DatabaseManager:
 - Website and localhost development recognition
 - Subtask extraction from OCR data
 
-**Application Patterns**:
-```python
-# Examples of supported applications
-'vscode': {'pattern': r'(.*?)\s*[—–\-]\s*(.*?)\s*[—–\-]\s*Visual Studio Code'},
-'chrome': {'pattern': r'(.*?)\s*[—–-]\s*(?:Google\s*)?Chrome'},
-'slack': {'pattern': r'(.*?)\s*[—–-]\s*(.*?)\s*[—–-]\s*Slack'},
-'github': Custom GitHub activity detection (PRs, issues, commits)
-```
+**Application Patterns**: Supports 50+ applications including VS Code, Chrome, Slack, GitHub, and more. See `autotasktracker/core/task_extractor.py` for complete pattern definitions.
 
 **Advanced Features**:
 - Project name cleaning and file extension handling
@@ -163,14 +122,7 @@ class DatabaseManager:
 - Task grouping based on embedding similarity
 - Context discovery for related work sessions
 
-**Key Methods**:
-```python
-class EmbeddingsSearchEngine:
-    def semantic_search(self, query_entity_id, limit, similarity_threshold) -> List[Dict]
-    def find_similar_task_groups(self, min_group_size, similarity_threshold) -> List[List[Dict]]
-    def get_task_context(self, entity_id, context_size) -> List[Dict]
-    def cosine_similarity(self, embedding1, embedding2) -> float
-```
+**Key Methods**: Semantic search, task grouping, context discovery, and similarity calculations. See `autotasktracker/ai/embeddings_search.py` for complete API.
 
 **Technical Details**:
 - Uses 768-dimensional Jina embeddings from Pensieve
@@ -188,22 +140,7 @@ class EmbeddingsSearchEngine:
 - Confidence scoring across multiple AI systems
 - Task insights and context discovery
 
-**Enhanced Output**:
-```python
-{
-    'task': 'Enhanced task description',
-    'category': '🧑‍💻 Coding',
-    'confidence': 0.85,
-    'ai_features': {
-        'ocr_quality': 'excellent',
-        'vlm_available': True,
-        'embeddings_available': True
-    },
-    'similar_tasks': [...],
-    'ui_state': {...},
-    'visual_context': {...}
-}
-```
+**Enhanced Output**: Structured task data with confidence scores, AI feature indicators, and related task information. See `autotasktracker/ai/enhanced_task_extractor.py` for complete schema.
 
 ### 3. AI CLI (`ai_cli.py`)
 
@@ -252,18 +189,7 @@ class EmbeddingsSearchEngine:
 - Productivity trends and streaks
 - Interactive charts with Plotly
 
-**Metrics Calculated**:
-```python
-{
-    'total_hours': float,
-    'total_activities': int,
-    'avg_activities_per_hour': float,
-    'category_distribution': dict,
-    'focus_sessions': int,
-    'avg_focus_duration': float,
-    'longest_focus': float
-}
-```
+**Metrics Calculated**: Hours worked, activity counts, category distribution, focus sessions, and productivity trends. See `autotasktracker/dashboards/analytics.py` for complete metrics.
 
 ### 3. Additional Dashboards
 
@@ -276,65 +202,17 @@ class EmbeddingsSearchEngine:
 ### Schema Overview
 AutoTaskTracker integrates with Pensieve's SQLite database structure:
 
-```sql
--- Core entities (screenshots)
-entities (
-    id INTEGER PRIMARY KEY,
-    filepath TEXT,
-    filename TEXT,
-    created_at TIMESTAMP,
-    file_type_group TEXT -- 'image' for screenshots
-)
-
--- Metadata and AI results
-metadata_entries (
-    id INTEGER PRIMARY KEY,
-    entity_id INTEGER REFERENCES entities(id),
-    key TEXT, -- 'ocr_result', 'active_window', 'vlm_result', 'embedding'
-    value TEXT -- JSON or text data
-)
-```
+**Core Tables**: `entities` (screenshots) and `metadata_entries` (OCR, AI results). See Pensieve documentation for complete schema.
 
 ### Query Patterns
-```sql
--- Typical task fetch with metadata
-SELECT 
-    e.id, e.filepath, e.created_at,
-    me_ocr.value as ocr_text,
-    me_window.value as active_window,
-    me_vlm.value as vlm_description
-FROM entities e
-LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr.key = 'ocr_result'
-LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window.key = 'active_window'
-LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm.key = 'vlm_result'
-WHERE e.file_type_group = 'image'
-ORDER BY e.created_at DESC
-```
+Standard queries join `entities` with `metadata_entries` to combine screenshot metadata with OCR and AI results. See `autotasktracker/core/database.py` for optimized query implementations.
 
 ## Configuration Management
 
 ### Config System (`autotasktracker/utils/config.py`)
 Centralized configuration using dataclasses and environment variables:
 
-```python
-@dataclass
-class Config:
-    # Database
-    DB_PATH: str = "~/.memos/database.db"
-    
-    # Dashboard ports
-    TASK_BOARD_PORT: int = 8502
-    ANALYTICS_PORT: int = 8503
-    TIMETRACKER_PORT: int = 8504
-    
-    # UI settings
-    SHOW_SCREENSHOTS: bool = True
-    GROUP_INTERVAL_MINUTES: int = 5
-    
-    # AI features
-    ENABLE_AI_FEATURES: bool = True
-    EMBEDDING_MODEL: str = "jinaai/jina-embeddings-v2-base-en"
-```
+**Configuration**: Database paths, dashboard ports, UI settings, and AI feature flags. See `autotasktracker/utils/config.py` for complete configuration options.
 
 ### Environment Variables
 - `AUTOTASK_DB_PATH`: Override database path
@@ -344,17 +222,7 @@ class Config:
 ## Testing Infrastructure
 
 ### Test Organization
-```
-tests/
-├── test_critical.py      # Core functionality tests
-├── test_smoke.py         # Quick smoke tests
-├── test_codebase_health.py # Code quality checks
-├── e2e/
-│   ├── test_full_journey.py # End-to-end workflows
-│   └── test_headless_integration.py # Headless testing
-└── assets/
-    └── sample_screenshot.png # Test data
-```
+Tests are organized into critical tests, smoke tests, and E2E tests in the `tests/` directory.
 
 ### Test Categories
 1. **Critical Tests**: Database, task extraction, categorization
@@ -363,14 +231,7 @@ tests/
 4. **Codebase Health**: Import validation, file structure
 
 ### Running Tests
-```bash
-# All tests
-python -m pytest tests/
-
-# Specific test suites
-python -m pytest tests/test_critical.py
-python -m pytest tests/e2e/
-```
+Use `pytest` to run all tests or specific test suites. See individual test files for detailed test scenarios.
 
 ## Development Workflow
 
@@ -380,36 +241,10 @@ python -m pytest tests/e2e/
 3. **Individual Dashboards**: Direct Streamlit execution
 
 ### Common Commands
-```bash
-# Start all services
-python autotasktracker.py start
-
-# Launch specific dashboards
-python autotasktracker.py dashboard
-python autotasktracker.py analytics
-
-# AI management
-python ai_cli.py status
-python ai_cli.py setup
-python ai_cli.py embeddings
-
-# Check status
-python autotasktracker.py status
-```
+Use `autotasktracker.py` for service management and `ai_cli.py` for AI features. See `--help` for complete command reference.
 
 ### Development Setup
-```bash
-# Initialize Pensieve
-memos init
-memos enable
-memos start
-
-# Setup AI features
-python ai_cli.py setup
-
-# Run tests
-python -m pytest tests/
-```
+Initialize Pensieve, setup AI features, and run tests. See `CLAUDE.md` for complete setup instructions.
 
 ## API Reference
 
@@ -442,24 +277,8 @@ python -m pytest tests/
 
 ### Utility Functions
 
-#### Configuration
-```python
-from autotasktracker import get_config
-config = get_config()  # Returns Config instance
-```
-
-#### Database Access
-```python
-from autotasktracker import get_default_db_manager
-db = get_default_db_manager()  # Returns DatabaseManager instance
-```
-
-#### Task Processing
-```python
-from autotasktracker import extract_task_summary, categorize_activity
-task = extract_task_summary(ocr_text, window_data)
-category = categorize_activity(window_title, ocr_text)
-```
+#### Utility Functions
+Convenience functions for configuration, database access, and task processing. See `autotasktracker/__init__.py` for complete utility API.
 
 ## Performance Considerations
 

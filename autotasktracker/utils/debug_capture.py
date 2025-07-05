@@ -13,6 +13,8 @@ from typing import Optional
 import subprocess
 import threading
 
+from autotasktracker.config import get_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,7 +75,7 @@ class DebugCapture:
             logger.error(f"Failed to capture screenshot: {e}")
             return None
     
-    def capture_browser_window(self, url: str = "http://localhost:8502") -> Optional[str]:
+    def capture_browser_window(self, url: str = None) -> Optional[str]:
         """Capture just the browser window showing the dashboard.
         
         Args:
@@ -82,6 +84,9 @@ class DebugCapture:
         Returns:
             Path to captured screenshot or None if failed
         """
+        if url is None:
+            url = get_config().get_service_url('task_board')
+        
         try:
             timestamp = datetime.now().strftime("%H%M%S")
             filename = f"{timestamp}_dashboard.png"
@@ -96,7 +101,7 @@ class DebugCapture:
                     set windowIndex to 0
                     repeat with w from 1 to count of windows
                         repeat with t from 1 to count of tabs in window w
-                            if URL of tab t of window w contains "localhost:8502" then
+                            if URL of tab t of window w contains "{url.replace('http://', '')}" then
                                 set windowIndex to w
                                 exit repeat
                             end if

@@ -130,7 +130,7 @@ class TestAdvancedAnalyticsDashboard:
         # Test error conditions
         try:
             # Test with malformed task data
-            invalid_task = type('MockTask', (), {'category': None, 'start_time': None})()
+            invalid_task = type('MockTask', (), {"category": None, 'start_time': None})()
             result = dashboard._calculate_context_switches([invalid_task])
             # Should either handle gracefully or raise appropriate error
             assert isinstance(result, int), "Should return integer even with invalid data"
@@ -600,7 +600,7 @@ class TestProductivityMetrics:
         
         # Validate test data structure
         assert len(task_groups) == 5, "Should have exactly 5 test tasks"
-        assert all(hasattr(t, 'category') for t in task_groups), "All tasks should have category"
+        assert all(hasattr(t, "category") for t in task_groups), "All tasks should have category"
         assert all(hasattr(t, 'duration_minutes') for t in task_groups), "All tasks should have duration"
         assert all(hasattr(t, 'start_time') for t in task_groups), "All tasks should have start_time"
         assert all(isinstance(t.duration_minutes, int) for t in task_groups), "Duration should be integers"

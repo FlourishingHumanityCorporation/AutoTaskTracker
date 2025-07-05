@@ -18,7 +18,7 @@ config = get_config()
 
 def get_vlm_stats():
     """Get comprehensive VLM processing statistics."""
-    db = DatabaseManager()
+    db = DatabaseManager(use_pensieve_api=True)
     
     # Basic AI coverage stats
     stats = db.get_ai_coverage_stats()
@@ -48,7 +48,7 @@ def get_vlm_stats():
         LENGTH(me.value) as description_length
     FROM entities e
     JOIN metadata_entries me ON e.id = me.entity_id AND me.key = 'minicpm_v_result'
-    LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = 'active_window'
+    LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = "active_window"
     ORDER BY e.created_at DESC
     LIMIT 50
     """

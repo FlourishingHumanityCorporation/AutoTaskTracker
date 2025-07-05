@@ -10,13 +10,13 @@ Components:
 - analysis: Performance analysis and reporting tools
 """
 
-from .pipelines.base import BasePipeline
-from .pipelines.basic import BasicPipeline
-from .pipelines.ocr import OCRPipeline
-from .pipelines.ai_full import AIFullPipeline
+from autotasktracker.comparison.pipelines.base import BasePipeline
+from autotasktracker.comparison.pipelines.basic import BasicPipeline
+from autotasktracker.comparison.pipelines.ocr import OCRPipeline
+from autotasktracker.comparison.pipelines.ai_full import AIFullPipeline
 
-from .analysis.performance_analyzer import PerformanceAnalyzer
-from .analysis.metrics import ComparisonMetrics
+from autotasktracker.comparison.analysis.performance_analyzer import PerformanceAnalyzer
+from autotasktracker.comparison.analysis.metrics import ComparisonMetrics
 
 __all__ = [
     'BasePipeline',

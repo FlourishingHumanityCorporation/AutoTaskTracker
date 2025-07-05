@@ -5,7 +5,6 @@ Analyzes screenshots using Ollama's minicpm-v model for richer task understandin
 """
 import sys
 import os
-import sqlite3
 import logging
 import requests
 import json
@@ -15,6 +14,8 @@ from typing import Dict, List, Optional
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from autotasktracker.config import get_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,11 +27,12 @@ logger = logging.getLogger(__name__)
 class VLMProcessor:
     """Process screenshots with Visual Language Model."""
     
-    def __init__(self, model: str = "minicpm-v:latest", ollama_url: str = "http://localhost:11434"):
-        self.db_path = os.path.expanduser("~/.memos/database.db")
-        self.screenshots_dir = os.path.expanduser("~/.memos/screenshots")
+    def __init__(self, model: str = "minicpm-v:latest", ollama_url: str = None):
+        config = get_config()
+        self.db_path = config.get_db_path()
+        self.screenshots_dir = config.get_screenshots_path()
         self.model = model
-        self.ollama_url = ollama_url
+        self.ollama_url = ollama_url if ollama_url else config.get_ollama_url()
         self.processed_count = 0
         
         # Test Ollama connection
@@ -62,16 +64,17 @@ class VLMProcessor:
     
     def get_unprocessed_screenshots(self, limit: int = 10) -> List[Dict]:
         """Get screenshots that haven't been VLM processed."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        try:
+        from autotasktracker.core.database import DatabaseManager
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
             # Find entities without VLM processing
             cursor.execute("""
                 SELECT e.id, e.filepath, m_window.value as window_title, m_task.value as task
                 FROM entities e
-                LEFT JOIN metadata_entries m_window ON e.id = m_window.entity_id AND m_window.key = 'active_window'
-                LEFT JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = 'tasks'
+                LEFT JOIN metadata_entries m_window ON e.id = m_window.entity_id AND m_window.key = "active_window"
+                LEFT JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = "tasks"
                 LEFT JOIN metadata_entries m_vlm ON e.id = m_vlm.entity_id AND m_vlm.key = 'vlm_analysis'
                 WHERE m_vlm.id IS NULL
                 AND e.created_at > datetime('now', '-7 days')
@@ -89,9 +92,6 @@ class VLMProcessor:
                 })
             
             return screenshots
-            
-        finally:
-            conn.close()
     
     def _encode_image(self, image_path: str) -> Optional[str]:
         """Encode image to base64."""
@@ -172,40 +172,41 @@ Be concise but specific. Focus on actionable insights."""
     
     def save_vlm_analysis(self, entity_id: int, analysis: Dict) -> bool:
         """Save VLM analysis to database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        from autotasktracker.core.database import DatabaseManager
+        db = DatabaseManager()
         
         try:
-            # Save raw analysis
-            cursor.execute("""
-                INSERT INTO metadata_entries 
-                (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                VALUES (?, 'vlm_analysis', ?, 'vlm_processor', 'json', datetime('now'), datetime('now'))
-            """, (entity_id, json.dumps(analysis)))
-            
-            # Extract and save enhanced task if found
-            if 'raw_analysis' in analysis:
-                # Simple extraction - look for task-like descriptions
-                lines = analysis['raw_analysis'].split('\n')
-                for line in lines:
-                    if "tasks" in line.lower() or 'working on' in line.lower():
-                        enhanced_task = line.split(':', 1)[-1].strip()
-                        if enhanced_task:
-                            cursor.execute("""
-                                INSERT INTO metadata_entries 
-                                (entity_id, key, value, source_type, data_type, created_at, updated_at)
-                                VALUES (?, 'vlm_task', ?, 'vlm_processor', 'text', datetime('now'), datetime('now'))
-                            """, (entity_id, enhanced_task))
-                            break
-            
-            conn.commit()
-            return True
-            
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Save raw analysis
+                cursor.execute("""
+                    INSERT INTO metadata_entries 
+                    (entity_id, key, value, source_type, data_type, created_at, updated_at)
+                    VALUES (?, 'vlm_analysis', ?, 'vlm_processor', 'json', datetime('now'), datetime('now'))
+                """, (entity_id, json.dumps(analysis)))
+                
+                # Extract and save enhanced task if found
+                if 'raw_analysis' in analysis:
+                    # Simple extraction - look for task-like descriptions
+                    lines = analysis['raw_analysis'].split('\n')
+                    for line in lines:
+                        if "tasks" in line.lower() or 'working on' in line.lower():
+                            enhanced_task = line.split(':', 1)[-1].strip()
+                            if enhanced_task:
+                                cursor.execute("""
+                                    INSERT INTO metadata_entries 
+                                    (entity_id, key, value, source_type, data_type, created_at, updated_at)
+                                    VALUES (?, 'vlm_task', ?, 'vlm_processor', 'text', datetime('now'), datetime('now'))
+                                """, (entity_id, enhanced_task))
+                                break
+                
+                conn.commit()
+                return True
+                
         except Exception as e:
             logger.error(f"Error saving VLM analysis: {e}")
             return False
-        finally:
-            conn.close()
     
     def process_batch(self, limit: int = 10) -> int:
         """Process a batch of screenshots."""
@@ -237,17 +238,19 @@ Be concise but specific. Focus on actionable insights."""
     
     def show_sample_results(self, limit: int = 5):
         """Show sample VLM analysis results."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        from autotasktracker.core.database import DatabaseManager
+        db = DatabaseManager()
         
-        try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
             cursor.execute("""
                 SELECT 
                     e.created_at,
                     m_task.value as task,
                     m_vlm.value as vlm_analysis
                 FROM entities e
-                JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = 'tasks'
+                JOIN metadata_entries m_task ON e.id = m_task.entity_id AND m_task.key = "tasks"
                 JOIN metadata_entries m_vlm ON e.id = m_vlm.entity_id AND m_vlm.key = 'vlm_analysis'
                 ORDER BY e.created_at DESC
                 LIMIT ?
@@ -263,9 +266,6 @@ Be concise but specific. Focus on actionable insights."""
                 print(f"VLM Analysis:")
                 print(vlm_data.get('raw_analysis', 'No analysis')[:200] + "...")
                 print("-" * 80)
-                
-        finally:
-            conn.close()
 
 
 def main():

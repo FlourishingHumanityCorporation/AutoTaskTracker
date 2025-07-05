@@ -598,7 +598,7 @@ class TestSmartVLMProcessor:
             "Task should relate to content described"
         
         # Validate category assignment based on app type
-        assert structured['category'] == "Development", "IDE should map to Development category"
+        assert structured["category"] == "Development", "IDE should map to Development category"
         assert structured['app_type'] == "IDE"
         assert structured["active_window"] == "fibonacci.py - Visual Studio Code"
         
@@ -608,7 +608,7 @@ class TestSmartVLMProcessor:
         assert structured['confidence'] == 0.8, "Should have default confidence score"
         
         # Validate structured output completeness
-        required_fields = ["tasks", 'category', 'app_type', "active_window", 'processed_at', 'confidence']
+        required_fields = ["tasks", "category", 'app_type', "active_window", 'processed_at', 'confidence']
         assert all(field in structured for field in required_fields), "Should have all required fields"
     
     def test_batch_processing_efficiency(self, processor, mock_db):
@@ -1130,7 +1130,7 @@ class TestCircuitBreaker:
         
         # 2. REALISTIC DATA: Simulate actual VLM API failure scenarios
         def vlm_api_success():
-            return {"task": "Extract text from image", "confidence": 0.95}
+            return {"tasks": "Extract text from image", "confidence": 0.95}
         
         def vlm_api_failure():
             raise ValueError("VLM API timeout - service unavailable")
@@ -1142,7 +1142,7 @@ class TestCircuitBreaker:
         success_result = breaker.call(vlm_api_success)
         assert breaker.state == 'closed', "Successful calls should keep breaker closed"
         assert breaker.failure_count == 0, "Successful calls should not increment failure count"
-        assert success_result["task"] == "Extract text from image", "Should return actual API result"
+        assert success_result["tasks"] == "Extract text from image", "Should return actual API result"
         
         # 4. SIDE EFFECTS: Track failure state changes through multiple failures
         failure_states = []

@@ -1,0 +1,182 @@
+name: AutoTaskTracker CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  compliance-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+    
+    - name: Run config compliance check
+      run: |
+        python scripts/analysis/config_compliance_scanner.py --ci
+    
+    - name: Run enterprise compliance check
+      run: |
+        python scripts/analysis/enterprise_compliance_scanner.py --ci
+    
+    - name: Generate compliance report
+      if: always()
+      run: |
+        python scripts/analysis/enterprise_compliance_scanner.py --format json --output compliance-report.json
+    
+    - name: Upload compliance report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: compliance-report
+        path: compliance-report.json
+
+  health-tests:
+    runs-on: ubuntu-latest
+    needs: compliance-check
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+    
+    - name: Run codebase health tests
+      run: |
+        pytest tests/health/test_codebase_health.py -v --tb=short
+    
+    - name: Run documentation health tests
+      run: |
+        pytest tests/health/test_documentation_health.py -v --tb=short
+    
+    - name: Run config system tests
+      run: |
+        pytest tests/health/test_config_system_health.py::TestConfigTestSystemIntegration -v --tb=short
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+    
+    - name: Run Bandit security scan
+      run: |
+        bandit -r autotasktracker/ -f json -o bandit-report.json || true
+    
+    - name: Run Safety dependency scan
+      run: |
+        safety check --json --output safety-report.json || true
+    
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  performance-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+        pip install pytest-benchmark
+    
+    - name: Run performance benchmarks
+      run: |
+        pytest tests/performance/ -v --benchmark-json=benchmark-results.json || true
+    
+    - name: Upload benchmark results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark-results.json
+
+  deployment-readiness:
+    runs-on: ubuntu-latest
+    needs: [compliance-check, health-tests, security-scan]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+    
+    - name: Test production configuration
+      run: |
+        # Test with production-like environment variables
+        export AUTOTASK_DB_PATH="/tmp/prod_test.db"
+        export AUTOTASK_VLM_PORT="25000"
+        python -c "from autotasktracker.config import get_config; print('Config test passed')"
+    
+    - name: Validate dashboard imports
+      run: |
+        python -c "import autotasktracker.dashboards.task_board; print('Task board import OK')"
+        python -c "import autotasktracker.dashboards.analytics; print('Analytics import OK')"
+    
+    - name: Test script execution
+      run: |
+        python scripts/analysis/config_compliance_scanner.py --quiet
+        echo "All scripts can execute"
+    
+    - name: Generate deployment checklist
+      run: |
+        echo "✅ All compliance checks passed"
+        echo "✅ Health tests passed"  
+        echo "✅ Security scans completed"
+        echo "✅ Configuration validated"
+        echo "✅ Ready for deployment"

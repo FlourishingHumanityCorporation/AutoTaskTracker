@@ -8,18 +8,45 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
+from autotasktracker.config import get_config
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
+class PensieveEntity:
+    """Represents an entity (screenshot) from Pensieve."""
+    id: int
+    filepath: str
+    filename: str
+    created_at: str
+    file_created_at: Optional[str] = None
+    last_scan_at: Optional[str] = None
+    file_type_group: str = "image"
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass  
 class PensieveFrame:
-    """Represents a screenshot frame from Pensieve."""
+    """Legacy compatibility wrapper for PensieveEntity."""
     id: int
     filepath: str
     timestamp: str
     created_at: str
     processed_at: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    
+    @classmethod
+    def from_entity(cls, entity: 'PensieveEntity') -> 'PensieveFrame':
+        """Create PensieveFrame from PensieveEntity for backward compatibility."""
+        return cls(
+            id=entity.id,
+            filepath=entity.filepath,
+            timestamp=entity.created_at,
+            created_at=entity.created_at,
+            processed_at=entity.last_scan_at,
+            metadata=entity.metadata
+        )
 
 
 @dataclass
@@ -33,13 +60,15 @@ class PensieveAPIError(Exception):
 class PensieveAPIClient:
     """Client for interacting with Pensieve/memos REST API."""
     
-    def __init__(self, base_url: str = "http://localhost:8839", timeout: int = 30):
+    def __init__(self, base_url: str = None, timeout: int = 30):
         """Initialize Pensieve API client.
         
         Args:
             base_url: Base URL for Pensieve service
             timeout: Request timeout in seconds
         """
+        if base_url is None:
+            base_url = get_config().get_service_url('memos')
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
         self.session = requests.Session()
@@ -67,9 +96,69 @@ class PensieveAPIClient:
             logger.debug(f"Pensieve health check failed: {e}")
             return False
     
+    def get_entities(self, library_id: int = 1, folder_id: int = 1, 
+                    limit: int = 100, offset: int = 0) -> List[PensieveEntity]:
+        """Get entities (screenshots) from Pensieve using actual API.
+        
+        Args:
+            library_id: Library ID (default 1 for screenshots)
+            folder_id: Folder ID (default 1 for main folder)
+            limit: Maximum number of entities to return
+            offset: Number of entities to skip
+            
+        Returns:
+            List of PensieveEntity objects
+        """
+        params = {
+            'limit': limit,
+            'offset': offset
+        }
+            
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/libraries/{library_id}/folders/{folder_id}/entities",
+                params=params
+            )
+            
+            if response.status_code != 200:
+                raise PensieveAPIError(
+                    status_code=response.status_code,
+                    message=response.text,
+                    endpoint=f"/api/libraries/{library_id}/folders/{folder_id}/entities"
+                )
+            
+            entities_data = response.json()
+            entities = []
+            
+            for entity_data in entities_data:
+                # Include metadata_entries in metadata field for easy access
+                metadata = entity_data.copy()  # Include all entity data
+                entities.append(PensieveEntity(
+                    id=entity_data['id'],
+                    filepath=entity_data['filepath'],
+                    filename=entity_data['filename'],
+                    created_at=entity_data.get('file_created_at', entity_data.get('created_at', '')),
+                    file_created_at=entity_data.get('file_created_at'),
+                    last_scan_at=entity_data.get('last_scan_at'),
+                    file_type_group=entity_data.get('file_type_group', 'image'),
+                    metadata=metadata
+                ))
+            
+            return entities
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get entities from Pensieve: {e}")
+            raise PensieveAPIError(
+                status_code=0,
+                message=str(e),
+                endpoint=f"/api/libraries/{library_id}/folders/{folder_id}/entities"
+            )
+    
     def get_frames(self, limit: int = 100, offset: int = 0, 
                    processed_only: bool = False) -> List[PensieveFrame]:
-        """Get screenshot frames from Pensieve.
+        """Get screenshot frames from Pensieve (legacy wrapper for get_entities).
+        
+        DEPRECATED: Use get_entities() instead for better alignment with Pensieve API.
         
         Args:
             limit: Maximum number of frames to return
@@ -79,51 +168,70 @@ class PensieveAPIClient:
         Returns:
             List of PensieveFrame objects
         """
-        params = {
-            'limit': limit,
-            'offset': offset
-        }
-        if processed_only:
-            params['processed'] = 'true'
-            
+        logger.warning("get_frames() is deprecated, use get_entities() for better API alignment")
+        
         try:
-            response = self.session.get(
-                f"{self.base_url}/api/frames",
-                params=params
-            )
+            entities = self.get_entities(limit=limit, offset=offset)
+            frames = [PensieveFrame.from_entity(entity) for entity in entities]
             
-            if response.status_code != 200:
-                raise PensieveAPIError(
-                    status_code=response.status_code,
-                    message=response.text,
-                    endpoint="/api/frames"
-                )
-            
-            frames_data = response.json()
-            frames = []
-            
-            for frame_data in frames_data:
-                frames.append(PensieveFrame(
-                    id=frame_data['id'],
-                    filepath=frame_data['filepath'],
-                    timestamp=frame_data['timestamp'],
-                    created_at=frame_data['created_at'],
-                    processed_at=frame_data.get('processed_at'),
-                    metadata=frame_data.get('metadata', {})
-                ))
+            if processed_only:
+                # Filter for entities that have been processed (have last_scan_at)
+                frames = [f for f in frames if f.processed_at is not None]
             
             return frames
             
+        except PensieveAPIError:
+            # If entity API fails, return empty list for graceful degradation
+            logger.error("Entity API failed, returning empty frames list")
+            return []
+    
+    def get_entity(self, entity_id: int) -> Optional[PensieveEntity]:
+        """Get a specific entity by ID.
+        
+        Args:
+            entity_id: ID of the entity to retrieve
+            
+        Returns:
+            PensieveEntity object or None if not found
+        """
+        try:
+            response = self.session.get(f"{self.base_url}/api/entities/{entity_id}")
+            
+            if response.status_code == 404:
+                return None
+            elif response.status_code != 200:
+                raise PensieveAPIError(
+                    status_code=response.status_code,
+                    message=response.text,
+                    endpoint=f"/api/entities/{entity_id}"
+                )
+            
+            entity_data = response.json()
+            # Include all entity data in metadata for easy access
+            metadata = entity_data.copy()
+            return PensieveEntity(
+                id=entity_data['id'],
+                filepath=entity_data['filepath'],
+                filename=entity_data['filename'],
+                created_at=entity_data.get('file_created_at', entity_data.get('created_at', '')),
+                file_created_at=entity_data.get('file_created_at'),
+                last_scan_at=entity_data.get('last_scan_at'),
+                file_type_group=entity_data.get('file_type_group', 'image'),
+                metadata=metadata
+            )
+            
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get frames from Pensieve: {e}")
+            logger.error(f"Failed to get entity {entity_id}: {e}")
             raise PensieveAPIError(
                 status_code=0,
                 message=str(e),
-                endpoint="/api/frames"
+                endpoint=f"/api/entities/{entity_id}"
             )
     
     def get_frame(self, frame_id: int) -> Optional[PensieveFrame]:
-        """Get a specific frame by ID.
+        """Get a specific frame by ID (legacy wrapper).
+        
+        DEPRECATED: Use get_entity() instead for better alignment with Pensieve API.
         
         Args:
             frame_id: ID of the frame to retrieve
@@ -131,38 +239,51 @@ class PensieveAPIClient:
         Returns:
             PensieveFrame object or None if not found
         """
+        logger.warning("get_frame() is deprecated, use get_entity() for better API alignment")
+        
+        entity = self.get_entity(frame_id)
+        return PensieveFrame.from_entity(entity) if entity else None
+    
+    def get_entity_metadata(self, entity_id: int, key: Optional[str] = None) -> Dict[str, Any]:
+        """Get metadata for an entity using actual API.
+        
+        Args:
+            entity_id: ID of the entity
+            key: Specific metadata key to retrieve
+            
+        Returns:
+            Metadata dictionary or specific value if key specified
+        """
         try:
-            response = self.session.get(f"{self.base_url}/api/frames/{frame_id}")
+            # Get the full entity which includes metadata_entries
+            entity = self.get_entity(entity_id)
+            if not entity or not entity.metadata:
+                return {}
             
-            if response.status_code == 404:
-                return None
-            elif response.status_code != 200:
-                raise PensieveAPIError(
-                    status_code=response.status_code,
-                    message=response.text,
-                    endpoint=f"/api/frames/{frame_id}"
-                )
+            # Extract metadata_entries from entity response
+            metadata_entries = entity.metadata.get('metadata_entries', [])
             
-            frame_data = response.json()
-            return PensieveFrame(
-                id=frame_data['id'],
-                filepath=frame_data['filepath'],
-                timestamp=frame_data['timestamp'],
-                created_at=frame_data['created_at'],
-                processed_at=frame_data.get('processed_at'),
-                metadata=frame_data.get('metadata', {})
-            )
+            if key:
+                # Return specific key value
+                for entry in metadata_entries:
+                    if entry.get('key') == key:
+                        return {key: entry.get('value')}
+                return {}
+            else:
+                # Return all metadata as key-value pairs
+                metadata = {}
+                for entry in metadata_entries:
+                    metadata[entry.get('key')] = entry.get('value')
+                return metadata
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get frame {frame_id}: {e}")
-            raise PensieveAPIError(
-                status_code=0,
-                message=str(e),
-                endpoint=f"/api/frames/{frame_id}"
-            )
+        except Exception as e:
+            logger.error(f"Failed to get metadata for entity {entity_id}: {e}")
+            return {}
     
     def get_ocr_result(self, frame_id: int) -> Optional[str]:
-        """Get OCR text result for a frame.
+        """Get OCR text result for a frame (legacy wrapper).
+        
+        DEPRECATED: Use get_entity_metadata(entity_id, 'ocr_result') instead.
         
         Args:
             frame_id: ID of the frame
@@ -170,34 +291,24 @@ class PensieveAPIClient:
         Returns:
             OCR text or None if not available
         """
+        logger.warning("get_ocr_result() is deprecated, use get_entity_metadata() for better API alignment")
+        
         try:
-            response = self.session.get(f"{self.base_url}/api/ocr/{frame_id}")
-            
-            if response.status_code == 404:
-                return None
-            elif response.status_code != 200:
-                raise PensieveAPIError(
-                    status_code=response.status_code,
-                    message=response.text,
-                    endpoint=f"/api/ocr/{frame_id}"
-                )
-            
-            result = response.json()
-            return result.get('text')
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get OCR for frame {frame_id}: {e}")
+            metadata = self.get_entity_metadata(frame_id, 'ocr_result')
+            return metadata.get('ocr_result') if metadata else None
+        except Exception as e:
+            logger.error(f"Failed to get OCR for entity {frame_id}: {e}")
             return None
     
-    def search_frames(self, query: str, limit: int = 50) -> List[PensieveFrame]:
-        """Search frames using Pensieve's search capabilities.
+    def search_entities(self, query: str, limit: int = 50) -> List[PensieveEntity]:
+        """Search entities using Pensieve's search capabilities.
         
         Args:
             query: Search query string
             limit: Maximum number of results
             
         Returns:
-            List of matching frames
+            List of matching entities
         """
         try:
             response = self.session.get(
@@ -213,26 +324,96 @@ class PensieveAPIClient:
                 )
             
             search_results = response.json()
-            frames = []
+            entities = []
             
-            for result in search_results:
-                frames.append(PensieveFrame(
-                    id=result['id'],
-                    filepath=result['filepath'],
-                    timestamp=result['timestamp'],
-                    created_at=result['created_at'],
-                    processed_at=result.get('processed_at'),
-                    metadata=result.get('metadata', {})
-                ))
+            # Handle Pensieve's actual search response format: {"hits": [{"document": {...}}]}
+            if isinstance(search_results, dict) and 'hits' in search_results:
+                for hit in search_results['hits']:
+                    doc = hit.get('document', {})
+                    # Include all document data in metadata for easy access
+                    metadata = doc.copy()
+                    entities.append(PensieveEntity(
+                        id=int(doc['id']),
+                        filepath=doc['filepath'],
+                        filename=doc.get('filename', ''),
+                        created_at=doc.get('created_at', doc.get('file_created_at', '')),
+                        file_created_at=doc.get('file_created_at'),
+                        last_scan_at=doc.get('last_scan_at'),
+                        file_type_group=doc.get('file_type_group', 'image'),
+                        metadata=metadata
+                    ))
+            elif isinstance(search_results, list):
+                # Fallback for direct array format
+                for result in search_results:
+                    metadata = result.copy()
+                    entities.append(PensieveEntity(
+                        id=result['id'],
+                        filepath=result['filepath'],
+                        filename=result.get('filename', ''),
+                        created_at=result['created_at'],
+                        file_created_at=result.get('file_created_at'),
+                        last_scan_at=result.get('last_scan_at'),
+                        file_type_group=result.get('file_type_group', 'image'),
+                        metadata=metadata
+                    ))
             
-            return frames
+            return entities
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Search failed: {e}")
             return []
     
+    def search_frames(self, query: str, limit: int = 50) -> List[PensieveFrame]:
+        """Search frames using Pensieve's search capabilities (legacy wrapper).
+        
+        DEPRECATED: Use search_entities() instead for better alignment with Pensieve API.
+        
+        Args:
+            query: Search query string
+            limit: Maximum number of results
+            
+        Returns:
+            List of matching frames
+        """
+        logger.warning("search_frames() is deprecated, use search_entities() for better API alignment")
+        
+        try:
+            entities = self.search_entities(query, limit)
+            return [PensieveFrame.from_entity(entity) for entity in entities]
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            return []
+    
+    def store_entity_metadata(self, entity_id: int, key: str, value: Any) -> bool:
+        """Store metadata for an entity using actual API.
+        
+        Args:
+            entity_id: ID of the entity
+            key: Metadata key
+            value: Metadata value
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/entities/{entity_id}/metadata",
+                json={
+                    'key': key,
+                    'value': value
+                }
+            )
+            
+            return response.status_code in [200, 201]
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to store metadata for entity {entity_id}: {e}")
+            return False
+    
     def store_metadata(self, frame_id: int, key: str, value: Any) -> bool:
-        """Store metadata for a frame.
+        """Store metadata for a frame (legacy wrapper).
+        
+        DEPRECATED: Use store_entity_metadata() instead for better alignment with Pensieve API.
         
         Args:
             frame_id: ID of the frame
@@ -242,24 +423,13 @@ class PensieveAPIClient:
         Returns:
             True if successful, False otherwise
         """
-        try:
-            response = self.session.post(
-                f"{self.base_url}/api/metadata",
-                json={
-                    'frame_id': frame_id,
-                    'key': key,
-                    'value': value
-                }
-            )
-            
-            return response.status_code in [200, 201]
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to store metadata: {e}")
-            return False
+        logger.warning("store_metadata() is deprecated, use store_entity_metadata() for better API alignment")
+        return self.store_entity_metadata(frame_id, key, value)
     
     def get_metadata(self, frame_id: int, key: Optional[str] = None) -> Dict[str, Any]:
-        """Get metadata for a frame.
+        """Get metadata for a frame (legacy wrapper).
+        
+        DEPRECATED: Use get_entity_metadata() instead for better alignment with Pensieve API.
         
         Args:
             frame_id: ID of the frame
@@ -268,24 +438,8 @@ class PensieveAPIClient:
         Returns:
             Dictionary of metadata
         """
-        try:
-            url = f"{self.base_url}/api/metadata/{frame_id}"
-            if key:
-                url += f"/{key}"
-                
-            response = self.session.get(url)
-            
-            if response.status_code == 404:
-                return {}
-            elif response.status_code != 200:
-                logger.error(f"Failed to get metadata: {response.status_code}")
-                return {}
-            
-            return response.json()
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get metadata: {e}")
-            return {}
+        logger.warning("get_metadata() is deprecated, use get_entity_metadata() for better API alignment")
+        return self.get_entity_metadata(frame_id, key)
     
     def get_config(self) -> Dict[str, Any]:
         """Get Pensieve configuration.

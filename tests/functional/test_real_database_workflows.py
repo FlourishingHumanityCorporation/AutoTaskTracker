@@ -216,7 +216,7 @@ class TestRealDatabaseOperations:
         metadata_entries = [
             {
                 'entity_id': entity_id,
-                'key': 'active_window',
+                'key': "active_window",
                 'value': 'Visual Studio Code - task_extractor.py',
                 'created_at': '2024-01-01T10:00:01Z'
             },
@@ -234,7 +234,7 @@ class TestRealDatabaseOperations:
                 'key': 'ai_task_classification',
                 'value': json.dumps({
                     "tasks": 'Developing task extraction functionality',
-                    'category': 'Development',
+                    "category": 'Development',
                     'confidence': 0.89,
                     'subtasks': ['Writing Python code', 'Class definition', 'Method implementation']
                 }),
@@ -279,8 +279,8 @@ class TestRealDatabaseOperations:
         metadata_by_key = {row['key']: row for row in retrieved_metadata}
         
         # Validate active window
-        assert 'active_window' in metadata_by_key, "Should have active window metadata"
-        assert 'Visual Studio Code' in metadata_by_key['active_window']['value'], "Should store window title"
+        assert "active_window" in metadata_by_key, "Should have active window metadata"
+        assert 'Visual Studio Code' in metadata_by_key["active_window"]['value'], "Should store window title"
         
         # Validate OCR data
         assert "ocr_result" in metadata_by_key, "Should have OCR metadata"
@@ -293,7 +293,7 @@ class TestRealDatabaseOperations:
         assert 'ai_task_classification' in metadata_by_key, "Should have AI classification"
         ai_data = json.loads(metadata_by_key['ai_task_classification']['value'])
         assert ai_data["tasks"] is not None, "Should have task description"
-        assert ai_data['category'] == 'Development', "Should classify as Development"
+        assert ai_data["category"] == 'Development', "Should classify as Development"
         assert 0 <= ai_data['confidence'] <= 1, "Should have valid confidence"
         
         # Validate VLM description
@@ -330,24 +330,24 @@ class TestRealDatabaseOperations:
         # Insert corresponding metadata (using keys that the repository expects)
         metadata_data = [
             # Entity 1 - Coding session
-            (1, 'active_window', 'main.py - PyCharm', '2024-01-01 09:00:01'),
             (1, "active_window", 'main.py - PyCharm', '2024-01-01 09:00:01'),
-            (1, 'category', 'Development', '2024-01-01 09:00:02'),
-            (1, 'tasks', 'Python development in PyCharm', '2024-01-01 09:00:02'),
+            (1, "active_window", 'main.py - PyCharm', '2024-01-01 09:00:01'),
+            (1, "category", 'Development', '2024-01-01 09:00:02'),
+            (1, "tasks", 'Python development in PyCharm', '2024-01-01 09:00:02'),
             (1, 'text', 'class Calculator: def __init__(self):', '2024-01-01 09:00:03'),
             
             # Entity 2 - Meeting
-            (2, 'active_window', 'Zoom Meeting', '2024-01-01 10:00:01'),
             (2, "active_window", 'Zoom Meeting', '2024-01-01 10:00:01'),
-            (2, 'category', 'Communication', '2024-01-01 10:00:02'),
-            (2, 'tasks', 'Video conference meeting', '2024-01-01 10:00:02'),
+            (2, "active_window", 'Zoom Meeting', '2024-01-01 10:00:01'),
+            (2, "category", 'Communication', '2024-01-01 10:00:02'),
+            (2, "tasks", 'Video conference meeting', '2024-01-01 10:00:02'),
             (2, 'text', 'Team Meeting Weekly Standup', '2024-01-01 10:00:03'),
             
             # Entity 3 - Research
-            (3, 'active_window', 'Documentation - Chrome', '2024-01-01 11:00:01'),
             (3, "active_window", 'Documentation - Chrome', '2024-01-01 11:00:01'),
-            (3, 'category', 'Research', '2024-01-01 11:00:02'),
-            (3, 'tasks', 'Reading technical documentation', '2024-01-01 11:00:02'),
+            (3, "active_window", 'Documentation - Chrome', '2024-01-01 11:00:01'),
+            (3, "category", 'Research', '2024-01-01 11:00:02'),
+            (3, "tasks", 'Reading technical documentation', '2024-01-01 11:00:02'),
             (3, 'text', 'asyncio documentation Python async programming', '2024-01-01 11:00:03'),
         ]
         
@@ -375,7 +375,7 @@ class TestRealDatabaseOperations:
             assert hasattr(task, 'id'), "Task should have ID"
             assert hasattr(task, 'screenshot_path'), "Task should have screenshot path"
             assert hasattr(task, 'timestamp'), "Task should have timestamp"
-            assert hasattr(task, 'category'), "Task should have category"
+            assert hasattr(task, "category"), "Task should have category"
             assert hasattr(task, 'title'), "Task should have title"
         
         # Test category filtering 
@@ -412,7 +412,7 @@ class TestRealDatabaseOperations:
                 VALUES (?, ?, ?, ?)
             """, (entity_id, 'ai_task_classification', json.dumps({
                 "tasks": f'{category} activity {i}',
-                'category': category,
+                "category": category,
                 'confidence': 0.8 + (i % 20) * 0.01  # Varying confidence
             }), timestamp.isoformat() + 'Z'))
         

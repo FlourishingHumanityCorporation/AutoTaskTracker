@@ -10,19 +10,27 @@ This is an example of how to refactor existing dashboards to use:
 import streamlit as st
 from datetime import datetime, timedelta
 import logging
+import time
+import threading
+
+# Real-time integration imports
+from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
+from autotasktracker.pensieve.cache_manager import get_cache_manager
 
 # Removed sys.path hack - using proper package imports
 
-from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards import BaseDashboard
 from autotasktracker.utils.debug_capture import get_debug_capture, capture_event
 from autotasktracker.dashboards.components import (
     TimeFilterComponent, 
     CategoryFilterComponent,
     MetricsRow,
     TaskGroup as TaskGroupComponent,
-    NoDataMessage
+    NoDataMessage,
+    EnhancedSearch
 )
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +42,18 @@ class TaskBoardDashboard(BaseDashboard):
         super().__init__(
             title="Task Board - AutoTaskTracker",
             icon="📋",
-            port=8502
+            port=get_config().TASK_BOARD_PORT
         )
+        
+        # Real-time integration setup
+        self.event_processor = get_event_processor()
+        self.cache_manager = get_cache_manager()
+        self.last_refresh = time.time()
+        self.refresh_interval = 30  # seconds
+        
+        # Register dashboard update handler
+        self.event_processor.register_event_handler('entity_added', self._handle_realtime_update)
+        self.event_processor.register_event_handler('entity_processed', self._handle_realtime_update)
         
     def init_session_state(self):
         """Initialize dashboard-specific session state with smart defaults."""
@@ -48,6 +66,10 @@ class TaskBoardDashboard(BaseDashboard):
             st.session_state.show_screenshots = True
         if 'min_duration' not in st.session_state:
             st.session_state.min_duration = 1
+        if 'realtime_enabled' not in st.session_state:
+            st.session_state.realtime_enabled = True
+        if 'last_update_time' not in st.session_state:
+            st.session_state.last_update_time = datetime.now()
             
         # Initialize smart time filter if not set
         if 'time_filter' not in st.session_state:
@@ -91,11 +113,8 @@ class TaskBoardDashboard(BaseDashboard):
                 key="min_duration"
             )
             
-            # Auto refresh
-            st.subheader("Auto Refresh")
-            auto_refresh = st.checkbox("Enable (5 min)", value=True)
-            if auto_refresh:
-                self.add_auto_refresh(300)
+            # Real-time updates
+            self.render_realtime_controls()
             
             # Export functionality
             st.subheader("📥 Export Data")
@@ -121,6 +140,28 @@ class TaskBoardDashboard(BaseDashboard):
                     summary = debug_capture.get_session_summary()
                     st.json(summary)
                 
+            # Real-time controls
+            st.sidebar.markdown("### 🔄 Real-time Updates")
+            realtime_enabled = st.sidebar.checkbox(
+                "Enable real-time updates",
+                value=st.session_state.realtime_enabled,
+                help="Automatically refresh when new screenshots are processed"
+            )
+            st.session_state.realtime_enabled = realtime_enabled
+            
+            if realtime_enabled:
+                refresh_interval = st.sidebar.slider(
+                    "Refresh interval (seconds)",
+                    min_value=10,
+                    max_value=120,
+                    value=30,
+                    step=10
+                )
+                self.refresh_interval = refresh_interval
+                
+                # Show last update time
+                st.sidebar.caption(f"Last updated: {st.session_state.last_update_time.strftime('%H:%M:%S')}")
+            
             return time_filter, categories, show_screenshots, min_duration
             
     def render_metrics(self, metrics_repo: MetricsRepository, start_date: datetime, end_date: datetime):
@@ -293,7 +334,15 @@ class TaskBoardDashboard(BaseDashboard):
             )
             
     def run(self):
-        """Main dashboard execution with debug capture."""
+        """Main dashboard execution with debug capture and real-time updates."""
+        # Start event processing for real-time updates
+        if not self.event_processor.running:
+            self.event_processor.start_processing()
+        
+        # Check for real-time updates
+        if self.check_for_updates():
+            self.trigger_refresh("New data available")
+        
         # Capture dashboard startup
         capture_event("dashboard_startup")
         
@@ -304,9 +353,39 @@ class TaskBoardDashboard(BaseDashboard):
         
         capture_event("database_connected")
             
-        # Header
-        st.title("📋 Task Board")
-        st.markdown("Track and visualize your daily tasks and activities")
+        # Header with real-time status
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.title("📋 Task Board")
+            st.markdown("Track and visualize your daily tasks and activities")
+        
+        with col2:
+            # Real-time status indicator
+            if st.session_state.get('realtime_enabled', False):
+                processor_stats = self.event_processor.get_statistics()
+                if processor_stats['running']:
+                    st.success("🔄 Live")
+                    st.caption(f"Events: {processor_stats['events_processed']}")
+                else:
+                    st.warning("⏸️ Paused")
+            else:
+                st.info("📋 Static")
+        
+        # Enhanced search section
+        with st.expander("🔍 Enhanced Search", expanded=False):
+            search_result = EnhancedSearch.render(
+                key="main_search",
+                placeholder="Search tasks, activities, or content...",
+                show_search_type=True,
+                default_type="Hybrid"
+            )
+            
+            if search_result["has_query"]:
+                st.session_state.search_active = True
+                st.session_state.search_query = search_result["query"]
+                st.session_state.search_type = search_result["type"]
+            else:
+                st.session_state.search_active = False
         
         # Render sidebar and get filters
         time_filter, categories, show_screenshots, min_duration = self.render_sidebar()
@@ -369,6 +448,39 @@ class TaskBoardDashboard(BaseDashboard):
             show_screenshots,
             min_duration
         )
+    
+    def _handle_realtime_update(self, event: PensieveEvent):
+        """Handle real-time updates from EventProcessor."""
+        if st.session_state.get('realtime_enabled', False):
+            # Invalidate relevant caches
+            self.cache_manager.invalidate_pattern('fetch_tasks_*')
+            self.cache_manager.invalidate_pattern('task_groups_*')
+            
+            # Update last update time
+            st.session_state.last_update_time = datetime.now()
+            
+            # Force Streamlit rerun if in active session
+            try:
+                st.rerun()
+            except Exception:
+                # Graceful handling if rerun fails
+                logger.debug("Could not trigger Streamlit rerun from event handler")
+    
+    def _check_auto_refresh(self):
+        """Check if dashboard should auto-refresh."""
+        if not st.session_state.get('realtime_enabled', False):
+            return False
+        
+        current_time = time.time()
+        if current_time - self.last_refresh > self.refresh_interval:
+            self.last_refresh = current_time
+            st.session_state.last_update_time = datetime.now()
+            
+            # Clear caches to get fresh data
+            self.cache_manager.invalidate_pattern('fetch_tasks_*')
+            
+            return True
+        return False
         capture_event("after_task_groups_render")
         
         # Final dashboard loaded capture

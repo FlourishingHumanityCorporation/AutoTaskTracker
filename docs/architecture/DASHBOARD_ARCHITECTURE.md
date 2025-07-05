@@ -1,6 +1,6 @@
 # 🏗️ Dashboard Architecture - Technical Deep Dive
 
-> **Refactored System (2025)**: This document describes the completely rewritten dashboard architecture featuring component-based design, intelligent data processing, and 40% code reduction.
+> **Dashboard Architecture (2025)**: This document describes the dashboard architecture featuring component-based design, intelligent data processing, and optimized performance.
 
 ## 📋 Table of Contents
 1. [Architecture Overview](#architecture-overview)
@@ -25,107 +25,25 @@ The refactored dashboard system follows these core principles:
 
 ### **Architectural Layers**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Presentation Layer                       │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌──────────────────┐│
-│  │   Task Board    │ │   Analytics     │ │  Achievement     ││
-│  │   Dashboard     │ │   Dashboard     │ │   Board          ││
-│  └─────────────────┘ └─────────────────┘ └──────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│                   Component Layer                           │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌──────────────────┐│
-│  │   Filters       │ │    Metrics      │ │  Data Display    ││
-│  │  (Smart)        │ │   Components    │ │   Components     ││
-│  └─────────────────┘ └─────────────────┘ └──────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│                    Data Access Layer                        │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌──────────────────┐│
-│  │ TaskRepository  │ │MetricsRepository│ │  Cache Manager   ││
-│  │ (Smart Grouping)│ │ (Analytics)     │ │ (TTL + Smart)    ││
-│  └─────────────────┘ └─────────────────┘ └──────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│                      Storage Layer                          │
-│           ┌─────────────────────────────────────┐           │
-│           │         DatabaseManager            │           │
-│           │      (Pensieve/SQLite)             │           │
-│           └─────────────────────────────────────┘           │
-└─────────────────────────────────────────────────────────────┘
-```
+Four-layer architecture: Presentation (dashboards), Component (reusable UI), Data Access (repositories), and Storage (DatabaseManager/Pensieve).
 
 ## 🧩 Component System
 
 ### **Base Dashboard Class**
 All dashboards inherit from `BaseDashboard` which provides:
 
-```python
-class BaseDashboard:
-    """Base class with common dashboard functionality."""
-    
-    def __init__(self, title: str, icon: str, port: int):
-        self.db_manager = DatabaseManager()  # Lazy loaded
-        self.setup_page()                   # Streamlit configuration
-        self.init_session_state()          # Smart defaults
-    
-    @property
-    def db_manager(self) -> DatabaseManager:
-        """Lazy-loaded database connection with error handling."""
-        
-    def ensure_connection(self) -> bool:
-        """Check database connectivity with user-friendly errors."""
-        
-    def add_auto_refresh(self, seconds: int):
-        """Consistent auto-refresh across dashboards."""
-```
+**Base Dashboard Class**: Provides common functionality including database management, error handling, and auto-refresh. See `autotasktracker/dashboards/base.py` for complete implementation.
 
 ### **Reusable Components**
 
 #### **Smart Filter Components** (`components/filters.py`)
-```python
-class TimeFilterComponent:
-    @staticmethod
-    def get_smart_default(db_manager=None) -> str:
-        """Data-driven time filter selection."""
-        # Analyzes actual data patterns to select appropriate default
-        
-    @staticmethod
-    def render(db_manager=None) -> str:
-        """Renders time filter with intelligent defaults."""
-
-class CategoryFilterComponent:
-    @staticmethod
-    def render(multiselect=False) -> List[str]:
-        """Fixed logic: empty selection = all categories."""
-```
+**Smart Filter Components**: Time and category filters with data-driven defaults. See `autotasktracker/dashboards/components/filters.py` for implementation.
 
 #### **Metrics Components** (`components/metrics.py`)
-```python
-class MetricsRow:
-    @staticmethod
-    def render(metrics: Dict[str, Any]):
-        """Consistent metrics display across dashboards."""
-
-class ProgressIndicator:
-    @staticmethod
-    def render(value: float, max_value: float, label: str):
-        """Reusable progress visualization."""
-```
+**Metrics Components**: Consistent metrics display and progress indicators. See `autotasktracker/dashboards/components/metrics.py` for implementation.
 
 #### **Data Display Components** (`components/data_display.py`)
-```python
-class TaskGroup:
-    @staticmethod
-    def render(window_title: str, duration: float, ...):
-        """Standardized task group presentation."""
-
-class NoDataMessage:
-    @staticmethod
-    def render(message: str, suggestions: List[str]):
-        """Intelligent no-data messaging with actionable guidance."""
-```
+**Data Display Components**: Task group rendering and intelligent no-data messages. See `autotasktracker/dashboards/components/data_display.py` for implementation.
 
 ## 🗃️ Data Layer Architecture
 
@@ -133,38 +51,10 @@ class NoDataMessage:
 
 The data layer uses the Repository pattern to separate data access from business logic:
 
-```python
-class TaskRepository(BaseRepository):
-    """Handles all task-related data operations."""
-    
-    def get_task_groups(
-        self, 
-        start_date: datetime, 
-        end_date: datetime,
-        min_duration_minutes: float = 0.5,
-        gap_threshold_minutes: float = 15
-    ) -> List[TaskGroup]:
-        """Smart task grouping with window title normalization."""
-        
-    def _normalize_window_title(self, window_title: str) -> str:
-        """Removes session noise while preserving context."""
-        # Removes: MallocNanoZone=1, terminal dimensions, git hashes
-        # Preserves: Application name, main context
-```
+**TaskRepository**: Handles task data operations with smart grouping and window title normalization. See `autotasktracker/dashboards/data/task_repository.py` for implementation.
 
 ### **Data Models** (`data/models.py`)
-```python
-@dataclass
-class TaskGroup:
-    window_title: str
-    category: str
-    start_time: datetime
-    end_time: datetime
-    duration_minutes: float
-    task_count: int
-    tasks: List[Task]
-    confidence: float = 1.0
-```
+**Data Models**: Structured task group data with timing, categorization, and confidence metrics. See `autotasktracker/dashboards/data/models.py` for complete models.
 
 ## 🧠 Smart Filtering System
 
@@ -172,38 +62,13 @@ class TaskGroup:
 
 The system automatically detects the appropriate time period based on actual data:
 
-```python
-def get_smart_default(db_manager=None) -> str:
-    """Intelligent time filter selection."""
-    try:
-        # Check today's activity
-        today_df = db_manager.fetch_tasks(start_date=today_start, end_date=now)
-        
-        # Check yesterday's activity  
-        yesterday_df = db_manager.fetch_tasks(start_date=yesterday_start, end_date=yesterday_end)
-        
-        # Prefer day with more substantial activity
-        if len(yesterday_df) >= len(today_df) and len(yesterday_df) >= 5:
-            return "Yesterday"
-        elif len(today_df) >= 5:
-            return "Today"
-        
-        return "Last 7 Days"  # Safe fallback
-    except Exception:
-        return "Last 7 Days"
-```
+**Smart Time Filter**: Analyzes activity patterns to select appropriate default time periods. Prefers periods with substantial activity over empty periods.
 
 ### **Intelligent Category Filtering**
 
 Fixed the broken logic where "all selected" meant "exclude all":
 
-```python
-# Before (Broken)
-default=categories[1:]  # Selects all categories = exclude all
-
-# After (Fixed)  
-default=[]  # Empty selection = include all categories
-```
+**Category Filter Fix**: Empty selection now correctly includes all categories rather than excluding them.
 
 ## 🔍 Intelligent Task Grouping
 
@@ -211,35 +76,11 @@ default=[]  # Empty selection = include all categories
 
 The system removes session-specific noise while preserving meaningful context:
 
-```python
-def _normalize_window_title(self, window_title: str) -> str:
-    """Smart normalization for better task grouping."""
-    
-    # Remove session-specific noise
-    normalized = re.sub(r'MallocNanoZone=\d+', '', window_title)
-    normalized = re.sub(r'— \d+×\d+$', '', normalized)  # Terminal dimensions
-    normalized = re.sub(r'\([a-f0-9]{7,}\)', '', normalized)  # Git hashes
-    
-    # Extract meaningful parts
-    if ' — ' in normalized:
-        parts = normalized.split(' — ')
-        app_name = parts[0]
-        main_context = parts[1] if len(parts) > 1 else ''
-        
-        # Skip generic parts, preserve meaningful context
-        if main_context not in ['', '✳', '✳ ']:
-            return f"{app_name} — {main_context}"
-    
-    return normalized
-```
+**Window Title Normalization**: Removes session-specific noise while preserving meaningful context for better task grouping.
 
 ### **Improved Grouping Algorithm**
 
-```python
-# Enhanced grouping parameters
-min_duration_minutes: float = 0.5   # Lowered from 1.0
-gap_threshold_minutes: float = 15   # Increased from 10
-```
+**Enhanced Grouping Parameters**: Improved parameters resulted in 3.5x better task grouping (30 → 107 groups).
 
 **Results**: 30 → 107 task groups (3.5x improvement)
 
@@ -247,16 +88,7 @@ gap_threshold_minutes: float = 15   # Increased from 10
 
 ### **Multi-Layer Caching**
 
-```python
-class DashboardCache:
-    @staticmethod
-    def get_cached(key: str, fetch_func: Callable, ttl_seconds: int = 300):
-        """TTL-based caching with intelligent invalidation."""
-        
-class QueryCache:
-    def get_time_filtered_data(self, table: str, start_date: datetime, ...):
-        """Database query caching with smart cache keys."""
-```
+**Multi-Layer Caching**: TTL-based caching with intelligent invalidation and database query optimization. See `autotasktracker/dashboards/cache.py` for implementation.
 
 ### **Cache Invalidation Strategy**
 - **Time-based**: TTL expires after specified duration
@@ -267,34 +99,13 @@ class QueryCache:
 
 ### **Graceful Degradation**
 
-```python
-def ensure_connection(self) -> bool:
-    """Database connectivity with user-friendly error handling."""
-    if not self.db_manager.test_connection():
-        show_error_message(
-            "Cannot connect to database",
-            "Make sure Memos is running: memos start"
-        )
-        return False
-    return True
-```
+**Graceful Degradation**: User-friendly error handling with actionable guidance when database connectivity fails.
 
 ### **Component Error Boundaries**
 
 Each component handles its own errors without crashing the entire dashboard:
 
-```python
-def render_task_groups(self, ...):
-    try:
-        task_groups = task_repo.get_task_groups(...)
-        # Render components
-    except Exception as e:
-        logger.error(f"Task group rendering failed: {e}")
-        NoDataMessage.render(
-            "Error loading tasks",
-            ["Check database connection", "Refresh the page"]
-        )
-```
+**Component Error Boundaries**: Each component handles errors without crashing the entire dashboard.
 
 ## 🚀 Performance Optimizations
 
@@ -304,15 +115,7 @@ def render_task_groups(self, ...):
 - Large datasets paginated automatically
 
 ### **Efficient Queries**
-```python
-# Repository pattern enables query optimization
-def get_task_groups(self, start_date: datetime, end_date: datetime, limit: int = 1000):
-    """Optimized query with smart limits."""
-    
-# Batch operations where possible
-def get_metadata_batch(self, entity_ids: List[int]):
-    """Bulk metadata retrieval."""
-```
+**Efficient Queries**: Repository pattern enables query optimization with smart limits and bulk operations.
 
 ### **Memory Management**
 - Automatic cleanup of large datasets

@@ -298,7 +298,7 @@ class TestFloatingPointPrecision:
                     'filepath': '/test1.png',
                     'created_at': '2024-01-01 10:00:00',
                     "ocr_result": 'test',
-                    'active_window': 'test.txt',
+                    "active_window": 'test.txt',
                     'embedding': json.dumps([0.15, 0.25, 0.35])  # Similar to query
                 },
                 {
@@ -306,7 +306,7 @@ class TestFloatingPointPrecision:
                     'filepath': '/test2.png', 
                     'created_at': '2024-01-01 11:00:00',
                     "ocr_result": 'test2',
-                    'active_window': 'test2.txt',
+                    "active_window": 'test2.txt',
                     'embedding': json.dumps([0.9, 0.1, 0.1])  # Different from query
                 }
             ]
