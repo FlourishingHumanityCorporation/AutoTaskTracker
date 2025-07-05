@@ -89,11 +89,19 @@ class SmartVLMProcessor:
         }
         
     def _load_cache(self):
-        """Load cache from disk."""
+        """Load cache from disk with path validation."""
         cache_file = self.cache_dir / 'vlm_cache.json'
+        
+        # Validate cache file path to prevent directory traversal
+        cache_file_resolved = cache_file.resolve()
+        cache_dir_resolved = self.cache_dir.resolve()
+        if not str(cache_file_resolved).startswith(str(cache_dir_resolved)):
+            logger.error(f"Invalid cache file path: {cache_file}")
+            return
+            
         if cache_file.exists():
             try:
-                with open(cache_file, 'r') as f:
+                with open(cache_file_resolved, 'r') as f:
                     data = json.load(f)
                     self.result_cache = data.get('results', {})
                     logger.info(f"Loaded {len(self.result_cache)} cached VLM results")
@@ -101,10 +109,18 @@ class SmartVLMProcessor:
                 logger.error(f"Failed to load cache: {e}")
     
     def _save_cache(self):
-        """Save cache to disk."""
+        """Save cache to disk with path validation."""
         cache_file = self.cache_dir / 'vlm_cache.json'
+        
+        # Validate cache file path to prevent directory traversal
+        cache_file_resolved = cache_file.resolve()
+        cache_dir_resolved = self.cache_dir.resolve()
+        if not str(cache_file_resolved).startswith(str(cache_dir_resolved)):
+            logger.error(f"Invalid cache file path: {cache_file}")
+            return
+            
         try:
-            with open(cache_file, 'w') as f:
+            with open(cache_file_resolved, 'w') as f:
                 json.dump({
                     'results': self.result_cache,
                     'updated': datetime.now().isoformat()

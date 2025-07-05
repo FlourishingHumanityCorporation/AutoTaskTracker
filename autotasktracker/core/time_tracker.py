@@ -303,8 +303,15 @@ class TimeTracker:
             config = get_config()
             config_path = config.memos_dir / "config.yaml"
             
+            # Validate config path to prevent directory traversal
+            config_path_resolved = config_path.resolve()
+            memos_dir_resolved = config.memos_dir.resolve()
+            if not str(config_path_resolved).startswith(str(memos_dir_resolved)):
+                logger.error(f"Invalid config path: {config_path}")
+                return None
+            
             if config_path.exists():
-                with open(config_path, 'r') as f:
+                with open(config_path_resolved, 'r') as f:
                     memos_config = yaml.safe_load(f)
                 return memos_config.get('record_interval', None)
         except Exception as e:
