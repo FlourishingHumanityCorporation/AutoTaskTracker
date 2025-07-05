@@ -64,7 +64,7 @@ class CircuitBreaker:
         # Circuit is open if we have recent failures
         return len(self.failed_endpoints) > 0
     
-    def record_failure(self, endpoint: str = 'general', error_message: str = ''):
+    def record_failure(self, endpoint: str = 'general', error_message: str = '') -> None:
         """Record a failure for circuit breaker logic.
         
         Args:
@@ -83,7 +83,7 @@ class CircuitBreaker:
             
             logger.warning(f"Circuit breaker opened for endpoint '{endpoint}' due to repeated failures: {error_message}")
     
-    def record_success(self, endpoint: str = 'general'):
+    def record_success(self, endpoint: str = 'general') -> None:
         """Record a successful call and reset circuit breaker.
         
         Args:
@@ -94,7 +94,7 @@ class CircuitBreaker:
         if endpoint in self.last_failure_time:
             del self.last_failure_time[endpoint]
     
-    def reset_circuit(self, endpoint: str = 'general'):
+    def reset_circuit(self, endpoint: str = 'general') -> None:
         """Manually reset circuit breaker for an endpoint.
         
         Args:
@@ -107,7 +107,7 @@ class CircuitBreaker:
         
         logger.info(f"Circuit breaker manually reset for endpoint: {endpoint}")
     
-    def reset_all_circuits(self):
+    def reset_all_circuits(self) -> None:
         """Reset all circuit breakers."""
         self.failed_endpoints.clear()
         self.failure_counts.clear()

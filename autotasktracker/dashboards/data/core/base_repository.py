@@ -125,7 +125,7 @@ class BaseRepository:
             return pd.DataFrame()
     
     # Delegate methods for backward compatibility
-    def invalidate_cache(self, pattern: str = None):
+    def invalidate_cache(self, pattern: str = None) -> None:
         """Invalidate cached query results."""
         return self.cache_coordinator.invalidate_cache(pattern)
     
@@ -141,6 +141,6 @@ class BaseRepository:
         """Get circuit breaker status."""
         return self.circuit_breaker.get_circuit_status()
     
-    def reset_circuit_breaker(self, endpoint: str = 'general'):
+    def reset_circuit_breaker(self, endpoint: str = 'general') -> None:
         """Reset circuit breaker for an endpoint."""
         return self.circuit_breaker.reset_circuit(endpoint)

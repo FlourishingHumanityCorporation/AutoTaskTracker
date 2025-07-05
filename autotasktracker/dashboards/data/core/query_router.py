@@ -39,8 +39,12 @@ class QueryRouter:
                 self.circuit_breaker.record_success()
             
             return result
+        except (ConnectionError, TimeoutError) as e:
+            logger.debug(f"API connection failed: {e}")
+            self.circuit_breaker.record_failure(error_message=str(e))
+            return None
         except Exception as e:
-            logger.debug(f"API query routing failed: {e}")
+            logger.debug(f"Unexpected API query routing error: {e}")
             self.circuit_breaker.record_failure(error_message=str(e))
             return None
     
@@ -63,6 +67,28 @@ class QueryRouter:
     
     def _route_query_to_available_endpoints(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
         """Route queries to available Pensieve API endpoints based on current availability."""
+        try:
+            query_type = self._determine_query_type(query, params)
+            
+            if query_type == 'search':
+                return self._execute_search_query(query, params)
+            elif query_type == 'entity_listing':
+                return self._execute_entity_listing_query(query, params)
+            elif query_type == 'entity_specific':
+                return self._execute_entity_specific_query(query, params)
+            
+            # Cannot route this query to available endpoints
+            return None
+            
+        except (KeyError, ValueError) as e:
+            logger.debug(f"Query routing parameter error: {e}")
+            return None
+        except Exception as e:
+            logger.debug(f"Unexpected query routing error: {e}")
+            return None
+    
+    def _determine_query_type(self, query: str, params: tuple) -> Optional[str]:
+        """Determine the type of query for routing decisions."""
         query_lower = query.lower()
         
         # Available endpoints based on our testing:
@@ -71,44 +97,24 @@ class QueryRouter:
         # ✅ /api/libraries/1/folders/1/entities - Entities in folder
         # ✅ /api/config - Configuration
         
-        try:
-            # Route search-related queries to /api/search
-            if any(keyword in query_lower for keyword in ['search', 'like', 'match']):
-                return self._execute_search_query(query, params)
-            
-            # Route entity listing queries to /api/libraries/1/folders/1/entities
-            elif any(keyword in query_lower for keyword in ['entities', 'screenshots']) and 'limit' in query_lower:
-                return self._execute_entity_listing_query(query, params)
-                
-            # For other queries, check if we can use specific entity endpoints
-            elif 'entity_id' in query_lower or any(p for p in params if isinstance(p, int) and p > 0):
-                return self._execute_entity_specific_query(query, params)
-            
-            # Cannot route this query to available endpoints
-            return None
-            
-        except Exception as e:
-            logger.debug(f"Query routing failed: {e}")
-            return None
+        # Check for search queries
+        if any(keyword in query_lower for keyword in ['search', 'like', 'match']):
+            return 'search'
+        
+        # Check for entity listing queries
+        if any(keyword in query_lower for keyword in ['entities', 'screenshots']) and 'limit' in query_lower:
+            return 'entity_listing'
+        
+        # Check for entity-specific queries
+        if 'entity_id' in query_lower or any(p for p in params if isinstance(p, int) and p > 0):
+            return 'entity_specific'
+        
+        return None
     
     def _execute_search_query(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
         """Execute search queries using /api/search endpoint."""
         try:
-            # Extract search terms from SQL query parameters
-            search_term = None
-            limit = 100
-            
-            # Basic parameter extraction (could be enhanced)
-            if params:
-                for param in params:
-                    if isinstance(param, str) and len(param) > 2:
-                        search_term = param.strip('%')  # Remove SQL wildcards
-                        break
-                    elif isinstance(param, int) and param > 0 and param < 1000:
-                        limit = param
-            
-            if not search_term:
-                search_term = "screenshot"  # Default search term
+            search_term, limit = self._extract_search_parameters(params)
             
             # Use the API client's search functionality
             entities = self.api_client.search_entities(search_term, limit=limit)
@@ -116,24 +122,48 @@ class QueryRouter:
             if not entities:
                 return pd.DataFrame()
             
-            # Convert to DataFrame format matching database schema
-            data = []
-            for entity in entities:
-                data.append({
-                    'id': entity.id,
-                    'filepath': entity.filepath,
-                    'filename': entity.filename,
-                    'created_at': entity.created_at,
-                    'file_created_at': entity.file_created_at,
-                    'last_scan_at': entity.last_scan_at,
-                    'file_type_group': entity.file_type_group
-                })
+            return self._convert_entities_to_dataframe(entities)
             
-            return pd.DataFrame(data)
-            
-        except Exception as e:
-            logger.debug(f"Search query execution failed: {e}")
+        except (AttributeError, ConnectionError) as e:
+            logger.debug(f"Search query API error: {e}")
             return None
+        except Exception as e:
+            logger.debug(f"Unexpected search query error: {e}")
+            return None
+    
+    def _extract_search_parameters(self, params: tuple) -> Tuple[str, int]:
+        """Extract search term and limit from query parameters."""
+        search_term = None
+        limit = 100
+        
+        if params:
+            for param in params:
+                if isinstance(param, str) and len(param) > 2:
+                    search_term = param.strip('%')  # Remove SQL wildcards
+                    break
+                elif isinstance(param, int) and param > 0 and param < 1000:
+                    limit = param
+        
+        if not search_term:
+            search_term = "screenshot"  # Default search term
+        
+        return search_term, limit
+    
+    def _convert_entities_to_dataframe(self, entities) -> pd.DataFrame:
+        """Convert API entities to DataFrame format matching database schema."""
+        data = []
+        for entity in entities:
+            data.append({
+                'id': entity.id,
+                'filepath': entity.filepath,
+                'filename': entity.filename,
+                'created_at': entity.created_at,
+                'file_created_at': entity.file_created_at,
+                'last_scan_at': entity.last_scan_at,
+                'file_type_group': entity.file_type_group
+            })
+        
+        return pd.DataFrame(data)
     
     def _execute_entity_listing_query(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
         """Execute entity listing queries using /api/libraries/1/folders/1/entities."""
