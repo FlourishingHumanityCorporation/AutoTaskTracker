@@ -47,6 +47,11 @@ scan-dashboards:
 	python scripts/security/dashboard_security_tester.py --all
 	@echo "✅ Dashboard security test complete"
 
+# Security metrics and monitoring
+security-metrics:
+	@echo "📊 Generating security metrics..."
+	python scripts/security/security_metrics.py
+
 # Health checks
 health-check:
 	@echo "🏥 Running health tests..."
