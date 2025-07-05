@@ -10,5 +10,7 @@ setup(
         "plotly",
         "memos",
         "sentence-transformers",
+        "pydantic>=2.0.0",
+        "pydantic-settings>=2.0.0",
     ],
 )

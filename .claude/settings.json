@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "Edit": true,
+    "Write": true,
+    "Bash(git *)": true,
+    "Bash(pytest *)": true,
+    "Bash(python scripts/*)": true,
+    "Bash(memos *)": true,
+    "Bash(npm *)": false,
+    "Bash(pip install *)": false,
+    "Bash(rm -rf *)": false
+  },
+  "autoCommit": false,
+  "contextManagement": {
+    "autoCompact": true,
+    "maxContextLines": 10000
+  },
+  "projectSpecific": {
+    "healthCheckBeforeCommit": true,
+    "requireTestsForFeatures": true,
+    "conventionalCommits": true
+  }
+}
