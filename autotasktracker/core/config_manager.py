@@ -15,7 +15,8 @@ from datetime import datetime
 import hashlib
 from dataclasses import asdict
 
-from autotasktracker.config import get_config, reset_config, Config
+from autotasktracker.config import get_config, reset_config, AutoTaskSettings
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ConfigManager:
         """Update the environment variables hash for change detection."""
         env_vars = {k: v for k, v in os.environ.items() if k.startswith('AUTOTASK_')}
         env_string = json.dumps(env_vars, sort_keys=True)
-        self.environment_hash = hashlib.md5(env_string.encode()).hexdigest()
+        self.environment_hash = hashlib.md5(env_string.encode(), usedforsecurity=False).hexdigest()
         return self.environment_hash
     
     def add_change_listener(self, callback: Callable[[ConfigChangeEvent], None]):
@@ -221,6 +222,10 @@ class ConfigManager:
     def save_config_snapshot(self, file_path: str) -> bool:
         """Save current configuration as a snapshot."""
         try:
+            # Validate file path before writing
+            file_path = Path(file_path)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
             snapshot = {
                 'timestamp': datetime.now().isoformat(),
                 'config': asdict(self.config),
@@ -230,6 +235,14 @@ class ConfigManager:
                 },
                 'version': 'autotasktracker-1.0'
             }
+            
+            # Ensure parent directory exists
+            file_path = Path(file_path)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Validate we can write to the location
+            if file_path.exists() and not os.access(file_path, os.W_OK):
+                raise PermissionError(f"Cannot write to file: {file_path}")
             
             with open(file_path, 'w') as f:
                 json.dump(snapshot, f, indent=2, default=str)
