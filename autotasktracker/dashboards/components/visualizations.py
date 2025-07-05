@@ -81,7 +81,7 @@ class TimelineChart:
         """Render activity timeline.
         
         Args:
-            activities: List of activity dicts with 'start', 'end', 'task', 'category'
+            activities: List of activity dicts with 'start', 'end', "tasks", 'category'
             title: Chart title
             height: Chart height
             color_by: Field to color by
@@ -101,7 +101,7 @@ class TimelineChart:
             df,
             x_start="start",
             x_end="end",
-            y="task",
+            y="tasks",
             color=color_by,
             title=title,
             height=height

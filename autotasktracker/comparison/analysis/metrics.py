@@ -81,7 +81,7 @@ class ComparisonMetrics:
                 continue
             
             confidences = [r['confidence'] for r in results]
-            tasks = [r['task'] for r in results]
+            tasks = [r["tasks"] for r in results]
             categories = [r['category'] for r in results]
             features = [r['features_used'] for r in results]
             
@@ -101,7 +101,7 @@ class ComparisonMetrics:
             ),
             'diversity_ranking': sorted(
                 pipeline_results.keys(),
-                key=lambda p: len(set(r['task'] for r in pipeline_results[p])) if pipeline_results[p] else 0,
+                key=lambda p: len(set(r["tasks"] for r in pipeline_results[p])) if pipeline_results[p] else 0,
                 reverse=True
             )
         }

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Database infrastructure tests for AutoTaskTracker.
 Tests core database functionality, connection pooling, and data integrity.

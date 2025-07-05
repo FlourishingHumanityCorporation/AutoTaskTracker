@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Performance and resource infrastructure tests for AutoTaskTracker.
 Tests memory usage, CPU performance, and resource limits.

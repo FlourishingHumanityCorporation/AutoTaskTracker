@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """Data display components for dashboards."""
 
 import streamlit as st
@@ -18,6 +21,7 @@ class TaskGroup:
         tasks: List[str],
         category: str,
         timestamp: datetime,
+        end_time: Optional[datetime] = None,
         screenshot_path: Optional[str] = None,
         show_screenshot: bool = True,
         expanded: bool = False
@@ -29,19 +33,37 @@ class TaskGroup:
             duration_minutes: Duration in minutes
             tasks: List of tasks/activities
             category: Task category
-            timestamp: When the task occurred
+            timestamp: When the task started
+            end_time: When the task ended (optional)
             screenshot_path: Optional path to screenshot
             show_screenshot: Whether to show screenshot
             expanded: Whether to expand by default
         """
-        with st.expander(
-            f"**{window_title}** - {int(duration_minutes)} min ({category})",
-            expanded=expanded
-        ):
+        # Format time period display using proper timezone manager
+        from ...core.timezone_manager import get_timezone_manager
+        
+        tz_manager = get_timezone_manager()
+        if end_time:
+            time_period = tz_manager.format_time_period(timestamp, end_time, format_12h=False)
+            confidence_indicator = "🟢" if duration_minutes >= 2 else "🟡" if duration_minutes >= 1 else "🔴"
+        else:
+            time_period = f"[{tz_manager.format_for_display(timestamp)}]"
+            confidence_indicator = "🔴"  # Low confidence without end time
+        
+        # Main header with enhanced format: "Task Name (duration) [time-period] confidence"
+        header = f"**{window_title}** ({duration_minutes:.0f} min) {time_period} {confidence_indicator}"
+        
+        with st.expander(header, expanded=expanded):
             col1, col2 = st.columns([3, 1])
             
             with col1:
-                st.caption(f"🕒 {timestamp.strftime('%I:%M %p')}")
+                # Show category with icon
+                category_display = f"🏷️ {category}"
+                if end_time:
+                    gap_minutes = (end_time - timestamp).total_seconds() / 60
+                    if gap_minutes > duration_minutes * 1.5:
+                        category_display += f" ⚠️ ({gap_minutes - duration_minutes:.0f}min gaps)"
+                st.caption(category_display)
                 
                 if tasks:
                     st.markdown("**Activities:**")

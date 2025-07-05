@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """Headless integration test for CI.
 
 Simulates the presence of a newly captured screenshot by *copying* a sample PNG
@@ -30,7 +33,7 @@ except ImportError:
 SAMPLE_ASSET = Path(__file__).resolve().parent.parent / "assets" / "sample_screenshot.png"
 STREAMLIT_PORT = 8501
 UI_WAIT_S = 20
-DB_PROCESS_WAIT_S = 10
+DB_PROCESS_WAIT_S = 2  # Reduced for performance
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +137,7 @@ def test_pensieve_pipeline_processes_screenshots_in_headless_ci_environment(e2e_
                 break
         except Exception as e:
             last_error = str(e)
-        time.sleep(1)
+        time.sleep(0.5)
     else:
         stdout, stderr = board_proc.communicate() if board_proc.poll() is None else ("", "")
         pytest.fail(f"Streamlit dashboard did not start in time. Last error: {last_error}. "

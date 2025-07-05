@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import logging
+logger = logging.getLogger(__name__)
+
 """Test script to validate refactored dashboard functionality."""
 
 import sys

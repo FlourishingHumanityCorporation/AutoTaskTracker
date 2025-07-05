@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Real database workflow tests that validate actual database operations.
 These tests work with real SQLite databases and test complete data flows.
@@ -219,7 +222,7 @@ class TestRealDatabaseOperations:
             },
             {
                 'entity_id': entity_id,
-                'key': 'ocr_text',
+                'key': "ocr_result",
                 'value': json.dumps([
                     [[[10, 10], [200, 10], [200, 30], [10, 30]], "class TaskExtractor:", 0.95],
                     [[[10, 50], [250, 50], [250, 70], [10, 70]], "def extract_task(self):", 0.92]
@@ -230,7 +233,7 @@ class TestRealDatabaseOperations:
                 'entity_id': entity_id,
                 'key': 'ai_task_classification',
                 'value': json.dumps({
-                    'task': 'Developing task extraction functionality',
+                    "tasks": 'Developing task extraction functionality',
                     'category': 'Development',
                     'confidence': 0.89,
                     'subtasks': ['Writing Python code', 'Class definition', 'Method implementation']
@@ -280,8 +283,8 @@ class TestRealDatabaseOperations:
         assert 'Visual Studio Code' in metadata_by_key['active_window']['value'], "Should store window title"
         
         # Validate OCR data
-        assert 'ocr_text' in metadata_by_key, "Should have OCR metadata"
-        ocr_data = json.loads(metadata_by_key['ocr_text']['value'])
+        assert "ocr_result" in metadata_by_key, "Should have OCR metadata"
+        ocr_data = json.loads(metadata_by_key["ocr_result"]['value'])
         assert isinstance(ocr_data, list), "OCR data should be a list"
         assert len(ocr_data) == 2, "Should have 2 OCR text regions"
         assert 'TaskExtractor' in ocr_data[0][1], "Should contain class name"
@@ -289,7 +292,7 @@ class TestRealDatabaseOperations:
         # Validate AI classification
         assert 'ai_task_classification' in metadata_by_key, "Should have AI classification"
         ai_data = json.loads(metadata_by_key['ai_task_classification']['value'])
-        assert ai_data['task'] is not None, "Should have task description"
+        assert ai_data["tasks"] is not None, "Should have task description"
         assert ai_data['category'] == 'Development', "Should classify as Development"
         assert 0 <= ai_data['confidence'] <= 1, "Should have valid confidence"
         
@@ -328,21 +331,21 @@ class TestRealDatabaseOperations:
         metadata_data = [
             # Entity 1 - Coding session
             (1, 'active_window', 'main.py - PyCharm', '2024-01-01 09:00:01'),
-            (1, 'window_title', 'main.py - PyCharm', '2024-01-01 09:00:01'),
+            (1, "active_window", 'main.py - PyCharm', '2024-01-01 09:00:01'),
             (1, 'category', 'Development', '2024-01-01 09:00:02'),
             (1, 'tasks', 'Python development in PyCharm', '2024-01-01 09:00:02'),
             (1, 'text', 'class Calculator: def __init__(self):', '2024-01-01 09:00:03'),
             
             # Entity 2 - Meeting
             (2, 'active_window', 'Zoom Meeting', '2024-01-01 10:00:01'),
-            (2, 'window_title', 'Zoom Meeting', '2024-01-01 10:00:01'),
+            (2, "active_window", 'Zoom Meeting', '2024-01-01 10:00:01'),
             (2, 'category', 'Communication', '2024-01-01 10:00:02'),
             (2, 'tasks', 'Video conference meeting', '2024-01-01 10:00:02'),
             (2, 'text', 'Team Meeting Weekly Standup', '2024-01-01 10:00:03'),
             
             # Entity 3 - Research
             (3, 'active_window', 'Documentation - Chrome', '2024-01-01 11:00:01'),
-            (3, 'window_title', 'Documentation - Chrome', '2024-01-01 11:00:01'),
+            (3, "active_window", 'Documentation - Chrome', '2024-01-01 11:00:01'),
             (3, 'category', 'Research', '2024-01-01 11:00:02'),
             (3, 'tasks', 'Reading technical documentation', '2024-01-01 11:00:02'),
             (3, 'text', 'asyncio documentation Python async programming', '2024-01-01 11:00:03'),
@@ -408,7 +411,7 @@ class TestRealDatabaseOperations:
                 INSERT INTO metadata_entries (entity_id, key, value, created_at)
                 VALUES (?, ?, ?, ?)
             """, (entity_id, 'ai_task_classification', json.dumps({
-                'task': f'{category} activity {i}',
+                "tasks": f'{category} activity {i}',
                 'category': category,
                 'confidence': 0.8 + (i % 20) * 0.01  # Varying confidence
             }), timestamp.isoformat() + 'Z'))

@@ -188,7 +188,7 @@ class QueryCache:
         LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
         LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
         LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
-        LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = 'window_title'
+        LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = "active_window"
         WHERE e.created_at >= ? AND e.created_at <= ?
         ORDER BY e.created_at DESC
         LIMIT ?

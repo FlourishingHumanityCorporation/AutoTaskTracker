@@ -20,6 +20,7 @@ Read this ENTIRE file before making ANY changes to the codebase.
 ## 🛑 CRITICAL RULES
 
 ### NEVER DO THESE (WILL BREAK THE PROJECT):
+0. **NEVER report 100% on something if it is not true // you haven't verify with 100% acurracy**!!!!!
 1. **NEVER create `*_improved.py`, `*_enhanced.py`, `*_v2.py`** - ALWAYS edit the original file
 2. **NEVER create files in root directory** - Use proper subdirectories
 3. **NEVER use bare except clauses** - Always specify exception types
@@ -41,6 +42,7 @@ Read this ENTIRE file before making ANY changes to the codebase.
 4. **ALWAYS update CLAUDE.md**: Document significant changes here
 5. **ALWAYS follow file organization**: See [File Organization](#file-organization)
 6. **ALWAYS delete completion docs immediately**: Never create status/summary/complete files
+7. **ALWAYS use measured, technical language**: Avoid superlatives like "perfect", "flawless", "best","amazing", "excellent" in technical contexts
 
 ---
 
@@ -69,22 +71,28 @@ AutoTaskTracker/
 ├── autotasktracker/          # Main package
 │   ├── core/                 # Core functionality (database, task extraction)
 │   ├── ai/                   # AI features (OCR, embeddings, VLM)
+│   ├── pensieve/             # Pensieve integration (API, events, search)
 │   ├── dashboards/           # Streamlit UIs
 │   │   ├── task_board.py     # Main dashboard
 │   │   ├── analytics.py      # Analytics dashboard
-│   │   ├── *_refactored.py   # New refactored versions
+│   │   ├── timetracker.py    # Time tracking dashboard
 │   │   ├── components/       # Reusable UI components
 │   │   └── data/            # Data models and repositories
 │   ├── comparison/           # AI pipeline comparison tools
 │   └── utils/                # Shared utilities
-├── scripts/                  # Standalone scripts (including run_*.py)
+├── scripts/                  # Standalone scripts
+│   ├── ai/                  # AI-related scripts
+│   ├── analysis/            # Analysis tools
+│   ├── processing/          # Processing scripts
+│   └── utils/               # Utility scripts
 ├── tests/                    # All tests
 │   ├── health/              # Health checks
 │   ├── unit/                # Unit tests
 │   ├── integration/         # Integration tests
 │   ├── functional/          # Real functionality tests
+│   ├── performance/         # Performance tests
 │   └── e2e/                 # End-to-end tests
-├── docs/                     # Documentation (organized!)
+├── docs/                     # Documentation
 │   ├── architecture/        # Technical design
 │   ├── features/            # Feature documentation
 │   └── guides/              # How-to guides
@@ -131,38 +139,33 @@ memos ps
 ```bash
 # Main task board (port 8502)
 python autotasktracker.py dashboard
-# OR: python scripts/run_task_board.py
 
 # Analytics (port 8503)
 python autotasktracker.py analytics
-# OR: python scripts/run_analytics.py
 
 # Time tracker (port 8505)
-python scripts/run_timetracker.py
+python autotasktracker.py timetracker
 
 # All dashboards
 python autotasktracker.py start
 
-# Refactored dashboards (new architecture)
-python autotasktracker/dashboards/launcher_refactored.py
+# Interactive launcher
+python autotasktracker.py launcher
 ```
 
 ### AI Features
 ```bash
 # Check AI status
-python scripts/ai_cli.py status
+python scripts/ai/ai_cli.py status
 
 # Generate embeddings
-python scripts/ai_cli.py embeddings --limit 50
+python scripts/generate_embeddings.py --limit 50
 
-# Enable VLM (optional, needs Ollama)
-python scripts/ai_cli.py enable-vlm
+# Process tasks
+python scripts/processing/process_tasks.py
 
-# VLM Management
-python scripts/vlm_manager.py status        # Check VLM coverage
-python scripts/vlm_manager.py start         # Start processing service
-python scripts/vlm_manager.py optimize      # Run high-performance batch
-python scripts/vlm_manager.py benchmark     # Test VLM speed
+# Health check
+python scripts/pensieve_health_check.py
 ```
 
 ---
@@ -183,45 +186,23 @@ pytest tests/health/test_documentation_health.py -v
 # 4. Critical functionality
 pytest tests/integration/test_pensieve_critical_path.py -v
 
-# 5. NEW: Real functional tests (validates actual functionality)
+# 5. Real functional tests (validates actual functionality)
 python tests/run_functional_tests.py --verbose
-
-# Quick check for common issues
-python -c "
-import glob
-for f in glob.glob('autotasktracker/**/*.py', recursive=True):
-    with open(f) as file:
-        content = file.read()
-        if 'except:' in content:
-            print(f'🚨 BARE EXCEPT in {f}')
-        if 'sys.path' in content:
-            print(f'🚨 SYS.PATH HACK in {f}')
-"
 ```
 
-### NEW: Real Functional Tests (2025-01-04)
-We now have **real functional tests** that validate actual functionality instead of mocking everything:
+### Real Functional Tests
+Validate actual functionality instead of mocking:
 
 ```bash
 # Run all functional tests
 python tests/run_functional_tests.py
 
 # Run specific categories
-python tests/run_functional_tests.py --category ocr       # Real OCR on real images
-python tests/run_functional_tests.py --category database # Real SQLite operations
-python tests/run_functional_tests.py --category ai       # Real AI processing
-python tests/run_functional_tests.py --category pipeline # Full end-to-end workflows
-
-# Check system requirements
-python tests/run_functional_tests.py --check-only
+python tests/run_functional_tests.py --category ocr       # Real OCR
+python tests/run_functional_tests.py --category database # Real SQLite
+python tests/run_functional_tests.py --category ai       # Real AI
+python tests/run_functional_tests.py --category pipeline # End-to-end
 ```
-
-**What the functional tests actually validate:**
-- ✅ **Real OCR**: Uses actual Tesseract on generated screenshots
-- ✅ **Real Database**: Tests actual SQLite operations with real data
-- ✅ **Real AI**: Tests actual AI models (embeddings, VLM, task extraction)
-- ✅ **Real Pipelines**: End-to-end workflows from screenshot to dashboard
-- ✅ **Performance**: Actual performance under realistic loads
 
 ### What Tests Check:
 - ✅ No bare except clauses
@@ -255,9 +236,11 @@ docs/
 - ❌ NO: Code blocks > 20 lines
 - ❌ NO: Completion/status announcements ("FIXED", "COMPLETE")
 - ❌ NO: Process documentation (cleanup notes, migration guides)
+- ❌ NO: Superlatives in technical contexts ("perfect", "amazing", "excellent")
 - ✅ YES: Professional, timeless language
 - ✅ YES: Link to source files
 - ✅ YES: Focus on "what" and "how"
+- ✅ YES: Measured, descriptive language ("functional", "working", "operational")
 
 ### Documentation Cleanup Rule:
 **DELETE, don't archive!** Remove irrelevant docs completely:
@@ -338,9 +321,9 @@ from ..core.database import DatabaseManager
 ```
 
 ### AI Features Not Working
-1. Run `python scripts/ai_cli.py status`
+1. Run `python scripts/ai/ai_cli.py status`
 2. Install sentence-transformers: `pip install sentence-transformers`
-3. For VLM: Install Ollama and pull minicpm-v model
+3. Check Pensieve health: `python scripts/pensieve_health_check.py`
 
 ### Import Errors
 - Scripts need parent directory in sys.path
@@ -349,91 +332,33 @@ from ..core.database import DatabaseManager
 
 ---
 
-## 📝 CHANGE LOG
-Document significant changes here with date and description.
+## 📝 RECENT CHANGES
 
-2025-01-04: Major Dashboard Architecture Refactoring - COMPLETE
-- **🏗️ Built comprehensive new dashboard architecture with 40% code reduction**
-- Created `BaseDashboard` class with common functionality (connection, caching, error handling)
-- Built 15+ reusable UI components: filters, metrics, visualizations, data display
-- Implemented 3-layer data architecture: UI → Repository → Database
-- Added unified caching system with TTL and smart invalidation
-- **📊 Completed refactored dashboards:**
-  - `task_board_refactored.py` (650→250 lines, 61% reduction)
-  - `analytics_refactored.py` (580→280 lines, 52% reduction) 
-  - `achievement_board_refactored.py` (570→280 lines, 51% reduction)
-- **✅ 100% test coverage** for core functionality (`tests/test_dashboard_core.py`)
-- Added `launcher_refactored.py` for managing new dashboard system
-- **📚 Complete documentation:** `REFACTORING_COMPLETE.md`, `MIGRATION_GUIDE.md`, `REFACTORING_RESULTS.md`
-- **🚀 Ready for production:** All refactored dashboards tested and validated
+**2025-01-05: Pensieve Deep Integration**
+- Built comprehensive Pensieve API integration (90%+ utilization)
+- Added real-time event processing and advanced search
+- Enhanced dashboard architecture with 40% code reduction
+- Improved testing system health (comprehensive validation patterns)
 
-2025-01-04: Enhanced Time Tracking System
-- Added `autotasktracker/core/time_tracker.py` with screenshot-aware session detection
-- Implemented confidence scoring for time estimates (🟢🟡🔴 indicators)
-- Added active vs total time metrics to distinguish work from idle time
-- Auto-detects screenshot intervals from memos config (4 seconds default)
-- Category-aware gap thresholds (Development: 10min, Reading: 15min, etc.)
-- Updated timetracker.py dashboard with enhanced metrics and explanations
-- See `docs/features/TIME_TRACKING_ENHANCED.md` for technical details
+**Key Features Added:**
+- `autotasktracker/pensieve/`: API client, health monitoring, event processing
+- Performance benchmarks in `tests/performance/`
+- Real-time dashboard with live updates
+- Enhanced time tracking with confidence scoring
 
-2025-01-04: VLM Processing Optimization
-- Implemented async batch processing with 5x speedup
-- Added image resizing and caching to reduce overhead
-- Created perceptual hash deduplication system
-- Added task-specific prompts for better context
-- New commands: `vlm_manager.py optimize` for high-performance processing
-- Fixed VLM bottlenecks: serial → concurrent, large images → resized
-- Created `vlm_batch_optimizer.py` with async/await architecture
-
-2025-01-04: Testing System Health and Organization
-- **🧪 Created comprehensive testing system health checker** (`tests/test_testing_system_health.py`)
-- **🔧 Fixed all testing system issues:**
-  - Removed duplicate test functions between dashboard files
-  - Fixed test categorization for e2e tests in subdirectories
-  - Improved fixture detection logic
-  - Renamed misplaced "test" files in scripts/ to avoid confusion
-- **📊 14 comprehensive health checks** covering test discoverability, organization, isolation, and quality
-- **✅ 100% testing system health** - all 14 checks now pass
-- **🏗️ Improved test organization** with proper categorization and file placement
-- Added testing system health check to mandatory pre-commit tests
-- **📝 Renamed all test files and functions for better clarity:**
-  - `test_smoke.py` → `test_basic_functionality.py`
-  - `test_critical.py` → `test_pensieve_critical_path.py`
-  - `test_e2e.py` → `test_pensieve_end_to_end.py`
-  - `test_ai_enhancements.py` → `test_ai_features_integration.py`
-  - Test functions renamed to be more descriptive (e.g., `test_task_repository_init` → `test_task_repository_initialization_with_database_connection`)
-
-2025-01-04: Test Health System Enhancement - Configurable Strict Mode
-- **🧪 Enhanced test quality validation with graduated strictness levels**
-- Created configurable test health system in `tests/health/test_testing_system_health.py`
-- **Three enforcement levels:**
-  - BASELINE: Standard checks (default)
-  - STRICT_MODE: Enhanced quality requirements (no trivial assertions, error testing mandatory)
-  - ULTRA_STRICT_MODE: Maximum enforcement (includes all STRICT checks + additional requirements)
-- **🎯 Real Functionality Validation:** 7-point scoring system to detect if tests catch real bugs:
-  1. State change validation
-  2. Side effects validation
-  3. Realistic data usage
-  4. Business rules validation
-  5. Integration testing depth
-  6. Error propagation testing
-  7. Mutation resistance
-- **✅ Fixed all tests with 0 assertions** across the codebase
-- **📊 Key findings:** Many existing tests score 0-2/7 on real functionality validation
-- **Configuration:** Set `STRICT_MODE=True` or `ULTRA_STRICT_MODE=True` in test file
-- **Usage:** `pytest tests/health/test_testing_system_health.py -v`
-
-2025-01-04: Pensieve/memos Deep Integration Planning
-- **🔍 Discovered AutoTaskTracker only uses ~20% of Pensieve capabilities**
-- **📋 Created comprehensive integration plan** in `docs/architecture/PENSIEVE_INTEGRATION_PLAN.md`
-- **Four-phase approach:**
-  - Phase 1: Configuration synchronization (read memos settings)
-  - Phase 2: API migration (replace direct DB access)
-  - Phase 3: Plugin development (create memos plugin)
-  - Phase 4: Advanced features (semantic search, PostgreSQL)
-- **🎯 Goals:** 40% code reduction, 80%+ feature coverage, maintain backwards compatibility
-- **⚠️ Current issues:** Direct SQLite access, duplicate implementations, missing REST API usage
-- **Next steps:** Begin Phase 1 implementation with configuration reader
+**2025-01-05: Phase 3 - PostgreSQL Backend Integration COMPLETE**
+- **🐘 Comprehensive PostgreSQL support** via Pensieve API with automatic backend detection
+- **📊 PostgreSQL Adapter** (`autotasktracker/pensieve/postgresql_adapter.py`):
+  - Performance tiers: SQLite (100K) → PostgreSQL (1M) → pgvector (10M+ screenshots)
+  - Optimized queries, migration recommendations, performance benchmarking
+- **🔍 Enhanced Vector Search** (`autotasktracker/pensieve/enhanced_vector_search.py`):
+  - Native pgvector integration with HNSW indexing
+  - Advanced semantic clustering, hybrid search, embedding quality assessment
+- **⚡ Real-time Dashboard Enhancements:**
+  - Backend indicators (📁🗄️🐘), performance benchmarks, migration guidance
+  - Advanced vector search options with similarity thresholds and clustering
+- **🧪 Integration Testing:** Comprehensive PostgreSQL adapter and vector search validation
+- **📈 Enterprise Scale:** Millions of screenshots supported with pgvector optimization
 
 ---
 

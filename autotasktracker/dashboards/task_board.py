@@ -1,428 +1,403 @@
-"""
-Streamlit dashboard for AutoTaskTracker - Task Board view.
+"""Refactored Task Board Dashboard using new architecture.
+
+This is an example of how to refactor existing dashboards to use:
+- Base dashboard class
+- Reusable components
+- Data repositories
+- Cleaner separation of concerns
 """
 
 import streamlit as st
-import pandas as pd
-import os
-import logging
-from PIL import Image
 from datetime import datetime, timedelta
-import json
+import logging
 
-# Import from our package structure
-from autotasktracker import (
-    DatabaseManager, 
-    ActivityCategorizer, 
-    extract_task_summary,
-    extract_window_title,
-    Config, 
-    get_config
+# Removed sys.path hack - using proper package imports
+
+from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.utils.debug_capture import get_debug_capture, capture_event
+from autotasktracker.dashboards.components import (
+    TimeFilterComponent, 
+    CategoryFilterComponent,
+    MetricsRow,
+    TaskGroup as TaskGroupComponent,
+    NoDataMessage
 )
+from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 
-# Import AI features
-try:
-    from autotasktracker.ai.ai_task_extractor import AIEnhancedTaskExtractor
-    from autotasktracker.ai.embeddings_search import EmbeddingsSearchEngine
-    AI_FEATURES_AVAILABLE = True
-except ImportError as e:
-    AI_FEATURES_AVAILABLE = False
-    logging.info(f"AI features not available: {e}")
+logger = logging.getLogger(__name__)
 
 
-# Initialize configuration
-config = get_config()
-
-
-def init_session_state():
-    """Initialize session state variables."""
-    if 'time_filter' not in st.session_state:
-        st.session_state.time_filter = "Today"
-    if 'show_screenshots' not in st.session_state:
-        st.session_state.show_screenshots = config.SHOW_SCREENSHOTS
-    if 'group_interval' not in st.session_state:
-        st.session_state.group_interval = config.GROUP_INTERVAL_MINUTES
-    if 'use_ai_features' not in st.session_state:
-        st.session_state.use_ai_features = AI_FEATURES_AVAILABLE
-    if 'show_similar_tasks' not in st.session_state:
-        st.session_state.show_similar_tasks = False
-
-
-def group_tasks_by_time(df: pd.DataFrame, interval_minutes: int = None) -> list:
-    """Group similar tasks that occur within a time interval."""
-    if interval_minutes is None:
-        interval_minutes = st.session_state.get('group_interval', config.GROUP_INTERVAL_MINUTES)
+class TaskBoardDashboard(BaseDashboard):
+    """Refactored Task Board dashboard."""
     
-    if df.empty:
-        return []
-    
-    df['created_at'] = pd.to_datetime(df['created_at'])
-    df = df.sort_values('created_at')
-    
-    groups = []
-    current_group = []
-    current_task = None
-    current_category = None
-    
-    for idx, row in df.iterrows():
-        # Extract task and category for current row
-        task_title = extract_task_summary(row['ocr_text'], row['active_window'])
-        window_title = extract_window_title(row['active_window'])
-        category = ActivityCategorizer.categorize(window_title, row['ocr_text'])
-        
-        if not current_group:
-            current_group.append(row)
-            current_task = task_title
-            current_category = category
-        else:
-            time_diff = (row['created_at'] - current_group[-1]['created_at']).total_seconds() / 60
-            
-            # More intelligent grouping - same app/project should group together
-            same_context = False
-            if time_diff <= interval_minutes:
-                # Check if it's the same category
-                if category == current_category:
-                    same_context = True
-                # Also group if it's the same project/file (check for common words)
-                elif current_task and task_title:
-                    # Extract meaningful words from both tasks
-                    current_words = set(word for word in current_task.lower().split() if len(word) > 4)
-                    new_words = set(word for word in task_title.lower().split() if len(word) > 4)
-                    # If they share significant words, group them
-                    if current_words and new_words and len(current_words & new_words) > 0:
-                        same_context = True
-            
-            if same_context:
-                current_group.append(row)
-            else:
-                groups.append(current_group)
-                current_group = [row]
-                current_task = task_title
-                current_category = category
-    
-    if current_group:
-        groups.append(current_group)
-    
-    return groups
-
-
-def display_task_group(group: list, group_idx: int, ai_extractor=None, show_similar=False):
-    """Display a group of related tasks."""
-    if not group:
-        return
-    
-    # Get the primary task for this group
-    primary_row = group[0]
-    window_title = extract_window_title(primary_row['active_window'])
-    
-    # Use AI extraction if available
-    if ai_extractor and AI_FEATURES_AVAILABLE:
-        enhanced_task = ai_extractor.extract_enhanced_task(
-            window_title=primary_row.get('active_window'),
-            ocr_text=primary_row.get('ocr_text'),
-            vlm_description=primary_row.get('vlm_description'),
-            entity_id=primary_row.get('id')
+    def __init__(self):
+        super().__init__(
+            title="Task Board - AutoTaskTracker",
+            icon="📋",
+            port=8502
         )
-        task_title = enhanced_task['task']
-        category = enhanced_task['category']
-        ai_confidence = enhanced_task['confidence']
-        ai_features = enhanced_task.get('ai_features', {})
-    else:
-        task_title = extract_task_summary(primary_row['ocr_text'], primary_row['active_window'])
-        category = ActivityCategorizer.categorize(window_title, primary_row['ocr_text'])
-        ai_confidence = None
-        ai_features = {}
-    
-    with st.container():
-        col1, col2 = st.columns([3, 1])
         
-        with col1:
-            # Task title with AI confidence indicator
-            title_parts = [f"{category} | {task_title}"]
-            if ai_confidence is not None:
-                confidence_emoji = "🎯" if ai_confidence >= 0.8 else "🔍" if ai_confidence >= 0.6 else "❓"
-                title_parts.append(f"{confidence_emoji} {ai_confidence:.0%}")
+    def init_session_state(self):
+        """Initialize dashboard-specific session state with smart defaults."""
+        super().init_session_state()
+        
+        # Task board specific state with smart defaults
+        if 'group_by' not in st.session_state:
+            st.session_state.group_by = 'window'
+        if 'show_screenshots' not in st.session_state:
+            st.session_state.show_screenshots = True
+        if 'min_duration' not in st.session_state:
+            st.session_state.min_duration = 1
             
-            st.subheader(" ".join(title_parts))
+        # Initialize smart time filter if not set
+        if 'time_filter' not in st.session_state:
+            from .components.filters import TimeFilterComponent
+            st.session_state.time_filter = TimeFilterComponent.get_smart_default(self.db_manager)
             
-            # Time information
-            start_time = pd.to_datetime(group[0]['created_at'])
-            end_time = pd.to_datetime(group[-1]['created_at'])
-            duration = (end_time - start_time).total_seconds() / 60
+        # Initialize category filter to empty (all categories) if not set
+        if 'category_filter' not in st.session_state:
+            st.session_state.category_filter = []  # Empty = all categories
             
-            time_info = []
-            if duration > 1:
-                time_info.append(f"⏱️ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({duration:.0f} minutes, {len(group)} screenshots)")
-            else:
-                time_info.append(f"⏱️ {start_time.strftime('%H:%M:%S')}")
+    def render_sidebar(self):
+        """Render sidebar controls."""
+        with st.sidebar:
+            st.header("⚙️ Task Board Settings")
             
-            # Add AI feature indicators
-            if ai_features:
-                ai_indicators = []
-                if ai_features.get('ocr_quality') in ['excellent', 'good']:
-                    ai_indicators.append(f"📝 OCR: {ai_features['ocr_quality']}")
-                if ai_features.get('vlm_available'):
-                    ai_indicators.append("👁️ Visual")
-                if ai_features.get('embeddings_available'):
-                    ai_indicators.append("🧠 Similar")
-                if ai_indicators:
-                    time_info.append(" | ".join(ai_indicators))
+            # Time filter with smart defaults
+            time_filter = TimeFilterComponent.render(db_manager=self.db_manager)
             
-            st.caption(" | ".join(time_info))
+            # Smart default button
+            if st.button("🎯 Smart Default", help="Reset to optimal time period based on your data"):
+                smart_default = TimeFilterComponent.get_smart_default(self.db_manager)
+                st.session_state.time_filter = smart_default
+                st.rerun()
             
-            # Display VLM insights if available
-            if enhanced_task.get('visual_context') or enhanced_task.get('ui_state'):
-                with st.expander("👁️ Visual Insights", expanded=False):
-                    if enhanced_task.get('visual_context'):
-                        st.write(f"**Visual Context**: {enhanced_task['visual_context']}")
-                    if enhanced_task.get('ui_state'):
-                        st.write(f"**UI State**: {enhanced_task['ui_state']}")
-                    if enhanced_task.get('subtasks'):
-                        st.write("**Detected Subtasks**:")
-                        for subtask in enhanced_task['subtasks'][:3]:
-                            st.write(f"  • {subtask}")
+            # Category filter (fixed logic)
+            categories = CategoryFilterComponent.render(multiselect=True)
             
-            # Extract and show subtasks from group
-            subtasks = []
-            seen_tasks = {task_title}
+            # Display options
+            st.subheader("Display Options")
+            show_screenshots = st.checkbox(
+                "Show Screenshots",
+                value=st.session_state.show_screenshots,
+                key="show_screenshots"
+            )
             
-            # Try to get task extractor for advanced subtask extraction
-            try:
-                from autotasktracker.core.task_extractor import get_task_extractor
-                extractor = get_task_extractor()
+            min_duration = st.slider(
+                "Minimum Duration (minutes)",
+                min_value=1,
+                max_value=30,
+                value=st.session_state.min_duration,
+                key="min_duration"
+            )
+            
+            # Auto refresh
+            st.subheader("Auto Refresh")
+            auto_refresh = st.checkbox("Enable (5 min)", value=True)
+            if auto_refresh:
+                self.add_auto_refresh(300)
+            
+            # Export functionality
+            st.subheader("📥 Export Data")
+            if st.button("Export to CSV", help="Export current task data as CSV for reporting"):
+                # This will be handled in the main run method
+                st.session_state.export_csv = True
+            
+            # Debug capture controls
+            st.subheader("🐛 Debug Capture")
+            debug_capture = get_debug_capture()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📸 Capture Now", help="Capture current dashboard state"):
+                    path = debug_capture.capture_browser_window()
+                    if path:
+                        st.success(f"Screenshot saved!")
+                    else:
+                        st.error("Capture failed")
+            
+            with col2:
+                if st.button("📊 Session Info", help="Show debug session information"):
+                    summary = debug_capture.get_session_summary()
+                    st.json(summary)
                 
-                for row in group[1:]:  # Skip first as it's the primary
-                    # Get task for this row
-                    row_task = extract_task_summary(row['ocr_text'], row['active_window'])
-                    if row_task and row_task not in seen_tasks:
-                        seen_tasks.add(row_task)
-                        subtasks.append(row_task)
-                    
-                    # Extract actions from OCR
-                    if row['ocr_text']:
-                        ocr_subtasks = extractor.extract_subtasks_from_ocr(row['ocr_text'])
-                        for subtask in ocr_subtasks:
-                            if subtask not in seen_tasks:
-                                seen_tasks.add(subtask)
-                                subtasks.append(subtask)
-            except ImportError:
-                # Fallback to basic subtask extraction
-                for row in group[1:]:
-                    row_task = extract_task_summary(row['ocr_text'], row['active_window'])
-                    if row_task and row_task not in seen_tasks and row_task != task_title:
-                        seen_tasks.add(row_task)
-                        subtasks.append(row_task)
+            return time_filter, categories, show_screenshots, min_duration
             
-            # Display subtasks if any
-            if subtasks:
-                st.markdown("**Also worked on:**")
-                for subtask in subtasks[:5]:  # Show max 5 subtasks
-                    st.markdown(f"• {subtask}")
-            
-            # Show similar tasks if AI features are enabled
-            if show_similar and ai_extractor and primary_row.get('id') and AI_FEATURES_AVAILABLE:
-                try:
-                    similar_tasks = enhanced_task.get('similar_tasks', [])
-                    if similar_tasks:
-                        with st.expander(f"🔗 Similar tasks ({len(similar_tasks)})"):
-                            for similar in similar_tasks[:3]:
-                                similarity_pct = similar['similarity'] * 100
-                                st.write(f"• {similar['task']} (*{similarity_pct:.0f}% similar, {similar['time']}*)")
-                except Exception as e:
-                    st.caption(f"Could not load similar tasks: {e}")
-            
-            # Show OCR text preview in expander
-            if primary_row['ocr_text']:
-                with st.expander("📝 View captured text"):
-                    try:
-                        # Parse OCR JSON and display readable text
-                        ocr_data = json.loads(primary_row['ocr_text']) if isinstance(primary_row['ocr_text'], str) else primary_row['ocr_text']
-                        if isinstance(ocr_data, list):
-                            readable_texts = []
-                            for item in ocr_data[:20]:  # First 20 items
-                                if isinstance(item, list) and len(item) >= 2:
-                                    text_data = item[1]
-                                    if isinstance(text_data, tuple) and len(text_data) >= 2:
-                                        text_content = text_data[0].strip()
-                                        if text_content:
-                                            readable_texts.append(text_content)
-                            
-                            if readable_texts:
-                                st.text('\n'.join(readable_texts))
-                            else:
-                                st.text("No readable text found")
-                        else:
-                            st.text(str(primary_row['ocr_text'])[:500])
-                    except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
-                        st.text(str(primary_row['ocr_text'])[:500])
+    def render_metrics(self, metrics_repo: MetricsRepository, start_date: datetime, end_date: datetime):
+        """Render metrics section."""
+        # Get summary metrics
+        summary = metrics_repo.get_metrics_summary(start_date, end_date)
         
-        with col2:
-            # Show screenshot thumbnail if enabled
-            if st.session_state.show_screenshots and primary_row['filepath']:
-                try:
-                    img_path = primary_row['filepath']
-                    if os.path.exists(img_path):
-                        img = Image.open(img_path)
-                        # Create thumbnail
-                        img.thumbnail((config.MAX_SCREENSHOT_SIZE, config.MAX_SCREENSHOT_SIZE))
-                        st.image(img, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Could not load image: {e}")
+        # Display metrics
+        MetricsRow.render({
+            "📊 Total Activities": summary['total_activities'],
+            "📅 Active Days": summary['active_days'],
+            "🪟 Unique Windows": summary['unique_windows'],
+            "🏷️ Categories": summary['unique_categories']
+        })
         
-        st.divider()
+        # Daily average
+        if summary['active_days'] > 0:
+            st.metric(
+                "Daily Average",
+                f"{summary['avg_daily_activities']:.0f} activities",
+                help="Average number of activities per active day"
+            )
+            
+    def export_task_data_to_csv(
+        self, 
+        task_groups: list,
+        start_date: datetime,
+        end_date: datetime
+    ) -> str:
+        """Export task data to CSV format for professional reporting.
+        
+        Returns:
+            CSV content as string
+        """
+        import io
+        import csv
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header row matching user story example
+        writer.writerow([
+            'Date',
+            'Task Group', 
+            'Duration',
+            'Start Time',
+            'End Time',
+            'Category',
+            'Description',
+            'Activities',
+            'Confidence'
+        ])
+        
+        for group in task_groups:
+            # Format data for CSV
+            date = group.start_time.strftime('%Y-%m-%d')
+            task_name = group.window_title
+            duration = f"{group.duration_minutes:.0f}min"
+            start_time = group.start_time.strftime('%H:%M')
+            end_time = group.end_time.strftime('%H:%M')
+            category = group.category
+            
+            # Create description from task activities
+            activities = [task.title for task in group.tasks[:3]]  # First 3 activities
+            description = '; '.join(activities) if activities else task_name
+            activity_count = len(group.tasks)
+            
+            # Confidence indicator
+            confidence = 'High' if group.duration_minutes >= 2 else 'Medium' if group.duration_minutes >= 1 else 'Low'
+            
+            writer.writerow([
+                date,
+                task_name,
+                duration,
+                start_time,
+                end_time,
+                category,
+                description,
+                activity_count,
+                confidence
+            ])
+        
+        return output.getvalue()
 
-
-def main():
-    """Main dashboard function."""
-    # Page config
-    st.set_page_config(
-        layout="wide", 
-        page_title="My AI Task Board", 
-        page_icon="✅"
-    )
-    
-    # Initialize session state
-    init_session_state()
-    
-    # Auto-refresh
-    st_autorefresh = st.empty()
-    with st_autorefresh.container():
-        st.markdown(
-            f'<meta http-equiv="refresh" content="{config.AUTO_REFRESH_SECONDS}">',
-            unsafe_allow_html=True
-        )
-    
-    # Header with live indicator
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.title("✅ My AI-Powered Daily Task Board")
-        st.write("A passive and engaging look at what you've accomplished today.")
-    with col2:
-        st.markdown("<div style='text-align: right; padding-top: 20px;'>🟢 <b>LIVE</b></div>", unsafe_allow_html=True)
-        st.caption(f"Last update: {datetime.now().strftime('%H:%M:%S')}")
-    
-    # Sidebar controls
-    st.sidebar.header("🎛️ Controls")
-    
-    # Database connection and status
-    db_manager = DatabaseManager(config.DB_PATH)
-    if db_manager.test_connection():
-        today_count = db_manager.get_screenshot_count()
-        st.sidebar.info(f"📸 {today_count} screenshots today")
-    else:
-        st.sidebar.error("❌ Database connection failed")
-        st.error("Cannot connect to database. Is Memos running? Start with: memos start")
-        return
-    
-    # Time filter
-    time_filter = st.sidebar.selectbox(
-        "Time Range",
-        ["Last 15 Minutes", "Last Hour", "Today", "Last 24 Hours", "Last 7 Days", "All Time"],
-        index=2,
-        key='time_filter'
-    )
-    
-    # Show screenshots toggle
-    st.session_state.show_screenshots = st.sidebar.checkbox(
-        "Show Screenshots", 
-        value=st.session_state.show_screenshots,
-        help="Toggle screenshot thumbnails for faster loading"
-    )
-    
-    # Group interval slider
-    st.session_state.group_interval = st.sidebar.slider(
-        "Group Similar Tasks (minutes)",
-        min_value=1,
-        max_value=30,
-        value=st.session_state.group_interval,
-        help="Group activities within this time window"
-    )
-    
-    # AI Features section
-    if AI_FEATURES_AVAILABLE:
-        st.sidebar.subheader("🤖 AI Features")
-        st.session_state.use_ai_features = st.sidebar.checkbox(
-            "Enable AI Insights",
-            value=st.session_state.use_ai_features,
-            help="Use AI to enhance task detection and provide insights"
+    def render_task_groups(
+        self, 
+        task_repo: TaskRepository,
+        start_date: datetime,
+        end_date: datetime,
+        categories: list,
+        show_screenshots: bool,
+        min_duration: int
+    ):
+        """Render task groups."""
+        # Get grouped tasks
+        task_groups = task_repo.get_task_groups(
+            start_date=start_date,
+            end_date=end_date,
+            min_duration_minutes=min_duration
         )
         
-        if st.session_state.use_ai_features:
-            st.session_state.show_similar_tasks = st.sidebar.checkbox(
-                "Show Similar Tasks",
-                value=st.session_state.show_similar_tasks,
-                help="Find and display semantically similar tasks"
+        # Filter by categories if specified (empty list means all categories)
+        if categories:  # If specific categories selected
+            task_groups = [
+                group for group in task_groups 
+                if group.category in categories
+            ]
+            
+        if not task_groups:
+            # Check if this is a data availability issue or filter issue
+            total_tasks = task_repo.get_task_groups(
+                start_date=start_date - timedelta(days=30),  # Check last 30 days
+                end_date=end_date,
+                min_duration_minutes=0  # No duration filter
             )
-    else:
-        st.sidebar.info("💡 Install AI dependencies for enhanced features")
-    
-    # Initialize AI extractor if available
-    ai_extractor = None
-    if AI_FEATURES_AVAILABLE and st.session_state.use_ai_features:
-        ai_extractor = AIEnhancedTaskExtractor(db_manager.db_path)
-    
-    # Fetch and display tasks
-    with st.spinner("Loading activities..."):
-        if AI_FEATURES_AVAILABLE and st.session_state.use_ai_features:
-            # Fetch tasks with AI data
-            tasks_df = db_manager.fetch_tasks_with_ai()
-            if not tasks_df.empty:
-                # Filter by time
-                time_filters = {
-                    "Last 15 Minutes": datetime.now() - timedelta(minutes=15),
-                    "Last Hour": datetime.now() - timedelta(hours=1),
-                    "Today": datetime.now().replace(hour=0, minute=0, second=0, microsecond=0),
-                    "Last 24 Hours": datetime.now() - timedelta(days=1),
-                    "Last 7 Days": datetime.now() - timedelta(days=7),
-                    "All Time": datetime(2000, 1, 1)
-                }
-                start_date = time_filters.get(time_filter, datetime(2000, 1, 1))
-                tasks_df['created_at'] = pd.to_datetime(tasks_df['created_at'])
-                tasks_df = tasks_df[tasks_df['created_at'] >= start_date].head(config.DEFAULT_TASK_LIMIT)
-        else:
-            # Standard fetch
-            tasks_df = db_manager.fetch_tasks_by_time_filter(
-                time_filter, 
-                limit=config.DEFAULT_TASK_LIMIT
-            )
-    
-    if not tasks_df.empty:
-        # Activity Summary
-        st.header("📊 Activity Summary")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Activities", len(tasks_df))
-        with col2:
-            # Count unique window titles
-            unique_windows = tasks_df['active_window'].apply(extract_window_title).nunique()
-            st.metric("Unique Applications", unique_windows)
-        with col3:
-            time_range = (pd.to_datetime(tasks_df['created_at'].max()) - pd.to_datetime(tasks_df['created_at'].min()))
-            hours = time_range.total_seconds() / 3600
-            st.metric("Time Span", f"{hours:.1f} hours")
-        with col4:
-            avg_per_hour = len(tasks_df) / max(hours, 1)
-            st.metric("Avg Screenshots/Hour", f"{avg_per_hour:.1f}")
-        
-        # Activity Stream
-        st.header("📋 Activity Stream")
-        
-        # Group tasks by time intervals
-        task_groups = group_tasks_by_time(tasks_df)
+            
+            if not total_tasks:
+                # No data at all
+                NoDataMessage.render(
+                    "No task data available",
+                    suggestions=[
+                        "Check if Memos/Pensieve is running: 'memos ps'",
+                        "Start screenshot capture: 'memos start'",
+                        "Wait a few minutes for data to be captured"
+                    ]
+                )
+            else:
+                # Data exists, but filters are too restrictive
+                from .components.filters import TimeFilterComponent
+                smart_default = TimeFilterComponent.get_smart_default(self.db_manager)
+                
+                NoDataMessage.render(
+                    "No tasks found for current filters",
+                    suggestions=[
+                        f"Found {len(total_tasks)} tasks in last 30 days",
+                        f"💡 Try clicking 'Smart Default' (suggests: {smart_default})",
+                        "Or select 'Last 7 Days' or 'Yesterday' manually",
+                        "Clear category filters (leave empty for all)",
+                        "Lower minimum duration to 1 minute"
+                    ]
+                )
+            return
+            
+        # Sort by duration
+        task_groups.sort(key=lambda x: x.duration_minutes, reverse=True)
         
         # Display task groups
-        for group_idx, group in enumerate(task_groups):
-            display_task_group(
-                group, 
-                group_idx, 
-                ai_extractor=ai_extractor,
-                show_similar=st.session_state.get('show_similar_tasks', False)
+        st.subheader(f"📋 Tasks ({len(task_groups)})")
+        
+        for i, group in enumerate(task_groups[:20]):  # Limit to top 20
+            # Extract first task for screenshot
+            screenshot_path = group.tasks[0].screenshot_path if group.tasks else None
+            
+            # Get task descriptions
+            task_descriptions = []
+            for task in group.tasks[:3]:  # Show first 3 tasks
+                if task.metadata and 'description' in task.metadata:
+                    task_descriptions.append(task.metadata['description'])
+                    
+            TaskGroupComponent.render(
+                window_title=group.window_title,
+                duration_minutes=group.duration_minutes,
+                tasks=task_descriptions,
+                category=group.category,
+                timestamp=group.start_time,
+                end_time=group.end_time,
+                screenshot_path=screenshot_path,
+                show_screenshot=show_screenshots,
+                expanded=(i < 3)  # Expand first 3
             )
-    else:
-        st.info("🔍 No activities found for the selected time range.")
-        st.write("Make sure Memos is running and capturing screenshots.")
+            
+    def run(self):
+        """Main dashboard execution with debug capture."""
+        # Capture dashboard startup
+        capture_event("dashboard_startup")
+        
+        # Check database connection
+        if not self.ensure_connection():
+            capture_event("database_connection_failed")
+            return
+        
+        capture_event("database_connected")
+            
+        # Header
+        st.title("📋 Task Board")
+        st.markdown("Track and visualize your daily tasks and activities")
+        
+        # Render sidebar and get filters
+        time_filter, categories, show_screenshots, min_duration = self.render_sidebar()
+        
+        # Get time range
+        start_date, end_date = TimeFilterComponent.get_time_range(time_filter)
+        
+        # Initialize repositories
+        task_repo = TaskRepository(self.db_manager)
+        metrics_repo = MetricsRepository(self.db_manager)
+        
+        # Handle CSV export if requested
+        if st.session_state.get('export_csv', False):
+            with st.spinner("Generating CSV export..."):
+                # Get task groups for export
+                export_groups = task_repo.get_task_groups(
+                    start_date=start_date,
+                    end_date=end_date,
+                    min_duration_minutes=min_duration
+                )
+                
+                # Filter by categories if specified
+                if categories:
+                    export_groups = [
+                        group for group in export_groups 
+                        if group.category in categories
+                    ]
+                
+                if export_groups:
+                    csv_content = self.export_task_data_to_csv(export_groups, start_date, end_date)
+                    
+                    # Create download button
+                    filename = f"autotasktracker_export_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
+                    st.download_button(
+                        label="📥 Download CSV",
+                        data=csv_content,
+                        file_name=filename,
+                        mime="text/csv",
+                        help=f"Export contains {len(export_groups)} task groups from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+                    )
+                    st.success(f"✅ CSV export ready! {len(export_groups)} task groups included.")
+                else:
+                    st.warning("No task groups found for the selected time period and filters.")
+            
+            # Reset export flag
+            st.session_state.export_csv = False
+        
+        # Render metrics
+        self.render_metrics(metrics_repo, start_date, end_date)
+        
+        st.divider()
+        
+        # Render task groups
+        capture_event("before_task_groups_render")
+        self.render_task_groups(
+            task_repo,
+            start_date,
+            end_date,
+            categories,
+            show_screenshots,
+            min_duration
+        )
+        capture_event("after_task_groups_render")
+        
+        # Final dashboard loaded capture
+        capture_event("dashboard_loaded")
+        
+        # Raw data view (debug)
+        if st.session_state.show_raw_data:
+            with st.expander("🔍 Raw Data"):
+                tasks = task_repo.get_tasks_for_period(start_date, end_date)
+                if tasks:
+                    import pandas as pd
+                    df = pd.DataFrame([
+                        {
+                            'ID': t.id,
+                            'Window': t.window_title,
+                            'Category': t.category,
+                            'Timestamp': t.timestamp,
+                            'Duration': f"{t.duration_minutes:.1f} min"
+                        }
+                        for t in tasks[:100]
+                    ])
+                    st.dataframe(df, use_container_width=True)
+                    
 
+def main():
+    """Run the refactored task board."""
+    dashboard = TaskBoardDashboard()
+    dashboard.run()
+    
 
 if __name__ == "__main__":
     main()

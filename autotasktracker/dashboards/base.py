@@ -10,15 +10,18 @@ from autotasktracker.core.database import DatabaseManager
 from autotasktracker.utils.config import get_config
 from autotasktracker.utils.streamlit_helpers import configure_page, show_error_message
 from autotasktracker.dashboards.cache import DashboardCache, QueryCache
+from autotasktracker.pensieve.health_monitor import get_health_monitor, HealthAwareMixin
+from autotasktracker.pensieve.api_client import get_pensieve_client
 
 logger = logging.getLogger(__name__)
 
 
-class BaseDashboard:
+class BaseDashboard(HealthAwareMixin):
     """Base class for all AutoTaskTracker dashboards.
     
     Provides common functionality:
     - Database connection management
+    - Pensieve health monitoring with graceful degradation
     - Page configuration
     - Error handling
     - Time filtering
@@ -33,6 +36,9 @@ class BaseDashboard:
             icon: Emoji icon for the page
             port: Optional port number for the dashboard
         """
+        # Initialize health monitoring first
+        super().__init__()
+        
         self.title = title
         self.icon = icon
         self.port = port
@@ -44,6 +50,9 @@ class BaseDashboard:
         
         # Initialize session state
         self.init_session_state()
+        
+        # Show Pensieve health status
+        self.show_health_status()
         
     def setup_page(self):
         """Configure Streamlit page settings."""
@@ -62,8 +71,67 @@ class BaseDashboard:
     def db_manager(self) -> DatabaseManager:
         """Get database manager instance (lazy loading)."""
         if self._db_manager is None:
-            self._db_manager = DatabaseManager(self.config.DB_PATH)
+            try:
+                # Use Pensieve API when available, fallback to direct DB
+                use_api = self.is_pensieve_available()
+                self._db_manager = DatabaseManager(use_pensieve_api=use_api)
+                
+                if use_api:
+                    logger.info("Dashboard using Pensieve API for data access")
+                else:
+                    logger.info("Dashboard using direct database access (degraded mode)")
+                    
+            except Exception as e:
+                logger.error(f"Failed to initialize database manager: {e}")
+                # Final fallback to default
+                self._db_manager = DatabaseManager(use_pensieve_api=False)
         return self._db_manager
+    
+    def show_health_status(self):
+        """Show Pensieve service health status in sidebar."""
+        with st.sidebar:
+            st.divider()
+            
+            # Get health status
+            health_summary = self.get_health_status()
+            status = health_summary.get('status', 'unknown')
+            
+            if status == 'healthy':
+                st.success("🟢 Pensieve Healthy")
+            elif status == 'unhealthy':
+                st.error("🔴 Pensieve Issues")
+                
+                # Show specific issues
+                if 'warnings' in health_summary:
+                    for warning in health_summary['warnings'][:3]:  # Show max 3 warnings
+                        st.warning(f"⚠️ {warning}")
+                
+                # Show degraded mode notice
+                if self._degraded_mode:
+                    st.info("📊 Running in degraded mode (direct database access)")
+            else:
+                st.warning("🟡 Pensieve Status Unknown")
+            
+            # Show quick metrics
+            if 'metrics' in health_summary:
+                metrics = health_summary['metrics']
+                response_time = metrics.get('response_time_ms', 0)
+                
+                if response_time > 0:
+                    if response_time < 500:
+                        st.caption(f"⚡ Response: {response_time:.0f}ms")
+                    else:
+                        st.caption(f"🐌 Response: {response_time:.0f}ms")
+    
+    def _on_pensieve_degraded(self):
+        """Handle Pensieve becoming unhealthy."""
+        logger.warning("Dashboard entering degraded mode - Pensieve unavailable")
+        st.toast("⚠️ Pensieve unavailable - using direct database access", icon="⚠️")
+    
+    def _on_pensieve_recovered(self):
+        """Handle Pensieve recovery."""
+        logger.info("Dashboard exiting degraded mode - Pensieve recovered")
+        st.toast("✅ Pensieve recovered - full functionality restored", icon="✅")
         
     def ensure_connection(self) -> bool:
         """Ensure database connection is available.
@@ -154,7 +222,7 @@ class BaseDashboard:
             LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
             LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
             LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
-            LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = 'window_title'
+            LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = "active_window"
             WHERE e.created_at >= ? AND e.created_at <= ?
             ORDER BY e.created_at DESC
             LIMIT ?

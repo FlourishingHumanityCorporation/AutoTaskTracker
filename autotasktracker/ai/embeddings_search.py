@@ -157,7 +157,7 @@ class EmbeddingsSearchEngine:
                             'id': row['id'],
                             'filepath': row['filepath'],
                             'created_at': row['created_at'],
-                            'ocr_text': row['ocr_text'],
+                            "ocr_result": row["ocr_result"],
                             'active_window': row['active_window'],
                             'similarity_score': round(float(similarity), 6)
                         })
@@ -261,7 +261,7 @@ class EmbeddingsSearchEngine:
                                 'id': valid_df.iloc[idx]['id'],
                                 'filepath': valid_df.iloc[idx]['filepath'],
                                 'created_at': valid_df.iloc[idx]['created_at'],
-                                'ocr_text': valid_df.iloc[idx]['ocr_text'],
+                                "ocr_result": valid_df.iloc[idx]["ocr_result"],
                                 'active_window': valid_df.iloc[idx]['active_window'],
                                 'similarity_to_first': round(float(similarity_matrix[i][idx]), 6)
                             })

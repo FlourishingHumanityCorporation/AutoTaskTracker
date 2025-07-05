@@ -64,8 +64,13 @@ autotasktracker/
 ├── dashboards/             # Streamlit interfaces
 │   ├── task_board.py       # Main task dashboard
 │   ├── analytics.py        # Analytics dashboard
+│   ├── achievement_board.py # Achievement board
 │   ├── timetracker.py      # Time tracking
-│   └── notifications.py    # Notification system
+│   ├── notifications.py    # Notification system
+│   ├── base.py            # Base dashboard class
+│   ├── cache.py           # Caching utilities
+│   ├── components/        # Reusable UI components
+│   └── data/             # Data models and repositories
 └── utils/                  # Utility functions
     └── config.py           # Configuration management
 ```

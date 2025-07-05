@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Service infrastructure tests for AutoTaskTracker.
 Tests integration with external services and service health monitoring.

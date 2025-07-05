@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Performance analysis for AI pipelines.
 """
@@ -36,7 +39,7 @@ class PerformanceAnalyzer:
         FROM entities e
         LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr."key" = 'ocr_result'
         LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window."key" = 'active_window'
-        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm."key" = 'vlm_result'
+        LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm."key" = "vlm_structured"
         LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb."key" = 'embedding'
         WHERE e.file_type_group = 'image'
         """
@@ -63,7 +66,7 @@ class PerformanceAnalyzer:
         """Process a single screenshot with all pipelines."""
         screenshot_data = {
             'active_window': row.get('active_window', ''),
-            'ocr_text': row.get('ocr_text', ''),
+            "ocr_result": row.get("ocr_result", ''),
             'vlm_description': row.get('vlm_description', ''),
             'id': row.get('id')
         }
@@ -72,7 +75,7 @@ class PerformanceAnalyzer:
             'screenshot_id': row.get('id'),
             'filename': row.get('filename', ''),
             'created_at': row.get('created_at', ''),
-            'has_ocr': bool(screenshot_data['ocr_text']),
+            'has_ocr': bool(screenshot_data["ocr_result"]),
             'has_vlm': bool(screenshot_data['vlm_description']),
             'has_embedding': bool(row.get('has_embedding', 0))
         }
@@ -85,7 +88,7 @@ class PerformanceAnalyzer:
             except Exception as e:
                 print(f"Error processing with {pipeline_name}: {e}")
                 results[pipeline_name] = {
-                    'task': 'Processing failed',
+                    "tasks": 'Processing failed',
                     'category': 'Error',
                     'confidence': 0.0,
                     'features_used': [],
@@ -139,7 +142,7 @@ class PerformanceAnalyzer:
             pipeline_results = [r[pipeline_name] for r in results if pipeline_name in r]
             
             confidences = [pr['confidence'] for pr in pipeline_results]
-            tasks = [pr['task'] for pr in pipeline_results]
+            tasks = [pr["tasks"] for pr in pipeline_results]
             categories = [pr['category'] for pr in pipeline_results]
             
             report['method_performance'][pipeline_name] = {
@@ -208,7 +211,7 @@ class PerformanceAnalyzer:
                     row = base_row.copy()
                     row.update({
                         'pipeline': pipeline_name,
-                        'task': pipeline_data['task'],
+                        "tasks": pipeline_data["tasks"],
                         'category': pipeline_data['category'],
                         'confidence': pipeline_data['confidence'],
                         'features_used': ', '.join(pipeline_data['features_used'])

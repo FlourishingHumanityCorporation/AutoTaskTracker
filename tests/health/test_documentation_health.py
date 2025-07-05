@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Test suite for documentation quality and organization.
 Prevents documentation rot and maintains high standards.

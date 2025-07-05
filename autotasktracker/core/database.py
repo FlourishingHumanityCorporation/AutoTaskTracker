@@ -14,6 +14,8 @@ import pandas as pd
 from contextlib import contextmanager
 import logging
 from autotasktracker.config import get_config
+from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
+from autotasktracker.pensieve.config_reader import get_pensieve_config
 
 
 logger = logging.getLogger(__name__)
@@ -22,16 +24,31 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Manages database connections with connection pooling and performance optimizations."""
     
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, use_pensieve_api: bool = True):
         """
-        Initialize DatabaseManager with connection pooling.
+        Initialize DatabaseManager with connection pooling and Pensieve integration.
         
         Args:
-            db_path: Path to the database. If None, uses default path.
+            db_path: Path to the database. If None, uses Pensieve config.
+            use_pensieve_api: Whether to use Pensieve API when available.
         """
+        self.use_pensieve_api = use_pensieve_api
+        self._pensieve_client = None
+        
         if db_path is None:
-            config = get_config()
-            self.db_path = config.get_db_path()
+            if use_pensieve_api:
+                try:
+                    pensieve_config = get_pensieve_config()
+                    self.db_path = pensieve_config.database_path
+                    self._pensieve_client = get_pensieve_client()
+                    logger.info("Using Pensieve API for database access")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Pensieve client, falling back to direct DB: {e}")
+                    config = get_config()
+                    self.db_path = config.get_db_path()
+            else:
+                config = get_config()
+                self.db_path = config.get_db_path()
         else:
             self.db_path = db_path
         
@@ -259,6 +276,86 @@ class DatabaseManager:
             self._active_connections = 0
         
         logger.info("Closed all database connections")
+    
+    def get_frames_via_api(self, limit: int = 100, processed_only: bool = False) -> List[Dict[str, Any]]:
+        """Get frames using Pensieve API when available.
+        
+        Args:
+            limit: Maximum number of frames to return
+            processed_only: Only return processed frames
+            
+        Returns:
+            List of frame dictionaries
+        """
+        if not self.use_pensieve_api or not self._pensieve_client:
+            return []
+        
+        try:
+            if not self._pensieve_client.is_healthy():
+                logger.warning("Pensieve service not healthy, falling back to direct DB access")
+                return []
+            
+            frames = self._pensieve_client.get_frames(limit=limit, processed_only=processed_only)
+            
+            # Convert to dict format compatible with existing code
+            result = []
+            for frame in frames:
+                result.append({
+                    'id': frame.id,
+                    'filepath': frame.filepath,
+                    'timestamp': frame.timestamp,
+                    'created_at': frame.created_at,
+                    'processed_at': frame.processed_at,
+                    'metadata': frame.metadata or {}
+                })
+            
+            return result
+            
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error: {e.message}")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to get frames via API: {e}")
+            return []
+    
+    def get_frame_metadata_via_api(self, frame_id: int, key: Optional[str] = None) -> Dict[str, Any]:
+        """Get frame metadata using Pensieve API.
+        
+        Args:
+            frame_id: Frame ID
+            key: Specific metadata key
+            
+        Returns:
+            Metadata dictionary
+        """
+        if not self.use_pensieve_api or not self._pensieve_client:
+            return {}
+        
+        try:
+            return self._pensieve_client.get_metadata(frame_id, key)
+        except Exception as e:
+            logger.error(f"Failed to get metadata via API: {e}")
+            return {}
+    
+    def store_frame_metadata_via_api(self, frame_id: int, key: str, value: Any) -> bool:
+        """Store frame metadata using Pensieve API.
+        
+        Args:
+            frame_id: Frame ID
+            key: Metadata key
+            value: Metadata value
+            
+        Returns:
+            True if successful
+        """
+        if not self.use_pensieve_api or not self._pensieve_client:
+            return False
+        
+        try:
+            return self._pensieve_client.store_metadata(frame_id, key, value)
+        except Exception as e:
+            logger.error(f"Failed to store metadata via API: {e}")
+            return False
     
     def fetch_tasks(self, 
                    start_date: Optional[datetime] = None,

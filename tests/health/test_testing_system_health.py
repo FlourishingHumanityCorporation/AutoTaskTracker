@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 🧪 TESTING SYSTEM HEALTH CHECKER 🧪
 
@@ -160,7 +163,7 @@ class TestTestingSystemHealth:
                     break
             
             # Check if file is in organized subdirectories
-            if test_file.parent.name in ['unit', 'integration', 'infrastructure', 'health', 'e2e', 'functional']:
+            if test_file.parent.name in ['unit', 'integration', 'infrastructure', 'health', 'e2e', 'functional', 'performance', 'utils']:
                 category_found = True
                 # Map directory to categories
                 if test_file.parent.name == 'unit':
@@ -204,6 +207,12 @@ class TestTestingSystemHealth:
                         found_categories.add('ai_processing')
                     if 'pipeline' in filename:
                         found_categories.add('pipeline_integration')
+                elif test_file.parent.name == 'performance':
+                    found_categories.add('performance')
+                    if 'benchmark' in filename:
+                        found_categories.add('performance_benchmarks')
+                elif test_file.parent.name == 'utils':
+                    found_categories.add('test_utilities')
             
             if not category_found:
                 categorization_issues.append(f"{test_file}: Unknown test category")
@@ -1572,7 +1581,7 @@ Tests with fundamental quality issues that WILL NOT catch real bugs:
             print(f"   ⏸️  test_ultra_strict_documentation_requirements (DISABLED)")
         
         print(f"\n📝 STRICTNESS LEVELS:")
-        print(f"   📊 STRICT MODE enforces:")
+        logger.error(f"   📊 STRICT MODE enforces:")
         print(f"      • No trivial assertions (assert True, assert x == x)")
         print(f"      • Error condition testing for complex functions")
         print(f"      • Boundary value testing")
@@ -1678,7 +1687,7 @@ Tests with fundamental quality issues that WILL NOT catch real bugs:
                     has_realistic_data = False
                     # Look for domain-specific data
                     domain_patterns = [
-                        r'screenshot', r'task', r'dashboard', r'metrics', r'ocr', r'vlm',
+                        r'screenshot', r"tasks", r'dashboard', r'metrics', r'ocr', r'vlm',
                         r'pensieve', r'memos', r'AI', r'embedding', r'extraction'
                     ]
                     realistic_data_count = sum(1 for pattern in domain_patterns if re.search(pattern, test_content, re.IGNORECASE))

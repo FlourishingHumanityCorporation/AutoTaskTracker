@@ -54,7 +54,7 @@ def _create_dummy_png(path: Path) -> None:
 
 STREAMLIT_PORT = 8501
 UI_WAIT_S = 20
-DB_PROCESS_WAIT_S = 10
+DB_PROCESS_WAIT_S = 2  # Reduced for performance
 
 
 @pytest.mark.timeout(120)
@@ -111,7 +111,7 @@ def test_complete_end_to_end_user_journey_from_screenshot_to_dashboard_display(e
     print(f"Waiting for Streamlit at http://localhost:{STREAMLIT_PORT}")
     
     # Give it a moment to start
-    time.sleep(2)
+    time.sleep(0.5)
     
     # Check if the process started properly
     if board_proc.poll() is not None:
@@ -130,7 +130,7 @@ def test_complete_end_to_end_user_journey_from_screenshot_to_dashboard_display(e
         except Exception as e:
             if time.time() - start > 5:  # Only print after 5 seconds
                 print(f"Still waiting for Streamlit...")
-        time.sleep(1)
+        time.sleep(0.5)
     else:
         # Get process output before failing
         stdout, stderr = board_proc.communicate()

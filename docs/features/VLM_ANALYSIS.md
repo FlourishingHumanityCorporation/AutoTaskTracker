@@ -240,7 +240,7 @@ See `autotasktracker/ai/vlm_integration.py` for implementation details.
   
 - **Model Choice**: `minicpm-v` selected over larger models
   - **Tradeoff**: 90% accuracy at 25% resource cost vs larger models
-  - **Reasoning**: Better user experience with "good enough" results than perfect results with poor UX
+  - **Reasoning**: Better user experience with "good enough" results than optimal results with poor UX
   
 - **Processing Strategy**: Intelligent sampling rather than every screenshot
   - **Algorithm**: Process screenshots with significant visual changes
@@ -284,7 +284,7 @@ VLM integration addresses fundamental limitations of text-only analysis:
 - Most passive tracking tools rely on app-level data (limited)
 - OCR-only solutions miss visual context (incomplete)
 - Cloud-based solutions have privacy concerns (unacceptable)
-- AutoTaskTracker's local VLM integration provides best-in-class accuracy with privacy preservation
+- AutoTaskTracker's local VLM integration provides high accuracy with privacy preservation
 
 **Implementation Philosophy**: 
 - **Minimal Codebase Impact**: Leverages existing metadata architecture
@@ -292,4 +292,4 @@ VLM integration addresses fundamental limitations of text-only analysis:
 - **Future-Proof Architecture**: Foundation for advanced AI features
 - **Risk Mitigation**: Graceful degradation ensures reliability
 
-VLM integration transforms AutoTaskTracker from "good enough" to "best-in-class" while maintaining privacy-first principles.
+VLM integration transforms AutoTaskTracker from "good enough" to "high-performing" while maintaining privacy-first principles.

@@ -280,7 +280,7 @@ class OCREnhancer:
         ocr_results = self.parse_ocr_json(ocr_json)
         if not ocr_results:
             return {
-                'task': base_task or "Activity",
+                "tasks": base_task or "Activity",
                 'ocr_quality': 'no_text',
                 'confidence': 0.0
             }
@@ -314,7 +314,7 @@ class OCREnhancer:
             enhanced_task = f"{enhanced_task} (Coding)"
         
         return {
-            'task': enhanced_task,
+            "tasks": enhanced_task,
             'ocr_quality': ocr_quality,
             'confidence': layout.average_confidence,
             'has_code': len(layout.code_regions) > 0,

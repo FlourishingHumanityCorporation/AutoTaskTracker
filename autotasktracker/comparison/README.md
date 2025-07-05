@@ -25,7 +25,7 @@ autotasktracker/comparison/
 ## 🎯 Purpose & Use Cases
 
 ### **When to Use This Module**
-- **AI Optimization**: Determine which processing approach works best
+- **AI Optimization**: Determine which processing approach works most effectively
 - **Performance Analysis**: Measure confidence scores and accuracy
 - **Parameter Tuning**: Compare different configurations
 - **Research & Development**: Evaluate new AI features

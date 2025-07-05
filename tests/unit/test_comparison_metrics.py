@@ -212,14 +212,14 @@ class TestComparisonMetrics:
         """Test comprehensive pipeline comparison."""
         pipeline_results = {
             'basic': [
-                {'task': 'Task A', 'category': 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
-                {'task': 'Task B', 'category': 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
-                {'task': 'Task A', 'category': 'Cat2', 'confidence': 0.5, 'features_used': ['Window Title']}
+                {"tasks": 'Task A', 'category': 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
+                {"tasks": 'Task B', 'category': 'Cat1', 'confidence': 0.5, 'features_used': ['Window Title']},
+                {"tasks": 'Task A', 'category': 'Cat2', 'confidence': 0.5, 'features_used': ['Window Title']}
             ],
             'enhanced': [
-                {'task': 'Enhanced Task A', 'category': 'Cat1', 'confidence': 0.8, 'features_used': ['Window Title', 'OCR']},
-                {'task': 'Enhanced Task B', 'category': 'Cat1', 'confidence': 0.9, 'features_used': ['Window Title', 'OCR', 'VLM']},
-                {'task': 'Enhanced Task C', 'category': 'Cat3', 'confidence': 0.7, 'features_used': ['Window Title', 'OCR']}
+                {"tasks": 'Enhanced Task A', 'category': 'Cat1', 'confidence': 0.8, 'features_used': ['Window Title', 'OCR']},
+                {"tasks": 'Enhanced Task B', 'category': 'Cat1', 'confidence': 0.9, 'features_used': ['Window Title', 'OCR', 'VLM']},
+                {"tasks": 'Enhanced Task C', 'category': 'Cat3', 'confidence': 0.7, 'features_used': ['Window Title', 'OCR']}
             ]
         }
         
@@ -260,7 +260,7 @@ class TestComparisonMetrics:
         # Test pipeline with no results
         mixed_comparison = ComparisonMetrics.compare_pipelines({
             'pipeline_a': [],
-            'pipeline_b': [{'task': 'Task', 'category': 'Cat', 'confidence': 0.7, 'features_used': ['Feature']}]
+            'pipeline_b': [{"tasks": 'Task', 'category': 'Cat', 'confidence': 0.7, 'features_used': ['Feature']}]
         })
         assert 'pipeline_b' in mixed_comparison
         assert 'pipeline_a' not in mixed_comparison  # Empty results filtered out
@@ -349,17 +349,17 @@ class TestComparisonMetricsIntegration:
         """Test a realistic pipeline comparison scenario."""
         # Simulate real pipeline comparison data
         basic_pipeline_results = [
-            {'task': 'Browse web', 'category': 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
-            {'task': 'Edit document', 'category': 'Productivity', 'confidence': 0.5, 'features_used': ['Window Title']},
-            {'task': 'Code review', 'category': 'Development', 'confidence': 0.5, 'features_used': ['Window Title']},
-            {'task': 'Browse web', 'category': 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Browse web', 'category': 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Edit document', 'category': 'Productivity', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Code review', 'category': 'Development', 'confidence': 0.5, 'features_used': ['Window Title']},
+            {"tasks": 'Browse web', 'category': 'Browser', 'confidence': 0.5, 'features_used': ['Window Title']},
         ]
         
         ai_enhanced_results = [
-            {'task': 'Research documentation', 'category': 'Browser', 'confidence': 0.85, 'features_used': ['Window Title', 'OCR', 'VLM']},
-            {'task': 'Write technical report', 'category': 'Productivity', 'confidence': 0.92, 'features_used': ['Window Title', 'OCR', 'Semantic Search']},
-            {'task': 'Review Python code', 'category': 'Development', 'confidence': 0.88, 'features_used': ['Window Title', 'OCR', 'VLM', 'Layout Analysis']},
-            {'task': 'Study API documentation', 'category': 'Browser', 'confidence': 0.79, 'features_used': ['Window Title', 'OCR', 'VLM']},
+            {"tasks": 'Research documentation', 'category': 'Browser', 'confidence': 0.85, 'features_used': ['Window Title', 'OCR', 'VLM']},
+            {"tasks": 'Write technical report', 'category': 'Productivity', 'confidence': 0.92, 'features_used': ['Window Title', 'OCR', 'Semantic Search']},
+            {"tasks": 'Review Python code', 'category': 'Development', 'confidence': 0.88, 'features_used': ['Window Title', 'OCR', 'VLM', 'Layout Analysis']},
+            {"tasks": 'Study API documentation', 'category': 'Browser', 'confidence': 0.79, 'features_used': ['Window Title', 'OCR', 'VLM']},
         ]
         
         pipeline_results = {

@@ -143,7 +143,7 @@ enhancement = ocr_enhancer.enhance_task_with_ocr(ocr_text, basic_task)
 1. **Text Quality Assessment**:
    ```python
    # Confidence scoring based on OCR accuracy
-   high_quality = avg_confidence > 0.8    # "excellent"
+   high_quality = avg_confidence > 0.8    # "high quality"
    good_quality = avg_confidence > 0.6    # "good"  
    low_quality = avg_confidence < 0.4     # "poor"
    ```

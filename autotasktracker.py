@@ -32,7 +32,7 @@ Examples:
     
     parser.add_argument(
         'command',
-        choices=['start', 'stop', 'dashboard', 'analytics', 'timetracker', 'notifications', 'vlm-monitor', 'status', 'launcher'],
+        choices=['start', 'stop', 'dashboard', 'analytics', 'timetracker', 'notifications', 'vlm-monitor', 'status', 'launcher', 'stop-dashboard'],
         help='Command to execute'
     )
     
@@ -69,20 +69,38 @@ Examples:
         subprocess.run(['pkill', '-f', 'streamlit'])
         print("✅ All services stopped")
         
+    elif args.command == 'stop-dashboard':
+        from scripts.dashboard_manager import DashboardManager
+        manager = DashboardManager()
+        manager.stop_all()
+        print("✅ All dashboards stopped")
+        
     elif args.command == 'dashboard':
-        cmd = [
-            sys.executable, '-m', 'streamlit', 'run',
-            'run_task_board.py',
-            '--server.port', str(config.TASK_BOARD_PORT)
-        ]
-        if args.headless:
-            cmd.extend(['--server.headless', 'true'])
-        subprocess.run(cmd)
+        # Use background dashboard manager
+        from scripts.dashboard_manager import DashboardManager
+        
+        manager = DashboardManager()
+        pid = manager.start_dashboard(
+            dashboard_type='task_board',
+            headless=args.headless
+        )
+        
+        if pid:
+            print(f"\n🎉 Task Board dashboard is now running in background!")
+            print(f"🌐 Open: http://localhost:{config.TASK_BOARD_PORT}")
+            print(f"🆔 Process ID: {pid}")
+            print(f"\n📋 Management commands:")
+            print(f"  Status:    python scripts/dashboard_manager.py status")
+            print(f"  Stop:      python scripts/dashboard_manager.py stop --type task_board")
+            print(f"  Stop All:  python scripts/dashboard_manager.py stop-all")
+            print(f"\n💡 Dashboard will keep running until you close the browser tab or stop it manually.")
+        else:
+            print("❌ Failed to start dashboard")
         
     elif args.command == 'analytics':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'run_analytics.py',
+            'autotasktracker/dashboards/analytics.py',
             '--server.port', str(config.ANALYTICS_PORT)
         ]
         if args.headless:
@@ -92,7 +110,7 @@ Examples:
     elif args.command == 'timetracker':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'run_timetracker.py',
+            'autotasktracker/dashboards/timetracker.py',
             '--server.port', str(config.TIMETRACKER_PORT)
         ]
         if args.headless:
@@ -102,7 +120,7 @@ Examples:
     elif args.command == 'notifications':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'run_notifications.py',
+            'autotasktracker/dashboards/notifications.py',
             '--server.port', str(config.NOTIFICATIONS_PORT)
         ]
         if args.headless:
@@ -112,7 +130,7 @@ Examples:
     elif args.command == 'vlm-monitor':
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
-            'run_vlm_monitor.py',
+            'autotasktracker/dashboards/vlm_monitor.py',
             '--server.port', '8510'
         ]
         if args.headless:
@@ -121,7 +139,7 @@ Examples:
         
     elif args.command == 'launcher':
         # Use the refactored launcher
-        from autotasktracker.dashboards.launcher_refactored import DashboardLauncher
+        from autotasktracker.dashboards.launcher import DashboardLauncher
         launcher = DashboardLauncher()
         launcher.print_status()
         

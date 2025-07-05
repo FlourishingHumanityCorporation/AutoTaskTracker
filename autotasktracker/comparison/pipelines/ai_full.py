@@ -27,7 +27,7 @@ class AIFullPipeline(BasePipeline):
     def process_screenshot(self, screenshot_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process screenshot using full AI enhancement."""
         window_title = screenshot_data.get('active_window', '')
-        ocr_text = screenshot_data.get('ocr_text', '')
+        ocr_text = screenshot_data.get("ocr_result", '')
         vlm_description = screenshot_data.get('vlm_description', '')
         entity_id = screenshot_data.get('id')
         
@@ -55,7 +55,7 @@ class AIFullPipeline(BasePipeline):
             data_sources.append('Historical patterns')
         
         return {
-            'task': enhanced_result['task'],
+            "tasks": enhanced_result["tasks"],
             'category': enhanced_result['category'],
             'confidence': enhanced_result['confidence'],
             'features_used': features_used,

@@ -62,7 +62,7 @@ class TestPerformanceAnalyzer:
             'filepath': ['/path/1.png', '/path/2.png', '/path/3.png'],
             'filename': ['screenshot1.png', 'screenshot2.png', 'screenshot3.png'],
             'created_at': ['2024-01-01 10:00:00', '2024-01-01 11:00:00', '2024-01-01 12:00:00'],
-            'ocr_text': ['OCR text 1', None, 'OCR text 3'],
+            "ocr_result": ['OCR text 1', None, 'OCR text 3'],
             'active_window': ['Window 1', 'Window 2', 'Window 3'],
             'vlm_description': [None, 'VLM desc 2', 'VLM desc 3'],
             'has_embedding': [0, 1, 1]
@@ -77,7 +77,7 @@ class TestPerformanceAnalyzer:
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 3
         assert 'id' in result.columns
-        assert 'ocr_text' in result.columns
+        assert "ocr_result" in result.columns
         assert 'vlm_description' in result.columns
         
         # Verify SQL query construction
@@ -90,7 +90,7 @@ class TestPerformanceAnalyzer:
             'filepath': ['/path/1.png', '/path/2.png'],
             'filename': ['screenshot1.png', 'screenshot2.png'],
             'created_at': ['2024-01-01 10:00:00', '2024-01-01 11:00:00'],
-            'ocr_text': ['OCR text 1', 'OCR text 2'],
+            "ocr_result": ['OCR text 1', 'OCR text 2'],
             'active_window': ['Window 1', 'Window 2'],
             'vlm_description': ['VLM desc 1', 'VLM desc 2'],
             'has_embedding': [1, 1]
@@ -124,7 +124,7 @@ class TestPerformanceAnalyzer:
         """Test processing single screenshot with complete data."""
         # Mock pipeline responses
         analyzer.mock_basic.process_screenshot.return_value = {
-            'task': 'Basic task',
+            "tasks": 'Basic task',
             'category': 'Development',
             'confidence': 0.5,
             'features_used': ['Window Title'],
@@ -132,7 +132,7 @@ class TestPerformanceAnalyzer:
         }
         
         analyzer.mock_ocr.process_screenshot.return_value = {
-            'task': 'OCR enhanced task',
+            "tasks": 'OCR enhanced task',
             'category': 'Development',
             'confidence': 0.75,
             'features_used': ['Window Title', 'OCR'],
@@ -140,7 +140,7 @@ class TestPerformanceAnalyzer:
         }
         
         analyzer.mock_ai.process_screenshot.return_value = {
-            'task': 'AI enhanced task',
+            "tasks": 'AI enhanced task',
             'category': 'Development',
             'confidence': 0.92,
             'features_used': ['Window Title', 'OCR', 'VLM'],
@@ -153,7 +153,7 @@ class TestPerformanceAnalyzer:
             'filename': 'test_screenshot.png',
             'created_at': '2024-01-01 10:00:00',
             'active_window': 'editor.py - VSCode',
-            'ocr_text': 'def process_data():',
+            "ocr_result": 'def process_data():',
             'vlm_description': 'Code editor with Python function',
             'has_embedding': 1
         })
@@ -180,7 +180,7 @@ class TestPerformanceAnalyzer:
         assert result['has_embedding'] is True
         
         # Validate pipeline results
-        assert result['basic']['task'] == 'Basic task'
+        assert result['basic']["tasks"] == 'Basic task'
         assert result['ocr']['confidence'] == 0.75
         assert result['ai_full']['features_used'] == ['Window Title', 'OCR', 'VLM']
         
@@ -193,7 +193,7 @@ class TestPerformanceAnalyzer:
         """Test processing single screenshot with missing data fields."""
         # Mock pipeline responses
         analyzer.mock_basic.process_screenshot.return_value = {
-            'task': 'Unknown task',
+            "tasks": 'Unknown task',
             'category': 'Other',
             'confidence': 0.3,
             'features_used': ['Window Title'],
@@ -220,7 +220,7 @@ class TestPerformanceAnalyzer:
         # Should still call pipelines with empty data
         expected_screenshot_data = {
             'active_window': '',
-            'ocr_text': '',
+            "ocr_result": '',
             'vlm_description': '',
             'id': 456
         }
@@ -230,8 +230,8 @@ class TestPerformanceAnalyzer:
         """Test handling of pipeline processing errors."""
         # Mock one pipeline to raise an error
         analyzer.mock_basic.process_screenshot.side_effect = Exception("Basic pipeline failed")
-        analyzer.mock_ocr.process_screenshot.return_value = {'task': 'OCR task', 'category': 'Cat', 'confidence': 0.8, 'features_used': []}
-        analyzer.mock_ai.process_screenshot.return_value = {'task': 'AI task', 'category': 'Cat', 'confidence': 0.9, 'features_used': []}
+        analyzer.mock_ocr.process_screenshot.return_value = {"tasks": 'OCR task', 'category': 'Cat', 'confidence': 0.8, 'features_used': []}
+        analyzer.mock_ai.process_screenshot.return_value = {"tasks": 'AI task', 'category': 'Cat', 'confidence': 0.9, 'features_used': []}
         
         row_data = pd.Series({'id': 789, 'filename': 'error_test.png'})
         
@@ -240,15 +240,15 @@ class TestPerformanceAnalyzer:
         
         # Should handle error gracefully
         assert 'basic' in result
-        assert result['basic']['task'] == 'Processing failed'
+        assert result['basic']["tasks"] == 'Processing failed'
         assert result['basic']['category'] == 'Error'
         assert result['basic']['confidence'] == 0.0
         assert result['basic']['features_used'] == []
         assert 'error' in result['basic']['details']
         
         # Should still process other pipelines
-        assert result['ocr']['task'] == 'OCR task'
-        assert result['ai_full']['task'] == 'AI task'
+        assert result['ocr']["tasks"] == 'OCR task'
+        assert result['ai_full']["tasks"] == 'AI task'
         
         # Should print error message
         mock_print.assert_called_with("Error processing with basic: Basic pipeline failed")
@@ -260,7 +260,7 @@ class TestPerformanceAnalyzer:
             'id': [1, 2, 3],
             'filename': ['shot1.png', 'shot2.png', 'shot3.png'],
             'active_window': ['app1', 'app2', 'app3'],
-            'ocr_text': ['text1', 'text2', 'text3'],
+            "ocr_result": ['text1', 'text2', 'text3'],
             'vlm_description': ['desc1', 'desc2', 'desc3'],
             'has_embedding': [1, 0, 1]
         })
@@ -270,7 +270,7 @@ class TestPerformanceAnalyzer:
             return {
                 'screenshot_id': row['id'],
                 'filename': row['filename'],
-                'has_ocr': bool(row['ocr_text']),
+                'has_ocr': bool(row["ocr_result"]),
                 'has_vlm': bool(row['vlm_description']),
                 'has_embedding': bool(row['has_embedding']),
                 'basic': {'confidence': 0.5},
@@ -331,18 +331,18 @@ class TestPerformanceAnalyzer:
                 'has_ocr': True,
                 'has_vlm': False,
                 'has_embedding': True,
-                'basic': {'confidence': 0.5, 'task': 'Task A', 'category': 'Cat1'},
-                'ocr': {'confidence': 0.7, 'task': 'Task B', 'category': 'Cat1'},
-                'ai_full': {'confidence': 0.9, 'task': 'Task C', 'category': 'Cat2'}
+                'basic': {'confidence': 0.5, "tasks": 'Task A', 'category': 'Cat1'},
+                'ocr': {'confidence': 0.7, "tasks": 'Task B', 'category': 'Cat1'},
+                'ai_full': {'confidence': 0.9, "tasks": 'Task C', 'category': 'Cat2'}
             },
             {
                 'screenshot_id': 2,
                 'has_ocr': False,
                 'has_vlm': True,
                 'has_embedding': False,
-                'basic': {'confidence': 0.4, 'task': 'Task D', 'category': 'Cat2'},
-                'ocr': {'confidence': 0.6, 'task': 'Task E', 'category': 'Cat1'},
-                'ai_full': {'confidence': 0.8, 'task': 'Task F', 'category': 'Cat3'}
+                'basic': {'confidence': 0.4, "tasks": 'Task D', 'category': 'Cat2'},
+                'ocr': {'confidence': 0.6, "tasks": 'Task E', 'category': 'Cat1'},
+                'ai_full': {'confidence': 0.8, "tasks": 'Task F', 'category': 'Cat3'}
             }
         ]
         
@@ -448,13 +448,13 @@ class TestPerformanceAnalyzer:
                 'has_vlm': False,
                 'has_embedding': True,
                 'basic': {
-                    'task': 'Basic Task 1',
+                    "tasks": 'Basic Task 1',
                     'category': 'Development',
                     'confidence': 0.5,
                     'features_used': ['Window Title']
                 },
                 'ocr': {
-                    'task': 'OCR Task 1',
+                    "tasks": 'OCR Task 1',
                     'category': 'Development',
                     'confidence': 0.75,
                     'features_used': ['Window Title', 'OCR Text']
@@ -468,7 +468,7 @@ class TestPerformanceAnalyzer:
                 'has_vlm': True,
                 'has_embedding': False,
                 'basic': {
-                    'task': 'Basic Task 2',
+                    "tasks": 'Basic Task 2',
                     'category': 'Browser',
                     'confidence': 0.4,
                     'features_used': ['Window Title']
@@ -494,7 +494,7 @@ class TestPerformanceAnalyzer:
             
             # Validate columns
             expected_columns = ['screenshot_id', 'filename', 'created_at', 'has_ocr', 
-                               'has_vlm', 'has_embedding', 'pipeline', 'task', 
+                               'has_vlm', 'has_embedding', 'pipeline', "tasks", 
                                'category', 'confidence', 'features_used']
             for col in expected_columns:
                 assert col in exported_df.columns
@@ -502,7 +502,7 @@ class TestPerformanceAnalyzer:
             # Validate data
             basic_rows = exported_df[exported_df['pipeline'] == 'basic']
             assert len(basic_rows) == 2
-            assert basic_rows.iloc[0]['task'] == 'Basic Task 1'
+            assert basic_rows.iloc[0]["tasks"] == 'Basic Task 1'
             assert basic_rows.iloc[1]['confidence'] == 0.4
             
             ocr_rows = exported_df[exported_df['pipeline'] == 'ocr']
@@ -536,22 +536,22 @@ class TestPerformanceAnalyzerIntegration:
                             'id': [1, 2],
                             'filename': ['test1.png', 'test2.png'],
                             'active_window': ['Code Editor', 'Browser'],
-                            'ocr_text': ['code content', 'web page'],
+                            "ocr_result": ['code content', 'web page'],
                             'vlm_description': ['coding interface', 'web interface'],
                             'has_embedding': [1, 0]
                         })
                         
                         # Mock pipeline responses
                         mock_basic.return_value.process_screenshot.return_value = {
-                            'task': 'Basic task', 'category': 'Development', 
+                            "tasks": 'Basic task', 'category': 'Development', 
                             'confidence': 0.5, 'features_used': ['Window']
                         }
                         mock_ocr.return_value.process_screenshot.return_value = {
-                            'task': 'OCR task', 'category': 'Development', 
+                            "tasks": 'OCR task', 'category': 'Development', 
                             'confidence': 0.7, 'features_used': ['Window', 'OCR']
                         }
                         mock_ai.return_value.process_screenshot.return_value = {
-                            'task': 'AI task', 'category': 'Development', 
+                            "tasks": 'AI task', 'category': 'Development', 
                             'confidence': 0.9, 'features_used': ['Window', 'OCR', 'VLM']
                         }
                         

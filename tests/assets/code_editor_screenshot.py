@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Generate a realistic code editor screenshot for testing OCR and AI functionality.
 This creates a PNG image that looks like a real VS Code window with Python code.
@@ -91,8 +94,8 @@ def create_code_editor_screenshot():
         ('    def extract_task(self, window_title: str) -> Dict:', '#dcdcaa'),
         ('        """Extract task from window title."""', '#6a9955'),
         ('        if "code" in window_title.lower():', '#c586c0'),
-        ('            return {"task": "Coding", "category": "Development"}', '#ffffff'),
-        ('        return {"task": "Unknown", "category": "Other"}', '#ffffff'),
+        ('            return {"tasks": "Coding", "category": "Development"}', '#ffffff'),
+        ('        return {"tasks": "Unknown", "category": "Other"}', '#ffffff'),
     ]
     
     for i, (code, color) in enumerate(code_lines[:20]):

@@ -7,9 +7,11 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 import time
+import logging
 
 from autotasktracker import ActivityCategorizer, extract_window_title, DatabaseManager, get_config
-import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from plyer import notification
@@ -34,7 +36,7 @@ class TaskNotifier:
             
         stats = {
             'screenshots': 0,
-            'categories': {},
+            "category": {},
             'focus_time': 0,
             'top_activity': None
         }
@@ -68,11 +70,11 @@ class TaskNotifier:
             # Calculate category distribution
             for activity in activities:
                 cat = activity['category']
-                stats['categories'][cat] = stats['categories'].get(cat, 0) + 1
+                stats["category"][cat] = stats["category"].get(cat, 0) + 1
                 
             # Find top activity
-            if stats['categories']:
-                top_cat = max(stats['categories'].items(), key=lambda x: x[1])
+            if stats["category"]:
+                top_cat = max(stats["category"].items(), key=lambda x: x[1])
                 stats['top_activity'] = top_cat[0]
                 
             # Calculate focus time (continuous work in same category)
@@ -116,7 +118,7 @@ class TaskNotifier:
         
         # Activity summary
         if stats['top_activity']:
-            percentage = (stats['categories'][stats['top_activity']] / stats['screenshots']) * 100
+            percentage = (stats["category"][stats['top_activity']] / stats['screenshots']) * 100
             insights.append(f"You spent {percentage:.0f}% of the last hour on {stats['top_activity']}")
             
         # Focus time
@@ -126,9 +128,9 @@ class TaskNotifier:
             insights.append("Consider blocking time for focused work")
             
         # Activity variety
-        if len(stats['categories']) > 3:
+        if len(stats["category"]) > 3:
             insights.append("High context switching detected")
-        elif len(stats['categories']) == 1:
+        elif len(stats["category"]) == 1:
             insights.append("Excellent single-tasking!")
             
         return " • ".join(insights) if insights else None

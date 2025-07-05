@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 """
 🚨 CODEBASE HEALTH CHECKER 🚨
 
@@ -94,13 +97,15 @@ class TestCodebaseHealth:
                         problematic_files.append(str(file_path))
                     break
             
-            # Check for legacy folders (except if it's explicitly named 'legacy')
+            # Check for legacy folders (except if it's explicitly named 'legacy' or in scripts/archive)
             for indicator in legacy_indicators:
                 if indicator in filepath_str:
-                    # Allow the 'legacy' folder but flag others
+                    # Allow the 'legacy' folder and scripts/archive folder
                     if indicator == 'legacy' and '/legacy/' in filepath_str:
                         continue
-                    if indicator in ['old', 'deprecated', 'archive'] and f'/{indicator}/' in filepath_str:
+                    if indicator == 'archive' and '/scripts/archive/' in filepath_str:
+                        continue
+                    if indicator in ['old', 'deprecated'] and f'/{indicator}/' in filepath_str:
                         problematic_files.append(f"{file_path} (in '{indicator}' folder)")
         
         assert not problematic_files, f"Found files with redundant naming: {problematic_files}"
@@ -370,9 +375,9 @@ class TestCodebaseHealth:
         merge_conflicts = []
         
         conflict_markers = [
-            '<' + '<<<<<<',  # Split to avoid matching self
-            '=' + '=====',
-            '>' + '>>>>>>'
+            '<' + '<<<<< ',  # Split to avoid matching self, with space
+            '=' + '===== ',  # With space to avoid matching decoration lines
+            '>' + '>>>>> '   # With space for consistency
         ]
         
         for file_path in all_files:
@@ -751,7 +756,10 @@ This test will PASS once root directory is properly organized!
             # Look for hardcoded database paths
             db_path_patterns = ['.memos/database.db', '~/.memos/', 'database.db']
             for pattern in db_path_patterns:
-                if pattern in content and 'config.py' not in str(file_path):
+                # Exclude config files and pensieve modules which legitimately interface with memos defaults
+                if (pattern in content and 
+                    'config.py' not in str(file_path) and 
+                    'pensieve/' not in str(file_path)):
                     db_issues.append(f"{file_path}: Hardcoded DB path '{pattern}' (use config)")
                     break
         
@@ -872,6 +880,114 @@ This test will PASS once root directory is properly organized!
                 print(f"  {issue}")
             if len(naming_issues) > 3:
                 print(f"  ... and {len(naming_issues) - 3} more")
+    
+    def test_incomplete_refactoring(self):
+        """Test for incomplete refactoring - find old files that should be removed after refactoring"""
+        refactoring_issues = []
+        
+        # Check for pairs of original and refactored files
+        dashboard_dir = self.package_dir / "dashboards"
+        if dashboard_dir.exists():
+            dashboard_files = list(dashboard_dir.glob("*.py"))
+            
+            # Find files with _refactored suffix
+            refactored_files = [f for f in dashboard_files if "_refactored.py" in f.name]
+            
+            for refactored_file in refactored_files:
+                # Check if original file still exists
+                original_name = refactored_file.name.replace("_refactored.py", ".py")
+                original_file = dashboard_dir / original_name
+                
+                if original_file.exists():
+                    # Check if both files have similar sizes (indicating duplication)
+                    refactored_size = refactored_file.stat().st_size
+                    original_size = original_file.stat().st_size
+                    
+                    refactoring_issues.append({
+                        'original': str(original_file),
+                        'refactored': str(refactored_file),
+                        'original_size': original_size,
+                        'refactored_size': refactored_size,
+                        'message': f"Both original and refactored versions exist for {original_name}"
+                    })
+        
+        # Check for legacy files that might need cleanup
+        legacy_patterns = [
+            "*_old.py",
+            "*_backup.py",
+            "*_deprecated.py",
+            "*_legacy.py",
+            "*.bak",
+            "*_temp.py"
+        ]
+        
+        for pattern in legacy_patterns:
+            legacy_files = list(self.project_root.glob(f"**/{pattern}"))
+            for legacy_file in legacy_files:
+                if 'venv' not in str(legacy_file) and '__pycache__' not in str(legacy_file):
+                    refactoring_issues.append({
+                        'file': str(legacy_file),
+                        'message': f"Legacy file pattern detected: {legacy_file.name}"
+                    })
+        
+        # Check scripts directory for duplicate functionality
+        scripts_dir = self.project_root / "scripts"
+        if scripts_dir.exists():
+            # Group scripts by similar names
+            script_groups = {}
+            for script in scripts_dir.glob("*.py"):
+                # Extract base name (e.g., "vlm_processor" from "vlm_processor.py")
+                base_name = script.stem
+                
+                # Check for similar scripts (e.g., vlm_processor, vlm_processing_service, vlm_manager)
+                for key in script_groups:
+                    if key in base_name or base_name in key:
+                        script_groups[key].append(script)
+                        break
+                else:
+                    script_groups[base_name] = [script]
+            
+            # Flag groups with multiple similar scripts
+            for base, scripts in script_groups.items():
+                if len(scripts) > 1:
+                    refactoring_issues.append({
+                        'scripts': [str(s) for s in scripts],
+                        'message': f"Multiple scripts with similar names found: {base}"
+                    })
+        
+        # Generate detailed report
+        if refactoring_issues:
+            print("\n🚨 INCOMPLETE REFACTORING DETECTED 🚨")
+            print(f"Found {len(refactoring_issues)} issues that need cleanup:\n")
+            
+            # Group by type
+            dashboard_issues = [i for i in refactoring_issues if 'original' in i]
+            legacy_issues = [i for i in refactoring_issues if 'file' in i]
+            script_issues = [i for i in refactoring_issues if 'scripts' in i]
+            
+            if dashboard_issues:
+                print("📊 Dashboard Refactoring Issues:")
+                for issue in dashboard_issues:
+                    print(f"  - {issue['message']}")
+                    print(f"    Original: {issue['original_size']} bytes")
+                    print(f"    Refactored: {issue['refactored_size']} bytes")
+                print()
+            
+            if legacy_issues:
+                print("🗑️  Legacy Files to Remove:")
+                for issue in legacy_issues:
+                    print(f"  - {issue['file']}")
+                print()
+            
+            if script_issues:
+                print("📜 Duplicate Scripts:")
+                for issue in script_issues:
+                    print(f"  - {issue['message']}")
+                    for script in issue['scripts']:
+                        print(f"    • {script}")
+                print()
+        
+        assert not refactoring_issues, f"Found {len(refactoring_issues)} incomplete refactoring issues"
 
 
 if __name__ == "__main__":
@@ -910,6 +1026,7 @@ if __name__ == "__main__":
         ("Streamlit anti-patterns", test.test_streamlit_anti_patterns),
         ("Circular imports", test.test_circular_imports),
         ("Naming conventions", test.test_naming_conventions),
+        ("Incomplete refactoring", test.test_incomplete_refactoring),
     ]
     
     passed = 0

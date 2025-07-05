@@ -20,13 +20,13 @@ class BasicPipeline(BasePipeline):
     def process_screenshot(self, screenshot_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process screenshot using basic pattern matching."""
         window_title = screenshot_data.get('active_window', '')
-        ocr_text = screenshot_data.get('ocr_text', '')
+        ocr_text = screenshot_data.get("ocr_result", '')
         
         task = self.extractor.extract_task(window_title) if window_title else "Unknown Activity"
         category = ActivityCategorizer.categorize(window_title, ocr_text)
         
         return {
-            'task': task,
+            "tasks": task,
             'category': category,
             'confidence': 0.5,  # Fixed confidence for basic method
             'features_used': ['Window Title'],

@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import logging
+logger = logging.getLogger(__name__)
+
 """Full end-to-end Pensieve test.
 
 This test only *passes* when running in a normal desktop session where:
@@ -7,8 +12,6 @@ This test only *passes* when running in a normal desktop session where:
 
 Otherwise we mark the case as *xfail* to avoid breaking headless CI.
 """
-
-from __future__ import annotations
 
 import json
 import os
@@ -29,7 +32,7 @@ API_URL = "http://localhost:8839"
 STREAMLIT_URL = "http://localhost:8502"
 
 CAPTURE_TIMEOUT = 60      # total seconds allowed for capture+process
-POLL_INTERVAL = 3         # DB poll interval
+POLL_INTERVAL = 0.5       # DB poll interval (reduced for performance)
 
 
 # -----------------------------------------------------------------------------
@@ -143,7 +146,7 @@ def test_pensieve_complete_pipeline_capture_to_api_retrieval():  # type: ignore[
         import subprocess
         subprocess.Popen(["./venv/bin/streamlit", "run", "task_board.py", "--server.headless", "true", "--server.port", "8502"],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(2)  # Reduced from 5s for performance
+        time.sleep(0.5)  # Reduced for performance
         
         try:
             resp = requests.get(streamlit_url, timeout=5)

@@ -3,6 +3,7 @@
 import streamlit as st
 from datetime import datetime, timedelta
 from typing import Tuple, List, Optional
+import streamlit as st
 
 
 class TimeFilterComponent:
@@ -14,23 +15,86 @@ class TimeFilterComponent:
     ]
     
     @staticmethod
-    def render(key: str = "time_filter", default: str = "Today") -> str:
+    def get_smart_default(db_manager=None) -> str:
+        """Get smart default based on actual data availability.
+        
+        Args:
+            db_manager: Database manager to check data
+            
+        Returns:
+            Best default time filter based on data
+        """
+        if db_manager is None:
+            return "Last 7 Days"  # Safe default
+            
+        try:
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            # Check different time periods for data availability
+            time_periods = {
+                "Today": (now.replace(hour=0, minute=0, second=0, microsecond=0), now),
+                "Yesterday": (
+                    (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0),
+                    (now - timedelta(days=1)).replace(hour=23, minute=59, second=59)
+                ),
+                "Last 7 Days": (now - timedelta(days=7), now),
+                "Last 30 Days": (now - timedelta(days=30), now)
+            }
+            
+            # Check each period for substantial data
+            period_scores = {}
+            for period_name, (start_date, end_date) in time_periods.items():
+                try:
+                    tasks_df = db_manager.fetch_tasks(start_date=start_date, end_date=end_date, limit=50)
+                    task_count = len(tasks_df)
+                    
+                    # Score based on task count and recency
+                    recency_weight = 1.0 if period_name in ["Today", "Yesterday"] else 0.7
+                    period_scores[period_name] = task_count * recency_weight
+                except Exception:
+                    period_scores[period_name] = 0
+            
+            # Find the best period with substantial data (at least 5 tasks)
+            best_period = None
+            best_score = 0
+            
+            # Prioritize recent periods if they have good data
+            for period in ["Today", "Yesterday", "Last 7 Days", "Last 30 Days"]:
+                score = period_scores.get(period, 0)
+                if score >= 5 and score > best_score:  # At least 5 tasks
+                    best_period = period
+                    best_score = score
+            
+            # If no period has enough data, default to Last 7 Days
+            return best_period if best_period else "Last 7 Days"
+            
+        except Exception:
+            return "Last 7 Days"  # Safe fallback
+    
+    @staticmethod
+    def render(key: str = "time_filter", default: Optional[str] = None, db_manager=None) -> str:
         """Render time filter selectbox.
         
         Args:
             key: Session state key
-            default: Default selection
+            default: Default selection (auto-detected if None)
+            db_manager: Database manager for smart defaults
             
         Returns:
             Selected time filter
         """
+        if default is None:
+            default = TimeFilterComponent.get_smart_default(db_manager)
+            
+        current_value = st.session_state.get(key, default)
+        
         return st.selectbox(
             "Time Period",
             TimeFilterComponent.TIME_OPTIONS,
-            index=TimeFilterComponent.TIME_OPTIONS.index(
-                st.session_state.get(key, default)
-            ),
-            key=key
+            index=TimeFilterComponent.TIME_OPTIONS.index(current_value),
+            key=key,
+            help="Automatically selected based on your activity data"
         )
     
     @staticmethod
@@ -99,19 +163,21 @@ class CategoryFilterComponent:
             multiselect: Whether to allow multiple selections
             
         Returns:
-            Selected category/categories
+            Selected category/categories (empty list means all categories)
         """
         if categories is None:
             categories = CategoryFilterComponent.DEFAULT_CATEGORIES
             
         if multiselect:
+            # FIXED: Default to empty list (all categories) instead of selecting all
             selected = st.multiselect(
                 "Categories",
                 categories[1:],  # Skip "All Categories" for multiselect
-                default=st.session_state.get(key, categories[1:]),
-                key=key
+                default=st.session_state.get(key, []),  # Empty default = all categories
+                key=key,
+                help="Leave empty to show all categories"
             )
-            return selected if selected else categories[1:]
+            return selected  # Empty list means all categories
         else:
             selected = st.selectbox(
                 "Category",
@@ -119,4 +185,4 @@ class CategoryFilterComponent:
                 index=0,
                 key=key
             )
-            return [selected] if selected != "All Categories" else categories[1:]
+            return [] if selected == "All Categories" else [selected]

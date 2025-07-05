@@ -1,8 +1,13 @@
 # Pensieve/memos Deep Integration Plan
 
+**Status:** UPDATED - Reflects architectural decision to maintain dashboard superiority  
+**Date:** 2025-01-05
+
 ## Executive Summary
 
-AutoTaskTracker currently uses only ~20% of Pensieve's capabilities, primarily treating it as a passive SQLite database. This plan outlines a phased approach to leverage Pensieve's full feature set, reducing code duplication and improving maintainability.
+AutoTaskTracker currently uses only ~20% of Pensieve's capabilities, primarily treating it as a passive SQLite database. This plan outlines a phased approach to leverage Pensieve's full feature set while **preserving our rich dashboard ecosystem** as the core differentiator.
+
+**Key Decision:** After thorough analysis, we **reject the plugin architecture** in favor of deepening API-first integration while maintaining our competitive advantages.
 
 ## Current State Analysis
 
@@ -129,58 +134,60 @@ class MemosAPIClient:
 4. Gradually migrate each dashboard to use API
 5. Remove direct database access once stable
 
-### Phase 3: Plugin Development (Week 5-6)
+### Phase 3: Advanced Integration (Week 5-6) - **UPDATED**
 
-**Goal**: Create AutoTaskTracker as a memos plugin
+**Goal**: Leverage advanced Pensieve capabilities while preserving dashboard ecosystem
 
-**Plugin Structure**:
-```yaml
-# ~/.memos/plugins/autotasktracker/plugin.yaml
-name: autotasktracker
-version: 1.0.0
-description: AI-powered task extraction from screenshots
-processors:
-  - name: task_extractor
-    type: metadata
-    config:
-      model: gpt-4
-      categories:
-        - Development
-        - Communication
-        - Research
-  - name: task_aggregator
-    type: post_processor
-    schedule: "*/5 * * * *"
-```
+**Key Decision**: Plugin architecture **REJECTED** - See `PENSIEVE_INTEGRATION_ARCHITECTURE_DECISION.md` for detailed analysis
 
-**Implementation**:
+**Advanced Integration Features**:
+
+1. **PostgreSQL Backend Integration**
 ```python
-# ~/.memos/plugins/autotasktracker/task_extractor.py
-from memos.plugin import MetadataProcessor
-from autotasktracker.ai import AITaskExtractor
-
-class TaskExtractorPlugin(MetadataProcessor):
-    def process(self, frame_data: dict) -> dict:
-        """Extract tasks from frame data"""
-        ocr_text = frame_data.get('metadata', {}).get('ocr_result', '')
-        window_title = frame_data.get('metadata', {}).get('active_window', '')
-        
-        extractor = AITaskExtractor()
-        tasks = extractor.extract_from_context(
-            text=ocr_text,
-            window_title=window_title
-        )
-        
-        return {
-            'tasks': tasks,
-            'task_count': len(tasks),
-            'categories': list(set(t['category'] for t in tasks))
-        }
+# autotasktracker/pensieve/postgresql_adapter.py
+class PostgreSQLAdapter:
+    """Adapter for Pensieve's PostgreSQL backend"""
+    
+    def __init__(self, pensieve_client):
+        self.client = pensieve_client
+        self.use_postgresql = self._check_postgresql_support()
+    
+    def _check_postgresql_support(self) -> bool:
+        """Check if Pensieve has PostgreSQL enabled"""
+        try:
+            health = self.client.get_health()
+            return health.get('database_type') == 'postgresql'
+        except:
+            return False
+    
+    def get_tasks_optimized(self, query_params) -> List[Task]:
+        """Use PostgreSQL optimized queries via Pensieve API"""
+        if self.use_postgresql:
+            return self._get_via_postgresql_api(query_params)
+        return self._get_via_sqlite_api(query_params)
 ```
 
-### Phase 4: Advanced Features (Week 7-8)
+2. **Enhanced Vector Search with pgvector**
+```python
+# autotasktracker/pensieve/vector_search.py
+class PensieveVectorSearch:
+    """Enhanced vector search using Pensieve's pgvector"""
+    
+    def semantic_search(self, query: str, limit: int = 20) -> List[SearchResult]:
+        """Use Pensieve's vector search capabilities"""
+        return self.client.vector_search(
+            query=query,
+            similarity_threshold=0.7,
+            limit=limit,
+            include_metadata=['tasks', 'category', 'window_title']
+        )
+```
 
-**Goal**: Leverage memos advanced capabilities
+### Phase 4: Optional Plugin Mode (Week 7-8) - **UPDATED**
+
+**Goal**: Provide optional lightweight plugin for users who prefer minimal integration
+
+**Note**: This is **optional** - full dashboard mode remains default and recommended
 
 **Features to Implement**:
 

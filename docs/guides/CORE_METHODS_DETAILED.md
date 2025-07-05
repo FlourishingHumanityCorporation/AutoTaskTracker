@@ -937,7 +937,7 @@ Where:
 ```
 
 **Similarity Score Interpretation**:
-- **1.0**: Identical semantic meaning (perfect match)
+- **1.0**: Identical semantic meaning (exact match)
 - **0.8-0.9**: Very similar activities (same project, similar tasks)
 - **0.6-0.8**: Related activities (same domain, related concepts)
 - **0.4-0.6**: Somewhat related (might be connected)

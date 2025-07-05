@@ -11,7 +11,7 @@ We now have comprehensive tests that validate different extraction methods on re
 - Results on 50 real screenshots:
   - **16% successful categorization** (mostly "Development" and "System" categories)
   - 84% fell into "Unknown" category
-  - Works best with obvious keywords like "code", "debug", "system"
+  - Works effectively with obvious keywords like "code", "debug", "system"
 
 ### 2. **OCR Extraction** (`test_ocr_extraction_on_real_screenshots`)
 - Tests OCR processing on actual screenshot image files

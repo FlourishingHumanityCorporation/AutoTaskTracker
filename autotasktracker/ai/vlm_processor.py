@@ -625,12 +625,12 @@ class SmartVLMProcessor:
         category = self._map_app_to_category(app_type)
         
         structured = {
-            'task': task,
+            "tasks": task,
             'category': category,
             'description': raw_result,
             'visual_context': raw_result,  # For compatibility
             'app_type': app_type,
-            'window_title': window_title,
+            "active_window": window_title,
             'processed_at': datetime.now().isoformat(),
             'confidence': 0.8,  # Default confidence
             'ui_elements': self._extract_ui_elements(raw_result),
@@ -957,7 +957,7 @@ class CircuitBreaker:
         for task in tasks:
             path = task.get('filepath', task) if isinstance(task, dict) else task
             entity_id = task.get('entity_id') if isinstance(task, dict) else None
-            window_title = task.get('window_title') if isinstance(task, dict) else None
+            window_title = task.get("active_window") if isinstance(task, dict) else None
             
             should_proc, reason = self.should_process(path, window_title, entity_id)
             if should_proc:
@@ -974,8 +974,8 @@ class CircuitBreaker:
                 if isinstance(task, dict):
                     result = self.process_image(
                         task['filepath'],
-                        task.get('window_title'),
-                        task.get('ocr_text'),
+                        task.get("active_window"),
+                        task.get("ocr_result"),
                         task.get('priority', 'normal'),
                         task.get('entity_id')
                     )

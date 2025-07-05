@@ -1,10 +1,8 @@
 """Utility modules for AutoTaskTracker."""
 
-from autotasktracker.utils.config import Config, get_config, set_config, reset_config
+from autotasktracker.config import Config, get_config
 
 __all__ = [
     'Config',
-    'get_config',
-    'set_config', 
-    'reset_config'
+    'get_config'
 ]

@@ -40,7 +40,7 @@ def load_screenshot_data(limit=50):
     FROM entities e
     LEFT JOIN metadata_entries me_ocr ON e.id = me_ocr.entity_id AND me_ocr."key" = 'ocr_result'
     LEFT JOIN metadata_entries me_window ON e.id = me_window.entity_id AND me_window."key" = 'active_window'
-    LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm."key" = 'vlm_result'
+    LEFT JOIN metadata_entries me_vlm ON e.id = me_vlm.entity_id AND me_vlm."key" = "vlm_structured"
     LEFT JOIN metadata_entries me_emb ON e.id = me_emb.entity_id AND me_emb."key" = 'embedding'
     WHERE e.file_type_group = 'image'
     AND me_window.value IS NOT NULL
@@ -90,7 +90,7 @@ def render_pipeline_interface(pipeline, screenshots_df, tab_name):
         
         # Data availability indicators
         indicators = []
-        if pd.notna(selected_screenshot['ocr_text']):
+        if pd.notna(selected_screenshot["ocr_result"]):
             indicators.append("📝 OCR")
         if pd.notna(selected_screenshot['vlm_description']):
             indicators.append("👁️ VLM")
@@ -115,7 +115,7 @@ def render_pipeline_interface(pipeline, screenshots_df, tab_name):
     with st.spinner(f"Processing with {pipeline.name}..."):
         screenshot_data = {
             'active_window': selected_screenshot.get('active_window', ''),
-            'ocr_text': selected_screenshot.get('ocr_text', ''),
+            "ocr_result": selected_screenshot.get("ocr_result", ''),
             'vlm_description': selected_screenshot.get('vlm_description', ''),
             'id': selected_screenshot.get('id')
         }
@@ -147,8 +147,8 @@ def render_pipeline_interface(pipeline, screenshots_df, tab_name):
     with col2:
         st.metric(
             label="Detected Task",
-            value=result['task'][:30] + "..." if len(result['task']) > 30 else result['task'],
-            help=f"Full task: {result['task']}"
+            value=result["tasks"][:30] + "..." if len(result["tasks"]) > 30 else result["tasks"],
+            help=f"Full task: {result['tasks']}"
         )
     
     with col3:

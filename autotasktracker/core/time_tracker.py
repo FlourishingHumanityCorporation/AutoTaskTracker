@@ -127,7 +127,7 @@ class TimeTracker:
         for idx, row in df.iterrows():
             timestamp = row['created_at']
             window_title = extract_window_title(row['active_window']) or 'Unknown'
-            category = ActivityCategorizer.categorize(window_title, row.get('ocr_text', ''))
+            category = ActivityCategorizer.categorize(window_title, row.get("ocr_result", ''))
             
             # Simplify task name (remove redundant app names)
             task_name = self._extract_task_name(window_title)

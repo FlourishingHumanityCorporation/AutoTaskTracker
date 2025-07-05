@@ -59,4 +59,4 @@ screenshots/
 
 # Config overrides
 config.local.json
-settings.local.json
+settings.local.json.pensieve_health_cache/

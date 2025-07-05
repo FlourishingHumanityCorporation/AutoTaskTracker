@@ -65,7 +65,7 @@ class AIEnhancedTaskExtractor:
             
             # If OCR provides high-quality task info, use it
             if ocr_enhancement and ocr_enhancement.get('ocr_quality') in ['excellent', 'good']:
-                base_task = ocr_enhancement.get('task', base_task)
+                base_task = ocr_enhancement.get("tasks", base_task)
         
         # Enhance with VLM if available
         vlm_task = None
@@ -96,7 +96,7 @@ class AIEnhancedTaskExtractor:
                 )
                 similar_tasks = [
                     {
-                        'task': self.base_extractor.extract_task(s.get('active_window', '')),
+                        "tasks": self.base_extractor.extract_task(s.get('active_window', '')),
                         'similarity': s['similarity_score'],
                         'time': s['created_at']
                     }
@@ -107,7 +107,7 @@ class AIEnhancedTaskExtractor:
         
         # Combine all information
         result = {
-            'task': base_task or "Activity Captured",
+            "tasks": base_task or "Activity Captured",
             'category': category,
             'confidence': 0.5,  # Base confidence
             'ai_features': {
@@ -221,7 +221,7 @@ class AIEnhancedTaskExtractor:
                 insights['has_similar_tasks'] = True
                 insights['task_context'] = [
                     {
-                        'task': self.base_extractor.extract_task(c.get('active_window', '')),
+                        "tasks": self.base_extractor.extract_task(c.get('active_window', '')),
                         'time_ago': self._time_ago(c['created_at']),
                         'similarity': c['similarity_score']
                     }

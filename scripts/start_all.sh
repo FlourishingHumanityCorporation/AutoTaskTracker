@@ -24,8 +24,8 @@ start_service() {
 }
 
 # Start services
-start_service "realtime-processor" "scripts/realtime_processor.py"
-start_service "session-processor" "scripts/process_sessions.py --continuous"
+start_service "realtime-processor" "scripts/processing/realtime_processor.py"
+start_service "session-processor" "scripts/processing/process_sessions.py --continuous"
 
 echo ""
 echo "✅ Services started successfully!"

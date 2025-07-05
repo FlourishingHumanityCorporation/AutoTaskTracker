@@ -1,0 +1,137 @@
+name: Pensieve Integration Health Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Need full history for git diff
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          .pensieve_health_cache
+        key: ${{ runner.os }}-pensieve-health-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pensieve-health-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-timeout
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    
+    - name: Run Pensieve Health Test (Incremental)
+      env:
+        PENSIEVE_TEST_INCREMENTAL: "1"
+        GITHUB_BASE_REF: ${{ github.base_ref }}
+      run: |
+        pytest tests/health/test_pensieve_integration_health_v2.py \
+          -v \
+          --timeout=300 \
+          --tb=short \
+          -k "not test_generate_summary_report" || true
+    
+    - name: Generate Health Report
+      if: always()
+      run: |
+        python -m tests.health.test_pensieve_integration_health_v2
+    
+    - name: Upload Health Report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: pensieve-health-report
+        path: |
+          pensieve_health_summary.json
+          .pensieve_health_cache/
+    
+    - name: Comment PR with Results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          let summary = '## 🔍 Pensieve Integration Health Check\n\n';
+          
+          try {
+            // Read the summary file
+            const reportPath = 'pensieve_health_summary.json';
+            if (fs.existsSync(reportPath)) {
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              
+              summary += `**Mode**: ${report.mode}\n`;
+              summary += `**Files Analyzed**: ${report.files_analyzed}\n`;
+              summary += `**Timestamp**: ${report.timestamp}\n\n`;
+              
+              if (report.fixes_applied && report.fixes_applied.length > 0) {
+                summary += '### 🔧 Auto-Fix Results\n\n';
+                summary += `Applied ${report.fixes_applied.length} fixes:\n`;
+                report.fixes_applied.forEach(fix => {
+                  summary += `- ${fix}\n`;
+                });
+                summary += '\n';
+              }
+              
+              summary += '### 💡 Tips\n\n';
+              summary += '- Set `PENSIEVE_AUTO_FIX=1` in your PR to auto-fix simple issues\n';
+              summary += '- Run locally: `pytest tests/health/test_pensieve_integration_health_v2.py`\n';
+              summary += '- View full results in the Actions artifacts\n';
+            } else {
+              summary += '⚠️ No health report generated. Check the logs for errors.\n';
+            }
+          } catch (error) {
+            summary += `❌ Error reading health report: ${error.message}\n`;
+          }
+          
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('Pensieve Integration Health Check')
+          );
+          
+          // Update or create comment
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: summary
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
+          }
+    
+    - name: Fail if critical issues found
+      if: failure()
+      run: |
+        echo "❌ Critical Pensieve integration issues found!"
+        echo "Run locally with PENSIEVE_AUTO_FIX=1 to fix simple issues"
+        exit 1
