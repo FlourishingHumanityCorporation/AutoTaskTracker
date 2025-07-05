@@ -11,46 +11,26 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Import unified configuration system with hot-reloading capabilities
-try:
-    from autotasktracker.config_unified import (
-        UnifiedAutoTaskSettings, 
-        get_config as get_unified_config,
-        reload_config as reload_unified_config,
-        get_config_manager,
-        reset_config as reset_unified_config
-    )
-    UNIFIED_AVAILABLE = True
-    logger.info("🔥 Unified configuration system with hot-reloading activated")
-except ImportError as e:
-    UNIFIED_AVAILABLE = False
-    logger.warning(f"Unified configuration not available: {e}")
-    
-    # Fallback to Pydantic config
-    from autotasktracker.config_pydantic import AutoTaskSettings, get_pydantic_config
-    PYDANTIC_AVAILABLE = True
-    UnifiedAutoTaskSettings = AutoTaskSettings  # Alias for compatibility
-    logger.info("📋 Using Pydantic configuration system")
+# Use Pydantic configuration system
+from autotasktracker.config_pydantic import AutoTaskSettings, get_pydantic_config
+UNIFIED_AVAILABLE = False  # Unified system not implemented
+UnifiedAutoTaskSettings = AutoTaskSettings  # Alias for compatibility
+logger.info("📋 Using Pydantic configuration system")
 
 
 def get_config():
     """Get the configuration instance.
     
     This is the main configuration function used throughout the application.
-    Returns a type-safe, validated configuration with environment variable support,
-    hot-reloading, and advanced features when unified system is available.
+    Returns a type-safe, validated configuration with environment variable support.
     
     Returns:
-        Configuration instance (unified or Pydantic based on availability)
+        AutoTaskSettings: Validated Pydantic configuration instance
         
     Raises:
-        ImportError: If configuration system is not available
         ValidationError: If configuration validation fails
     """
-    if UNIFIED_AVAILABLE:
-        return get_unified_config()
-    else:
-        return get_pydantic_config()
+    return get_pydantic_config()
 
 
 def validate_current_config() -> Dict[str, Any]:
@@ -110,14 +90,11 @@ def reload_config():
     This function forces a fresh reload of the configuration system.
     
     Returns:
-        Configuration instance after reload
+        AutoTaskSettings: Configuration instance after reload
     """
-    if UNIFIED_AVAILABLE:
-        return reload_unified_config()
-    else:
-        from autotasktracker.config_pydantic import reset_pydantic_config
-        reset_pydantic_config()
-        return get_config()
+    from autotasktracker.config_pydantic import reset_pydantic_config
+    reset_pydantic_config()
+    return get_config()
 
 
 def reset_config() -> None:
@@ -126,11 +103,8 @@ def reset_config() -> None:
     This function resets the configuration singleton to force
     a fresh reload from environment variables and configuration files.
     """
-    if UNIFIED_AVAILABLE:
-        reset_unified_config()
-    else:
-        from autotasktracker.config_pydantic import reset_pydantic_config
-        reset_pydantic_config()
+    from autotasktracker.config_pydantic import reset_pydantic_config
+    reset_pydantic_config()
 
 
 def start_config_monitoring(check_interval: int = 60) -> bool:

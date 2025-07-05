@@ -137,7 +137,7 @@ class TaskRepository(BaseRepository):
             SELECT entity_id, key, value 
             FROM metadata_entries 
             WHERE entity_id IN ({placeholders})
-            AND key IN ('category', 'active_window', 'ocr_result')
+            AND key IN ('category', 'active_window', 'ocr_result', 'minicpm_v_result', 'vlm_result', 'subtasks')
             """
             
             cursor.execute(metadata_query, batch_ids)
@@ -168,7 +168,7 @@ class TaskRepository(BaseRepository):
             # Extract and normalize window title
             window_title = self._extract_window_title_from_metadata(metadata)
             
-            # Create task object
+            # Create task object with enhanced metadata
             task = Task(
                 id=entity_id,
                 title=task_text,
@@ -177,7 +177,16 @@ class TaskRepository(BaseRepository):
                 duration_minutes=5,
                 window_title=window_title,
                 ocr_text=metadata.get('ocr_result', ''),
-                screenshot_path=filepath
+                screenshot_path=filepath,
+                metadata={
+                    'vlm_result': metadata.get('minicpm_v_result'),
+                    'minicpm_v_result': metadata.get('minicpm_v_result'),
+                    'subtasks': metadata.get('subtasks'),
+                    'tasks': task_text,
+                    'active_window': metadata.get('active_window'),
+                    'timestamp': created_at,
+                    'category': category
+                }
             )
             tasks.append(task)
         

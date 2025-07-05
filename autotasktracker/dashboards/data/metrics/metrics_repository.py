@@ -108,7 +108,7 @@ class MetricsRepository(BaseRepository):
             peak_hours=peak_hours
         )
     
-    def _calculate_daily_metrics_from_tasks(self, task_dicts: List[Dict[str, Any]], date) -> DailyMetrics:
+    def _calculate_daily_metrics_from_tasks(self, task_dicts: List[Dict[str, Any]], date) -> Optional[DailyMetrics]:
         """Calculate daily metrics from PostgreSQL adapter task data."""
         if not task_dicts:
             return None

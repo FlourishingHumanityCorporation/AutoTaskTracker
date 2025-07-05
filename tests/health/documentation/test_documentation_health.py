@@ -12,6 +12,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pytest
 
+from . import safe_read_text
+
 
 class TestDocumentationHealth:
     """Tests for documentation quality, organization, and relevance"""
@@ -37,7 +39,7 @@ class TestDocumentationHealth:
         duplicates = []
         
         for doc_path in docs:
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             # Extract meaningful content (ignore headers and whitespace)
             lines = [line.strip() for line in content.split('\n') 
                     if line.strip() and not line.startswith('#')]
@@ -88,7 +90,7 @@ class TestDocumentationHealth:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text().lower()
+            content = safe_read_text(doc_path).lower()
             for pattern in outdated_patterns:
                 if re.search(pattern, content, re.IGNORECASE):
                     outdated_docs.append(f"{doc_path.relative_to(self.docs_dir)}: contains '{pattern}'")
@@ -139,7 +141,7 @@ class TestDocumentationHealth:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             first_lines = '\n'.join(content.split('\n')[:10])  # Check first 10 lines
             
             for pattern in announcement_patterns:
@@ -197,7 +199,7 @@ class TestDocumentationHealth:
             
             # Check content patterns
             if not any(pattern in filename for pattern in ['complete', 'fix', 'summary', 'status']):
-                content = doc_path.read_text().lower()
+                content = safe_read_text(doc_path).lower()
                 for pattern in completion_content_patterns:
                     if re.search(pattern, content, re.IGNORECASE):
                         problematic_docs.append(
@@ -225,7 +227,7 @@ class TestDocumentationHealth:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text().lower()
+            content = safe_read_text(doc_path).lower()
             
             # Check if it's primarily about process rather than actual use
             process_indicators = 0
@@ -257,7 +259,7 @@ class TestDocumentationHealth:
         
         oversized_docs = []
         for doc_path in self.get_all_docs():
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             line_count = len(content.split('\n'))
             
             # Determine limit based on directory
@@ -284,7 +286,7 @@ class TestDocumentationHealth:
         
         docs_with_code = []
         for doc_path in self.get_all_docs():
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             code_blocks = re.findall(code_block_pattern, content)
             
             # Check for large code blocks (>20 lines)
@@ -360,7 +362,7 @@ class TestDocumentationHealth:
             if 'planning' in str(doc_path) or 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             found_patterns = []
             
             for pattern in informal_patterns:

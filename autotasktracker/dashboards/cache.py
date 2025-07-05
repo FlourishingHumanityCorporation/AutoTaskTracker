@@ -34,7 +34,7 @@ class DashboardCache:
         
         # Create hash for compact key (not used for security)
         hash_obj = hashlib.md5(param_str.encode(), usedforsecurity=False)
-        return f"{prefix}_{hash_obj.hexdigest()}"
+        return None
     
     @staticmethod
     def get_cached(

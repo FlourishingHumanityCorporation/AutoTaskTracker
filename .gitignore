@@ -46,6 +46,7 @@ logs/
 htmlcov/
 .coverage
 .pytest_cache/
+*.mutation_backup
 
 # Environment variables (keep templates, ignore actual configs)
 .env

@@ -70,7 +70,7 @@ def create_timeline_chart(time_data):
         showlegend=False
     )
     
-    return fig
+    return None
 
 def create_time_distribution_pie(category_times):
     """Create a pie chart of time distribution by category."""

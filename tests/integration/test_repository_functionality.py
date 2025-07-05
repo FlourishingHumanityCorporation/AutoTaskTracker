@@ -34,7 +34,7 @@ class TestRepositoryFunctionality:
         assert hasattr(repo, 'db')
         assert hasattr(repo, 'use_pensieve')
         assert hasattr(repo, 'performance_stats')
-        assert hasattr(repo, 'endpoint_circuit_breaker')
+        assert hasattr(repo, 'circuit_breaker')
         
         # Performance stats structure
         expected_stats = [
@@ -166,7 +166,7 @@ class TestRepositoryFunctionality:
         repo = BaseRepository()
         
         # Circuit breaker should have expected structure
-        assert hasattr(repo, 'endpoint_circuit_breaker')
+        assert hasattr(repo, 'circuit_breaker')
         assert isinstance(repo.endpoint_circuit_breaker, dict)
         
         # Should have circuit breaker methods

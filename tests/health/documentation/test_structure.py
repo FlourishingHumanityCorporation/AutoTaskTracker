@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 import pytest
 
+from . import safe_read_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,7 +77,7 @@ class TestDocumentationStructure:
         
         oversized_docs = []
         for doc_path in self.get_all_docs():
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             line_count = len(content.split('\n'))
             
             # Determine limit based on directory
@@ -143,13 +145,10 @@ class TestDocumentationStructure:
                     # Check if the feature is mentioned in any Python files
                     found_in_code = False
                     for py_file in self.project_root.rglob("*.py"):
-                        try:
-                            if feature_name in py_file.read_text(encoding='utf-8', errors='ignore').lower():
-                                found_in_code = True
-                                break
-                        except (UnicodeDecodeError, OSError):
-                            # Skip files that can't be read as text
-                            continue
+                        content = safe_read_text(py_file)
+                        if content and feature_name in content.lower():
+                            found_in_code = True
+                            break
                     
                     if not found_in_code:
                         orphaned_docs.append(f"features/{feature_doc.name}: No corresponding code found")

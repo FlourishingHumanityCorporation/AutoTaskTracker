@@ -5,6 +5,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pytest
 
+from . import safe_read_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ class TestDocumentationCompleteness:
         duplicates = []
         
         for doc_path in docs:
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             # Extract meaningful content (ignore headers and whitespace)
             lines = [line.strip() for line in content.split('\n') 
                     if line.strip() and not line.startswith('#')]
@@ -110,7 +112,7 @@ class TestDocumentationCompleteness:
                     break
             
             # Check content patterns for temporary/completion language
-            content = doc_path.read_text().lower()
+            content = safe_read_text(doc_path).lower()
             for pattern in completion_content_patterns:
                 if re.search(pattern, content, re.IGNORECASE):
                     problematic_docs.append(
@@ -138,7 +140,7 @@ class TestDocumentationCompleteness:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text().lower()
+            content = safe_read_text(doc_path).lower()
             
             # Check if it's primarily about process rather than actual use
             process_indicators = 0
@@ -208,7 +210,7 @@ class TestDocumentationCompleteness:
             # Check if feature is documented anywhere
             documented = False
             for doc_path in self.get_all_docs():
-                content = doc_path.read_text().lower()
+                content = safe_read_text(doc_path).lower()
                 if feature.replace('_', ' ') in content or feature in content:
                     documented = True
                     break
