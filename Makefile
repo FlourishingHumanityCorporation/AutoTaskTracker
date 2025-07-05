@@ -52,6 +52,17 @@ security-metrics:
 	@echo "📊 Generating security metrics..."
 	python scripts/security/security_metrics.py
 
+# Technical debt monitoring
+complexity-check:
+	@echo "📈 Monitoring code complexity..."
+	python scripts/monitor_complexity.py
+
+debt-analysis:
+	@echo "🔍 Running comprehensive technical debt analysis..."
+	make complexity-check
+	make security-metrics
+	@echo "✅ Technical debt analysis complete - check reports/ directories"
+
 # Health checks
 health-check:
 	@echo "🏥 Running health tests..."
