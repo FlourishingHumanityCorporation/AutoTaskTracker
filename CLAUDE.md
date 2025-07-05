@@ -1,19 +1,19 @@
 # 🚨 AUTOTASKTRACKER AI ASSISTANT INSTRUCTIONS 🚨
 
-This file contains MANDATORY instructions for AI assistants working on AutoTaskTracker.
-Read this ENTIRE file before making ANY changes to the codebase.
+Essential instructions for AI assistants working on AutoTaskTracker.
 
----
-
-## 📋 TABLE OF CONTENTS
-1. [🛑 Critical Rules](#-critical-rules)
-2. [📁 Project Overview](#-project-overview)
-3. [🏗️ Technical Architecture](#-technical-architecture)
-4. [🚀 Quick Start Commands](#-quick-start-commands)
-5. [🧪 Testing Requirements](#-testing-requirements)
-6. [📚 Documentation Standards](#-documentation-standards)
-7. [💡 Lessons Learned](#-lessons-learned)
-8. [⚠️ Common Issues](#-common-issues)
+## 📚 CRITICAL DOCUMENTATION PATTERN
+@docs/architecture/pensieve_integration.md
+@docs/guides/testing_guide.md
+@docs/guides/code_style.md
+@docs/guides/workflow_patterns.md
+@docs/guides/domain_knowledge.md
+@docs/guides/dependencies.md
+@docs/guides/mcp_integration.md
+@docs/guides/permissions_setup.md
+@docs/guides/github_actions_integration.md
+@docs/guides/complexity_management.md
+@docs/guides/common_issues.md
 
 ---
 
@@ -30,6 +30,7 @@ Read this ENTIRE file before making ANY changes to the codebase.
 7. **NEVER create announcement-style docs** - No "We're excited to announce!"
 8. **NEVER implement poor workarounds** - Fix the root causes of issues. Ask at least Why Something Happened three times. 
 9. **NEVER bypass Pensieve capabilities** - Check Pensieve features before implementing custom solutions
+10. **NEVER use progress percentages or superlatives** - No "85% complete", "amazing", "perfect" in documentation or task summaries
 
 ### ALWAYS DO THESE:
 1. **ALWAYS run ALL health tests before committing**: 
@@ -45,6 +46,31 @@ Read this ENTIRE file before making ANY changes to the codebase.
 6. **ALWAYS delete completion docs immediately**: Never create status/summary/complete files
 7. **ALWAYS use measured, technical language**: Avoid superlatives like "perfect", "flawless", "best","amazing", "excellent" in technical contexts
 8. **ALWAYS leverage Pensieve first**: Check Pensieve capabilities before implementing custom solutions
+9. **ALWAYS use conventional commits**: Follow structured commit message format
+10. **ALWAYS use git for project history**: Run git log/show/diff instead of manual changelogs
+
+---
+
+## 📝 COMMIT MESSAGE STANDARDS
+
+**Format:** `type(scope): description`
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix 
+- `docs`: Documentation changes
+- `style`: Code style changes
+- `refactor`: Code refactoring
+- `test`: Test changes
+- `chore`: Maintenance tasks
+
+**Examples:**
+```bash
+feat(ai): add VLM processing pipeline
+fix(database): resolve connection pool deadlock
+docs(pensieve): update integration guide
+test(health): add parallel execution tests
+```
 
 ---
 
@@ -89,6 +115,10 @@ AutoTaskTracker/
 │   └── utils/               # Utility scripts
 ├── tests/                    # All tests
 │   ├── health/              # Health checks
+│   │   ├── analyzers/       # General health analyzers
+│   │   ├── pensieve_health/ # Pensieve-specific health tests
+│   │   ├── config_system/   # Configuration health tests
+│   │   └── import_system/   # Import analysis tools
 │   ├── unit/                # Unit tests
 │   ├── integration/         # Integration tests
 │   ├── functional/          # Real functionality tests
@@ -114,130 +144,19 @@ AutoTaskTracker/
 
 ---
 
-## 🔗 PENSIEVE ARCHITECTURE IMPERATIVE
+## 🔗 PENSIEVE INTEGRATION IMPERATIVE
 
-**AutoTaskTracker achieves 60-70% Pensieve integration** through API-first architecture with comprehensive fallback systems.
-This section defines the integration patterns and current limitations.
+Always check Pensieve capabilities before implementing custom solutions. See docs/guides/PENSIEVE_REFERENCE.md for more information.
 
-### 🎯 PENSIEVE-FIRST DEVELOPMENT PRINCIPLE
+**Key Principle:** Use DatabaseManager, not direct sqlite3.connect()
 
-**Before implementing ANY feature, developers MUST:**
-
-1. **Check Pensieve Documentation**: Review available APIs, plugins, and services
-2. **Audit Current Utilization**: Understand what Pensieve already provides
-3. **Design Integration-First**: Prefer Pensieve APIs over direct implementation
-4. **Document Decision**: If custom implementation needed, document why Pensieve can't be used
-
-### 🚀 PENSIEVE UTILIZATION TARGETS
-
-**Current Integration State:**
-- Database Access: 70% ✅ (DatabaseManager + graceful SQLite fallback)
-- OCR Processing: 100% ✅ (Direct database access to Pensieve OCR results)
-- Service Commands: 60% ⚠️ (Health monitoring works, limited API endpoints)
-- REST API: 20% ⚠️ (Health endpoint only, data endpoints missing)
-- Configuration: 70% ✅ (Service discovery works, limited backend detection)
-- File System Integration: 80% ✅ (Direct access + validation)
-- PostgreSQL Backend: 10% ❌ (Detection fails, defaults to SQLite)
-- Vector Search: 60% ⚠️ (Implementation exists, limited by API availability)
-
-### 📋 MANDATORY PENSIEVE INTEGRATION CHECKLIST
-
-**For Any New Feature:**
-- [ ] Checked `memos --help` for relevant commands
-- [ ] Reviewed Pensieve REST API documentation
-- [ ] Evaluated plugin system capabilities  
-- [ ] Considered event-driven architecture
-- [ ] Assessed configuration management needs
-
-**For Data Processing:**
-- [ ] Use Pensieve's built-in OCR processing (builtin_ocr plugin)
-- [ ] Leverage built-in VLM processing (builtin_vlm plugin) 
-- [ ] Utilize metadata_entries table for results storage
-- [ ] Use DatabaseManager instead of direct sqlite3.connect()
-
-**For File Operations:**
-- [ ] Use Pensieve's screenshot directory structure
-- [ ] Implement file validation and error handling
-- [ ] Use service commands (scan, reindex) when appropriate
-- [ ] Read configuration from Pensieve when possible
-
-### 🛠️ PENSIEVE INTEGRATION PATTERNS
-
-**✅ PREFERRED: DatabaseManager Approach**
 ```python
-# Use DatabaseManager for consistent database access
+# ✅ CORRECT
 from autotasktracker.core.database import DatabaseManager
 db = DatabaseManager()
 with db.get_connection() as conn:
     screenshots = db.fetch_tasks(limit=100)
 ```
-
-**✅ ACCEPTABLE: Service Commands**
-```bash
-# Use Pensieve commands for maintenance
-memos scan           # Scan for new screenshots
-memos ps            # Check service status  
-memos start/stop    # Service management
-memos config        # Read configuration
-```
-
-**❌ DISCOURAGED: Direct SQLite Access**
-```python
-# Avoid direct database connections
-# Use DatabaseManager instead
-conn = sqlite3.connect("~/.memos/database.db")  # DON'T DO THIS
-```
-
-### 📊 UTILIZATION MONITORING
-
-**Required Metrics Tracking:**
-- DatabaseManager usage vs. direct sqlite3.connect()
-- Pensieve plugin usage (builtin_ocr, builtin_vlm) vs. custom processing
-- Service command utilization (scan, config, reindex)
-- Metadata schema compliance and efficiency
-
-**Regular Reviews:**
-- Audit scripts for direct database access violations
-- Check OCR/VLM processing efficiency
-- Monitor file system integration patterns
-- Assess configuration management improvements
-
-### 🔄 MIGRATION STRATEGY
-
-**Phase 1: Database Access Consolidation** (COMPLETED)
-- ✅ Eliminated direct sqlite3.connect() usage in production code  
-- ✅ Standardized on DatabaseManager for all database operations
-- ✅ Added proper connection pooling and error handling
-
-**Phase 2: API Integration** (PARTIALLY COMPLETED)
-- ✅ Comprehensive REST API client implementation
-- ⚠️ Health monitoring works, but data API endpoints unavailable
-- ✅ Graceful fallback to SQLite when API unavailable
-
-**Phase 3: Advanced Integration** (IN PROGRESS)
-- ✅ Configuration synchronization (limited by available endpoints)
-- ⚠️ Multi-backend support exists but limited by API constraints
-- ⚠️ PostgreSQL/pgvector detection limited by API availability
-
-### ⚖️ ARCHITECTURAL DECISION FRAMEWORK
-
-**When to Use Pensieve:**
-- ✅ Feature exists in Pensieve (database, OCR, VLM plugins)
-- ✅ Performance is acceptable (SQLite for <1M records)
-- ✅ Maintains data consistency and schema compliance
-- ✅ Simplifies maintenance and reduces code duplication
-
-**When Custom Implementation is Justified:**
-- ⚠️ Pensieve lacks specific functionality (advanced task extraction)
-- ⚠️ Performance requirements exceed Pensieve capabilities
-- ⚠️ AutoTaskTracker-specific UI/UX requirements
-- ⚠️ AI processing that extends beyond Pensieve's scope
-
-**Documentation Required for Custom Implementation:**
-1. **Pensieve Capability Assessment**: What Pensieve provides and limitations
-2. **Performance Justification**: Why Pensieve's approach is insufficient
-3. **Integration Plan**: How custom solution uses Pensieve infrastructure
-4. **Maintenance Plan**: Ongoing compatibility with Pensieve updates
 
 ---
 
@@ -301,214 +220,194 @@ python scripts/pensieve_health_check.py
 
 ## 🧪 TESTING REQUIREMENTS
 
-### MANDATORY Before ANY Commit:
+**MANDATORY Before ANY Commit:**
 ```bash
-# 1. Modular health checks (preferred - faster and focused)
-pytest tests/health/test_database_health.py -v          # Database patterns
-pytest tests/health/test_integration_health.py -v       # Pensieve integration
-pytest tests/health/test_error_health.py -v             # Error handling
-pytest tests/health/test_config_health.py -v            # Configuration
-
-# 2. Testing system health check
-pytest tests/health/test_testing_system_health.py -v
-
-# 3. Documentation check
-pytest tests/health/test_documentation_health.py -v
-
-# 4. Critical functionality
-pytest tests/integration/test_pensieve_critical_path.py -v
-
-# 5. Real functional tests (validates actual functionality)
-python tests/run_functional_tests.py --verbose
-
-# Alternative: Run all health tests together
+# Run all health tests
 pytest tests/health/ -v
+
+# Fast parallel execution  
+python scripts/run_health_tests_parallel.py --fast
+
+# Real functional tests
+python tests/run_functional_tests.py --verbose
 ```
-
-### Real Functional Tests
-Validate actual functionality instead of mocking:
-
-```bash
-# Run all functional tests
-python tests/run_functional_tests.py
-
-# Run specific categories
-python tests/run_functional_tests.py --category ocr       # Real OCR
-python tests/run_functional_tests.py --category database # Real SQLite
-python tests/run_functional_tests.py --category ai       # Real AI
-python tests/run_functional_tests.py --category pipeline # End-to-end
-```
-
-### What Tests Check:
-- ✅ No bare except clauses
-- ✅ No sys.path hacks
-- ✅ No root directory clutter
-- ✅ Proper database usage
-- ✅ Documentation quality
-- ✅ No duplicate/improved files
-- ✅ Testing system health and organization
-- ✅ Test categorization and discoverability
-- ✅ No infinite loops in tests
-- ✅ Proper fixture usage
 
 ---
 
 ## 📚 DOCUMENTATION STANDARDS
 
-### Documentation Structure
-```
-docs/
-├── architecture/     # Technical design (1-2 files max)
-├── features/        # Feature docs
-├── guides/          # How-to guides
-└── archive/         # Legacy docs (minimize - prefer deletion)
-```
+**Write Rules:**
+- ❌ NO: Announcement-style language, completion docs, superlatives
+- ✅ YES: Professional, timeless, measured language
+- ✅ YES: DELETE irrelevant docs, don't archive
 
-### Writing Rules:
-- ❌ NO: "We're excited to announce..."
-- ❌ NO: "Successfully implemented!"
-- ❌ NO: "As of December 2024..."
-- ❌ NO: Code blocks > 20 lines
-- ❌ NO: Completion/status announcements ("FIXED", "COMPLETE")
-- ❌ NO: Process documentation (cleanup notes, migration guides)
-- ❌ NO: Superlatives in technical contexts ("perfect", "amazing", "excellent")
-- ✅ YES: Professional, timeless language
-- ✅ YES: Link to source files
-- ✅ YES: Focus on "what" and "how"
-- ✅ YES: Measured, descriptive language ("functional", "working", "operational")
-- ✅ YES: Matter-of-fact summaries focused on next steps (not overconfident progress claims)
+**Key Principles:**
+- Update existing docs or use git commit messages for status
+- Use TDD workflow to prevent AI hallucinations and scope drift
+- Break complex tasks into smaller sub-problems to avoid "complexity threshold"
+- Clear context frequently with `/clear` or `/reload` to prevent degradation
 
-### Documentation Cleanup Rule:
-**DELETE, don't archive!** Remove irrelevant docs completely:
-- Status announcements ("Everything Fixed", "Complete")
-- Process documentation (migration guides, refactoring notes)
-- Outdated planning documents
-- Duplicate content
+**Personal Overrides:** Create `CLAUDE.local.md` for experimental instructions (ignored by git)
 
-### Root Cause Prevention:
-**Why completion docs get created and how to prevent:**
-- ❌ **Symptom**: Creating "COMPLETE.md", "FINAL.md", "SUMMARY.md" files
-- ✅ **Root Cause**: Lack of process enforcement and automated checks
-- ✅ **Prevention**: Run `pytest tests/health/test_documentation_health.py` before ANY commit
-- ✅ **Alternative**: Update existing docs or use git commit messages for status
+**Available Commands:** `/health-check`, `/start-dashboards`, `/process-screenshots`, `/new-feature [description]`, `/complexity-check`
 
-### Key Documents:
-- `architecture/CODEBASE_DOCUMENTATION.md` - Primary technical reference
-- `guides/FEATURE_MAP.md` - Feature-to-file mapping
-- `guides/README_AI.md` - AI features guide
+**Plan Template:** Use `@docs/templates/plan.md` for complex feature implementation
+
+**User Template:** Copy `@docs/templates/user-claude.md` to `~/.claude/CLAUDE.md` for personal preferences
+
+**Navigation:** Search for `<!-- CLAUDE-MARKER: section-name -->` in large files
+
+**Hierarchical Context:** Module-specific CLAUDE.md files in `autotasktracker/ai/`, `autotasktracker/dashboards/`, `autotasktracker/pensieve/`, `scripts/`
 
 ---
 
-## 💡 LESSONS LEARNED
+## 🎯 EFFECTIVE AI PROMPT ENGINEERING
 
-### Module Organization
-- Check existing structure before creating files
-- Use proper imports: `from autotasktracker.module import Class`
-- Consolidate related functionality (e.g., all VLM code in ai/)
-- Update all references when moving files
+**Core Principle:** The quality of AI-generated code directly reflects the quality of your prompt. Vague prompts force AI to make more guesses, increasing errors and security flaws.
 
-### Common Mistakes to Avoid
-1. Creating duplicate functionality (check first!)
-2. Putting scripts in root (use scripts/)
-3. Forgetting to update imports after moving files
-4. Not testing commands in documentation
-5. Creating "improved" versions instead of editing
-6. **PENSIEVE ENVIRONMENT ISSUE**: Check Python environment! Pensieve is installed in `venv/` NOT `anaconda3/`
+### Key Techniques for High-Quality Code
 
-### Import Patterns
+#### 1. Be Hyper-Specific and Demanding
+**❌ Vague:** "Create a login function"  
+**✅ Specific:** "Generate a Python function using Flask 2.0 for a user login endpoint. The function should be named `handle_login`, accept a POST request with JSON body, and return a JSON response."
+
+#### 2. Assign a Persona
+**❌ Basic:** "Create a database query function"  
+**✅ Persona-Based:** "**Act as a senior backend engineer with expertise in database security.** Create a function that queries the entities table using DatabaseManager..."
+
+#### 3. Provide Rich Context (Few-Shot Prompting)
+**❌ No Context:** "Add error handling"  
+**✅ Context-Rich:** "Following AutoTaskTracker patterns where we use `logging.getLogger(__name__)` and specific exception types, add error handling to this function. Here's an example from our codebase:
 ```python
-# ✅ CORRECT - From within package
-from autotasktracker.core.database import DatabaseManager
+try:
+    db = DatabaseManager()
+    with db.get_connection() as conn:
+        result = conn.execute(query)
+except sqlite3.Error as e:
+    logger.error(f"Database error: {e}")
+```"
 
-# ✅ CORRECT - From scripts/
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from autotasktracker.core.database import DatabaseManager
+#### 4. Incorporate Security Requirements Explicitly
+**❌ Implicit:** "Create a function to process user input"  
+**✅ Explicit Security:** "Create a function that:
+1. Validates all user input against SQL injection
+2. Uses parameterized queries via DatabaseManager
+3. Implements rate limiting
+4. Logs security events
+5. Follows OWASP input validation guidelines"
 
-# ❌ WRONG - Relative imports
-from ..core.database import DatabaseManager
+#### 5. Use Advanced Reasoning Techniques
+
+**Chain-of-Thought (CoT):**
+"**First, outline the steps** needed to implement VLM processing with graceful degradation. Include: model availability check, fallback logic, error handling, and performance monitoring. **Then, write the code** implementing these steps."
+
+**Recursive Criticism and Improvement (RCI):**
+1. Initial: "Create the function following AutoTaskTracker patterns..."
+2. Follow-up: "**Review your code** for potential issues: missing error cases, Pensieve integration opportunities, complexity score impact. **Provide an improved version** addressing these concerns."
+
+### AutoTaskTracker-Specific Prompting
+
+**Example Prompt for New Feature:**
+```
+Act as a senior engineer familiar with AutoTaskTracker's architecture.
+
+Context: We use DatabaseManager for all database access, prefer Pensieve APIs when available, and implement graceful degradation for all AI features.
+
+Task: Create a new function in autotasktracker/ai/ that extracts dates from OCR text.
+
+Requirements:
+1. Check if Pensieve provides date extraction capabilities first
+2. Use type hints and Google-style docstrings
+3. Handle missing dependencies gracefully (dateutil might not be installed)
+4. Log operations using logging.getLogger(__name__)
+5. Return empty list on errors, never raise exceptions to caller
+6. Keep complexity score under 15 points
+
+First, outline your approach. Then implement the solution.
 ```
 
----
+### 🔄 IMPORTANT: Prompt Improvement Protocol
 
-## ⚠️ COMMON ISSUES
+**When receiving any development request, Claude MUST:**
+1. **Start the response** with an improved version of the user's prompt that applies the prompt engineering techniques above
+2. **Format** the improved prompt in a clear quote block
+3. **Then proceed** with the actual implementation
 
-### Port Conflicts
-- Memos: 8839
-- Task Board: 8502
-- Analytics: 8503
-- Time Tracker: 8505
+**Example:**
+```
+User: "add a function to process screenshots"
 
-### Database Issues
-- Path: `~/.memos/database.db` (NOT `memos.db`)
-- Always use DatabaseManager for connections
-- Check permissions if connection fails
+Claude's Response:
+> **Improved Prompt:**
+> Act as a senior backend engineer with expertise in AutoTaskTracker's architecture and Pensieve integration.
+> 
+> Task: Create a new function in autotasktracker/core/ that processes screenshots from the entities table.
+> 
+> Context: 
+> - We use DatabaseManager for all database operations
+> - Screenshots are stored in ~/.memos/screenshots/
+> - Processing should check Pensieve capabilities first
+> - All AI features must degrade gracefully
+> 
+> Requirements:
+> 1. Function named `process_screenshot_batch` with type hints
+> 2. Use DatabaseManager, not direct sqlite3
+> 3. Implement proper error handling with specific exceptions
+> 4. Log using logging.getLogger(__name__)
+> 5. Check if Pensieve provides processing capabilities before custom implementation
+> 6. Keep complexity score under 20 points
+> 7. Include comprehensive docstring with examples
+> 
+> First, verify existing functionality to avoid duplication. Then implement.
 
-### Pensieve/Memos Screenshot Capture Issues
-**CRITICAL**: Pensieve is installed in `venv/` environment, NOT `anaconda3/`
-```bash
-# ✅ CORRECT commands (use venv Python):
-/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python -m memos.commands ps
-/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python -m memos.commands start
-/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python -m memos.commands stop
-
-# ❌ WRONG: Don't try to install pensieve in anaconda3 (dependency conflicts)
+[Claude then continues with the actual implementation...]
 ```
 
-### AI Features Not Working
-1. Run `python scripts/ai/ai_cli.py status`
-2. Install sentence-transformers: `pip install sentence-transformers`
-3. Check Pensieve health: `python scripts/pensieve_health_check.py`
-
-### Import Errors
-- Scripts need parent directory in sys.path
-- Dashboards gracefully degrade if AI modules missing
-- Check virtual environment is activated
+This ensures every request benefits from optimal prompt engineering, improving code quality and reducing errors.
 
 ---
 
 ## 📝 RECENT CHANGES
 
-**2025-01-05: Pensieve Integration Architecture**
-- Built comprehensive API-first integration architecture (60-70% current utilization)
-- Added health monitoring with graceful SQLite fallback
-- Enhanced database management with Pensieve detection
-- Implemented robust error handling and service degradation
+**2025-07-05: Added AI prompt engineering guidelines**
+- Added "Effective AI Prompt Engineering" section with 5 key techniques
+- Included AutoTaskTracker-specific prompting example
+- Emphasized security requirements and context-rich prompts
+- Added Chain-of-Thought and Recursive Criticism techniques
+- **CRITICAL**: Added mandatory "Prompt Improvement Protocol" requiring Claude to start responses with improved prompts
 
-**Key Features Added:**
-- `autotasktracker/pensieve/`: API client, health monitoring, graceful fallback
-- DatabaseManager with automatic Pensieve API detection
-- Health monitoring with comprehensive service status
-- PostgreSQL adapter architecture (limited by API availability)
+**2025-07-05: Documentation optimization and modular structure**
+- Implemented modular CLAUDE.md structure using @ imports
+- Created `docs/architecture/pensieve_integration.md` for detailed integration patterns
+- Added `docs/guides/code_style.md` with specific formatting requirements
+- Added `/changes` and `/reload` context management commands in `.claude/commands/`
+- Reduced main CLAUDE.md from 547 to 294 lines
 
-**2025-01-05: Integration Reality Assessment**
-- **🔧 API-First Architecture**: Complete client implementation with graceful fallback
-- **📊 Health Monitoring** (`autotasktracker/pensieve/health_monitor.py`):
-  - Service status detection and degradation handling
-  - Automatic fallback to SQLite when API unavailable
-- **🗄️ Database Integration**: DatabaseManager with Pensieve detection
-- **⚠️ Current Limitations**: Pensieve provides web UI, not REST API for data operations
-- **✅ Production Ready**: System functions fully through intelligent fallback architecture
+**2025-07-05: Advanced best practices implementation**
+- Implemented hierarchical CLAUDE.md structure for module-specific context
+- Added MCP (Multi-Claude Protocol) integration documentation and custom servers
+- Created team-shared permissions configuration (`.claude/settings.json`)
+- Added GitHub Actions integration for automated workflows (@claude commands)
+- Implemented complexity budgeting system with `/complexity-check` command
+- Created navigational markers for large files (database.py)
+- Added user-level CLAUDE.md template for personal preferences
 
-**2025-07-05: Health Test Architecture Refactoring COMPLETE**
-- **🧩 Modular Health Tests**: Refactored monolithic health tests into focused, maintainable modules
-- **📁 Analyzer Architecture** (`tests/health/analyzers/`):
-  - `database_analyzer.py`: SQLite access, transactions, connection pooling, N+1 queries
-  - `integration_analyzer.py`: REST API usage, metadata consistency, service commands
-  - `error_analyzer.py`: Error handling patterns, retry logic, file validation
-  - `config_analyzer.py`: Configuration management, hardcoded values
-  - `utils.py`: Shared caching, parallel processing, incremental testing
-  - `auto_fixer.py`: Automated fixes for common issues
-- **🏗️ Focused Test Files**: Split into specialized health test modules (100-200 lines each):
-  - `test_database_health.py`: Database access pattern validation
-  - `test_integration_health.py`: Pensieve integration pattern checks  
-  - `test_error_health.py`: Error handling and retry logic validation
-  - `test_config_health.py`: Configuration pattern analysis
-- **✅ Validated Equivalence**: 0 discrepancies with original tests, 87% performance improvement
-- **⚡ Performance Preserved**: Maintained parallel processing, caching, and timeout protection
-- **🔧 Auto-fix Capabilities**: Separated auto-fix logic while preserving functionality
-- **📊 Production Ready**: Modular tests now preferred over monolithic version
+**2025-07-05: Pensieve integration modules**
+- Added webhook client (`autotasktracker/pensieve/webhook_client.py`)
+- Added endpoint discovery (`autotasktracker/pensieve/endpoint_discovery.py`) 
+- Added migration automation (`autotasktracker/pensieve/migration_automation.py`)
+- Added search coordinator (`autotasktracker/pensieve/search_coordinator.py`)
+- Added integration health dashboard (`autotasktracker/dashboards/integration_health.py`)
+- Added performance optimizer (`autotasktracker/pensieve/performance_optimizer.py`)
+
+**2025-07-05: Meta-testing security implementation**
+- Implemented AI-specific Semgrep rules (`.semgrep.yml`) targeting AI-generated code vulnerabilities
+- Added package legitimacy validator (`scripts/security/package_validator.py`) for slopsquatting protection
+- Configured Bandit (`.bandit`) and Safety (`.safety-policy.json`) with AI-focused security scanning
+- Implemented basic DAST capabilities (`scripts/security/dashboard_security_tester.py`) for Streamlit dashboards
+- Enhanced CI workflow with comprehensive security tool integration
+- Added meta-testing compliance health checks (`tests/health/test_metatesting_security.py`)
+- Security tools now include: semgrep, bandit, safety, pip-audit with AI-specific configurations
 
 ---
 
