@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-07-05T14:37:39.751206",
+  "semgrep": {
+    "database-queries-without-validation": 81,
+    "missing-pensieve-integration": 6,
+    "unsafe-file-operations": 12,
+    "suspicious-imports": 2
+  },
+  "bandit": {
+    "high": 0,
+    "medium": 4,
+    "low": 32
+  },
+  "summary": {
+    "total_findings": 137,
+    "critical_findings": 0,
+    "trends": []
+  }
+}

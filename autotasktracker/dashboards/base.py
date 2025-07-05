@@ -347,7 +347,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
             if total_requests > 0:
                 if hit_rate >= 70:
                     st.caption(f"🚀 Cache: {hit_rate:.0f}% hit rate")
-                elif hit_rate >= 40:
+                elif hit_rate > 40:
                     st.caption(f"⚡ Cache: {hit_rate:.0f}% hit rate")
                 else:
                     st.caption(f"📈 Cache: {hit_rate:.0f}% hit rate")
