@@ -7,10 +7,10 @@ from typing import Dict, Any
 
 # Import from package structure
 
-from autotasktracker.core import TaskExtractor
+from autotasktracker.core import TaskExtractor, DatabaseManager
 from autotasktracker.core import ActivityCategorizer
 from autotasktracker.ai import OCREnhancer
-from .base import BasePipeline
+from autotasktracker.comparison.pipelines.base import BasePipeline
 
 
 class OCRPipeline(BasePipeline):

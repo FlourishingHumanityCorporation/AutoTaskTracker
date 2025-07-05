@@ -10,7 +10,7 @@ from typing import Dict, Any
 from autotasktracker.core import DatabaseManager
 from autotasktracker.ai import AIEnhancedTaskExtractor
 from autotasktracker.ai import VLMTaskExtractor
-from .base import BasePipeline
+from autotasktracker.comparison.pipelines.base import BasePipeline
 
 
 class AIFullPipeline(BasePipeline):

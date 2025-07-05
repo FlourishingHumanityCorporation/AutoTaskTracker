@@ -6,6 +6,8 @@ Provides centralized logic for categorizing activities based on window titles an
 import json
 from typing import Optional, Dict, List, Tuple
 
+# DatabaseManager import removed - not used in this module
+
 
 class ActivityCategorizer:
     """Categorizes activities based on window titles and OCR content."""

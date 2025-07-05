@@ -3,9 +3,9 @@ Basic pattern matching pipeline.
 """
 from typing import Dict, Any
 
-from autotasktracker.core import TaskExtractor
+from autotasktracker.core import TaskExtractor, DatabaseManager
 from autotasktracker.core import ActivityCategorizer
-from .base import BasePipeline
+from autotasktracker.comparison.pipelines.base import BasePipeline
 
 
 class BasicPipeline(BasePipeline):

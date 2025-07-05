@@ -11,6 +11,8 @@ import logging
 import os
 from pathlib import Path
 
+from autotasktracker.core.database import DatabaseManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,3 +164,88 @@ class PensieveSchemaAdapter:
         ORDER BY e.created_at DESC
         LIMIT ?
         """
+
+
+class PensieveQueryExecutor:
+    """Executes Pensieve schema queries using DatabaseManager."""
+    
+    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+        self.db = db_manager or DatabaseManager()
+    
+    def get_screenshot_count(self, date_str: str) -> int:
+        """Get screenshot count for a specific date."""
+        query = PensieveSchemaAdapter.get_screenshot_count_query()
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (date_str,))
+                result = cursor.fetchone()
+                return result['count'] if result else 0
+        except Exception as e:
+            logger.error(f"Error getting screenshot count: {e}")
+            return 0
+    
+    def get_unique_applications(self, start_date: str, end_date: str) -> List[str]:
+        """Get unique applications for a date range."""
+        query = PensieveSchemaAdapter.get_unique_applications_query()
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (start_date, end_date))
+                results = cursor.fetchall()
+                return [row['active_window'] for row in results if row['active_window']]
+        except Exception as e:
+            logger.error(f"Error getting unique applications: {e}")
+            return []
+    
+    def get_activity_summary(self, date_str: str) -> Dict[str, Any]:
+        """Get activity summary for a specific date."""
+        query = PensieveSchemaAdapter.get_activity_summary_query()
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (date_str,))
+                result = cursor.fetchone()
+                if result:
+                    return {
+                        'first_activity': result['first_activity'],
+                        'last_activity': result['last_activity']
+                    }
+                return {}
+        except Exception as e:
+            logger.error(f"Error getting activity summary: {e}")
+            return {}
+    
+    def get_ai_coverage_stats(self) -> Dict[str, int]:
+        """Get AI coverage statistics."""
+        query = PensieveSchemaAdapter.get_ai_coverage_query()
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                result = cursor.fetchone()
+                if result:
+                    return {
+                        'total_screenshots': result['total_screenshots'],
+                        'with_ocr': result['with_ocr'],
+                        'with_vlm': result['with_vlm'],
+                        'with_embeddings': result['with_embeddings']
+                    }
+                return {}
+        except Exception as e:
+            logger.error(f"Error getting AI coverage stats: {e}")
+            return {}
+    
+    def search_activities(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Search activities by text content."""
+        query = PensieveSchemaAdapter.get_search_activities_query()
+        search_pattern = f"%{search_term}%"
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (search_pattern, search_pattern, limit))
+                results = cursor.fetchall()
+                return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Error searching activities: {e}")
+            return []

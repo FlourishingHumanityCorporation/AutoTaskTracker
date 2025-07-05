@@ -59,7 +59,7 @@ class PerformanceAnalyzer:
             with self.db_manager.get_connection() as conn:
                 return pd.read_sql_query(base_query, conn)
         except Exception as e:
-            print(f"Error loading screenshots: {e}")
+            logger.error(f"Error loading screenshots: {e}")
             return pd.DataFrame()
     
     def process_single_screenshot(self, row: pd.Series) -> Dict[str, Any]:
@@ -86,7 +86,7 @@ class PerformanceAnalyzer:
                 pipeline_result = pipeline.process_screenshot(screenshot_data)
                 results[pipeline_name] = pipeline_result
             except Exception as e:
-                print(f"Error processing with {pipeline_name}: {e}")
+                logger.error(f"Error processing with {pipeline_name}: {e}")
                 results[pipeline_name] = {
                     "tasks": 'Processing failed',
                     "category": 'Error',
@@ -101,17 +101,17 @@ class PerformanceAnalyzer:
         """Analyze a batch of screenshots."""
         all_results = []
         
-        print(f"Processing {len(screenshots_df)} screenshots...")
+        logger.info(f"Processing {len(screenshots_df)} screenshots...")
         
         for idx, row in screenshots_df.iterrows():
             if idx % 10 == 0:
-                print(f"Processed {idx}/{len(screenshots_df)} screenshots")
+                logger.info(f"Processed {idx}/{len(screenshots_df)} screenshots")
             
             try:
                 result = self.process_single_screenshot(row)
                 all_results.append(result)
             except Exception as e:
-                print(f"Error processing screenshot {row.get('id', 'unknown')}: {e}")
+                logger.error(f"Error processing screenshot {row.get('id', 'unknown')}: {e}")
                 continue
         
         return self.generate_analysis_report(all_results)
@@ -220,4 +220,4 @@ class PerformanceAnalyzer:
         
         df = pd.DataFrame(rows)
         df.to_csv(filename, index=False)
-        print(f"Detailed results exported to {filename}")
+        logger.info(f"Detailed results exported to {filename}")

@@ -9,6 +9,7 @@ import logging
 from typing import Optional, Dict, List, Tuple, Callable
 
 from autotasktracker.config import get_config
+from autotasktracker.core.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,9 @@ logger = logging.getLogger(__name__)
 class TaskExtractor:
     """Advanced task extraction with application-specific patterns."""
     
-    def __init__(self):
+    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+        self.db = db_manager or DatabaseManager()
+        
         # Application-specific patterns
         self.app_patterns = {
             # IDEs and Editors
@@ -321,6 +324,222 @@ class TaskExtractor:
             logger.debug(f"Error extracting subtasks from VLM data: {e}")
         
         return subtasks
+    
+    def extract_and_store_task(self, entity_id: int, window_title: str, ocr_text: Optional[str] = None) -> Optional[str]:
+        """Extract task and store it in database using DatabaseManager.
+        
+        Args:
+            entity_id: Entity ID to store the extracted task for
+            window_title: Window title to extract task from
+            ocr_text: Optional OCR text for enhanced extraction
+            
+        Returns:
+            Extracted task string or None
+        """
+        try:
+            # Extract the task
+            task = self.extract_task(window_title, ocr_text)
+            
+            if task:
+                # Store the extracted task using DatabaseManager
+                with self.db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    
+                    # Check if task metadata already exists
+                    cursor.execute(
+                        "SELECT id FROM metadata_entries WHERE entity_id = ? AND key = 'tasks'",
+                        (entity_id,)
+                    )
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        # Update existing task
+                        cursor.execute(
+                            "UPDATE metadata_entries SET value = ? WHERE entity_id = ? AND key = 'tasks'",
+                            (task, entity_id)
+                        )
+                        logger.debug(f"Updated task for entity {entity_id}: {task}")
+                    else:
+                        # Insert new task metadata
+                        cursor.execute(
+                            """INSERT INTO metadata_entries 
+                            (entity_id, key, value, source_type, source, data_type) 
+                            VALUES (?, 'tasks', ?, 'task_extractor', 'realtime', 'text')""",
+                            (entity_id, task)
+                        )
+                        logger.debug(f"Stored new task for entity {entity_id}: {task}")
+                    
+                    conn.commit()
+                
+                # Also extract and store subtasks if OCR text available
+                if ocr_text:
+                    subtasks = self.extract_subtasks_from_ocr(ocr_text)
+                    if subtasks:
+                        self._store_subtasks(entity_id, subtasks)
+                
+                return task
+            
+        except Exception as e:
+            logger.error(f"Error extracting and storing task for entity {entity_id}: {e}")
+        
+        return None
+    
+    def _store_subtasks(self, entity_id: int, subtasks: List[str]) -> None:
+        """Store subtasks in database."""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Store subtasks as JSON array
+                subtasks_json = json.dumps(subtasks)
+                
+                # Check if subtasks metadata already exists
+                cursor.execute(
+                    "SELECT id FROM metadata_entries WHERE entity_id = ? AND key = 'subtasks'",
+                    (entity_id,)
+                )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    cursor.execute(
+                        "UPDATE metadata_entries SET value = ? WHERE entity_id = ? AND key = 'subtasks'",
+                        (subtasks_json, entity_id)
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO metadata_entries 
+                        (entity_id, key, value, source_type, source, data_type) 
+                        VALUES (?, 'subtasks', ?, 'task_extractor', 'realtime', 'text')""",
+                        (entity_id, subtasks_json)
+                    )
+                
+                conn.commit()
+                logger.debug(f"Stored {len(subtasks)} subtasks for entity {entity_id}")
+                
+        except Exception as e:
+            logger.error(f"Error storing subtasks for entity {entity_id}: {e}")
+    
+    def get_recent_tasks(self, limit: int = 100) -> List[Dict[str, any]]:
+        """Get recently extracted tasks using DatabaseManager.
+        
+        Args:
+            limit: Maximum number of tasks to retrieve
+            
+        Returns:
+            List of task dictionaries with entity info
+        """
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get recent tasks with entity information
+                cursor.execute("""
+                    SELECT 
+                        e.id,
+                        e.created_at,
+                        e.filepath,
+                        m1.value as task,
+                        m2.value as active_window,
+                        m3.value as category,
+                        m4.value as subtasks
+                    FROM entities e
+                    LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'tasks'
+                    LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
+                    LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'category'
+                    LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'subtasks'
+                    WHERE m1.value IS NOT NULL
+                    ORDER BY e.created_at DESC
+                    LIMIT ?
+                """, (limit,))
+                
+                results = cursor.fetchall()
+                
+                tasks = []
+                for row in results:
+                    task_dict = {
+                        'entity_id': row[0],
+                        'created_at': row[1],
+                        'filepath': row[2],
+                        'task': row[3],
+                        'active_window': row[4],
+                        'category': row[5],
+                        'subtasks': json.loads(row[6]) if row[6] else []
+                    }
+                    tasks.append(task_dict)
+                
+                logger.debug(f"Retrieved {len(tasks)} recent tasks")
+                return tasks
+                
+        except Exception as e:
+            logger.error(f"Error retrieving recent tasks: {e}")
+            return []
+    
+    def get_task_patterns_analysis(self) -> Dict[str, any]:
+        """Analyze task patterns using DatabaseManager to identify common activities.
+        
+        Returns:
+            Dictionary with pattern analysis results
+        """
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get all tasks for pattern analysis
+                cursor.execute("""
+                    SELECT 
+                        m1.value as task,
+                        m2.value as active_window,
+                        COUNT(*) as frequency
+                    FROM metadata_entries m1
+                    LEFT JOIN metadata_entries m2 ON m1.entity_id = m2.entity_id AND m2.key = 'active_window'
+                    WHERE m1.key = 'tasks' AND m1.value IS NOT NULL
+                    GROUP BY m1.value, m2.value
+                    ORDER BY frequency DESC
+                    LIMIT 50
+                """)
+                
+                results = cursor.fetchall()
+                
+                # Analyze patterns
+                app_patterns = {}
+                task_frequency = {}
+                
+                for task, window, frequency in results:
+                    task_frequency[task] = task_frequency.get(task, 0) + frequency
+                    
+                    # Extract app from window title
+                    if window:
+                        app = window.split(' — ')[-1] if ' — ' in window else window.split(' - ')[-1] if ' - ' in window else window
+                        app = app.split()[0]  # First word usually the app
+                        
+                        if app not in app_patterns:
+                            app_patterns[app] = []
+                        app_patterns[app].append((task, frequency))
+                
+                # Sort patterns by frequency
+                for app in app_patterns:
+                    app_patterns[app] = sorted(app_patterns[app], key=lambda x: x[1], reverse=True)[:10]
+                
+                top_tasks = sorted(task_frequency.items(), key=lambda x: x[1], reverse=True)[:20]
+                
+                analysis = {
+                    'total_unique_tasks': len(task_frequency),
+                    'top_tasks': top_tasks,
+                    'app_patterns': app_patterns,
+                    'most_active_app': max(app_patterns.keys(), key=lambda x: sum(freq for _, freq in app_patterns[x])) if app_patterns else None
+                }
+                
+                logger.debug(f"Analyzed {len(results)} task patterns")
+                return analysis
+                
+        except Exception as e:
+            logger.error(f"Error analyzing task patterns: {e}")
+            return {
+                'total_unique_tasks': 0,
+                'top_tasks': [],
+                'app_patterns': {},
+                'most_active_app': None
+            }
 
 
 # Singleton instance

@@ -277,6 +277,20 @@ def get_health_monitor() -> HealthMonitor:
 # Setup default health checks
 def _check_ollama_available():
     """Check if Ollama service is available."""
+    try:
+        # Try to check via Pensieve API first
+        from autotasktracker.pensieve.api_client import PensieveAPIClient, PensieveAPIError
+        api_client = PensieveAPIClient()
+        health_status = api_client.get_health()
+        
+        # If Pensieve reports Ollama as available, trust it
+        if health_status and health_status.get('ollama_available'):
+            return True
+            
+    except (PensieveAPIError, Exception):
+        pass
+    
+    # Fallback to direct check if API unavailable
     import requests
     try:
         response = requests.get(f'{get_config().get_ollama_url()}/api/tags', timeout=5)

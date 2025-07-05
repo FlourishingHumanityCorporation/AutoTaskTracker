@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Union, Iterator
 from pathlib import Path
 import logging
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

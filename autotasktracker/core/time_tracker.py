@@ -18,6 +18,7 @@ import logging
 
 from autotasktracker.core import ActivityCategorizer, extract_window_title
 from autotasktracker.config import get_config
+from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 
 
 logger = logging.getLogger(__name__)

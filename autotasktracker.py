@@ -7,12 +7,15 @@ AI-powered task discovery from screenshots
 import sys
 import subprocess
 import argparse
+import logging
 from pathlib import Path
 
 # Add package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from autotasktracker import get_config
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -46,10 +49,10 @@ Examples:
     config = get_config()
     
     if args.command == 'start':
-        print("Starting AutoTaskTracker services...")
+        logger.info("Starting AutoTaskTracker services...")
         # Start memos
         subprocess.run(['memos', 'start'])
-        print("✅ Memos backend started")
+        logger.info("✅ Memos backend started")
         
         # Start main dashboard
         cmd = [
@@ -61,19 +64,19 @@ Examples:
             cmd.extend(['--server.headless', 'true'])
         
         subprocess.Popen(cmd)
-        print(f"✅ Task board started at http://localhost:{config.TASK_BOARD_PORT}")
+        logger.info(f"✅ Task board started at http://localhost:{config.TASK_BOARD_PORT}")
         
     elif args.command == 'stop':
-        print("Stopping AutoTaskTracker services...")
+        logger.info("Stopping AutoTaskTracker services...")
         subprocess.run(['memos', 'stop'])
         subprocess.run(['pkill', '-f', 'streamlit'])
-        print("✅ All services stopped")
+        logger.info("✅ All services stopped")
         
     elif args.command == 'stop-dashboard':
         from scripts.dashboard_manager import DashboardManager
         manager = DashboardManager()
         manager.stop_all()
-        print("✅ All dashboards stopped")
+        logger.info("✅ All dashboards stopped")
         
     elif args.command == 'dashboard':
         # Use background dashboard manager
@@ -86,16 +89,16 @@ Examples:
         )
         
         if pid:
-            print(f"\n🎉 Task Board dashboard is now running in background!")
-            print(f"🌐 Open: http://localhost:{config.TASK_BOARD_PORT}")
-            print(f"🆔 Process ID: {pid}")
-            print(f"\n📋 Management commands:")
-            print(f"  Status:    python scripts/dashboard_manager.py status")
-            print(f"  Stop:      python scripts/dashboard_manager.py stop --type task_board")
-            print(f"  Stop All:  python scripts/dashboard_manager.py stop-all")
-            print(f"\n💡 Dashboard will keep running until you close the browser tab or stop it manually.")
+            logger.info(f"\n🎉 Task Board dashboard is now running in background!")
+            logger.info(f"🌐 Open: http://localhost:{config.TASK_BOARD_PORT}")
+            logger.info(f"🆔 Process ID: {pid}")
+            logger.info(f"\n📋 Management commands:")
+            logger.info(f"  Status:    python scripts/dashboard_manager.py status")
+            logger.info(f"  Stop:      python scripts/dashboard_manager.py stop --type task_board")
+            logger.info(f"  Stop All:  python scripts/dashboard_manager.py stop-all")
+            logger.info(f"\n💡 Dashboard will keep running until you close the browser tab or stop it manually.")
         else:
-            print("❌ Failed to start dashboard")
+            logger.error("❌ Failed to start dashboard")
         
     elif args.command == 'analytics':
         cmd = [
@@ -144,20 +147,20 @@ Examples:
         launcher.print_status()
         
     elif args.command == 'status':
-        print("Checking AutoTaskTracker status...")
+        logger.info("Checking AutoTaskTracker status...")
         # Check memos
         try:
             result = subprocess.run(['memos', 'ps'], capture_output=True, text=True)
-            print(result.stdout)
+            logger.info(result.stdout)
         except FileNotFoundError:
-            print("❌ Memos not found in PATH. Make sure it's installed and activated.")
+            logger.error("❌ Memos not found in PATH. Make sure it's installed and activated.")
         
         # Check dashboards
         result = subprocess.run(['pgrep', '-f', 'streamlit'], capture_output=True)
         if result.returncode == 0:
-            print("✅ Streamlit dashboards are running")
+            logger.info("✅ Streamlit dashboards are running")
         else:
-            print("❌ No Streamlit dashboards running")
+            logger.info("❌ No Streamlit dashboards running")
 
 
 if __name__ == '__main__':

@@ -2,9 +2,9 @@
 Pipeline implementations for AI comparison.
 """
 
-from .base import BasePipeline
-from .basic import BasicPipeline
-from .ocr import OCRPipeline
-from .ai_full import AIFullPipeline
+from autotasktracker.comparison.pipelines.base import BasePipeline
+from autotasktracker.comparison.pipelines.basic import BasicPipeline
+from autotasktracker.comparison.pipelines.ocr import OCRPipeline
+from autotasktracker.comparison.pipelines.ai_full import AIFullPipeline
 
 __all__ = ['BasePipeline', 'BasicPipeline', 'OCRPipeline', 'AIFullPipeline']

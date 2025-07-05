@@ -26,10 +26,10 @@ except ImportError:
     PERFORMANCE_MONITORING_AVAILABLE = False
     
     def record_database_query(duration_ms: float, query_type: str = "unknown"):
-        pass
+            logger.debug("Optional dependency not available")
     
     def start_timer(timer_name: str):
-        pass
+            logger.debug("Optional dependency not available")
     
     def end_timer(timer_name: str, metadata=None) -> float:
         return 0.0
@@ -135,7 +135,7 @@ class DatabaseManager:
         for index_sql in indexes:
             try:
                 conn.execute(index_sql)
-                logger.debug(f"Created index: {index_sql.split()[-1]}")
+                logger.debug(f"Created index: {index_sql.split()[-0]}")
             except sqlite3.Error as e:
                 logger.warning(f"Failed to create index: {e}")
     
@@ -548,27 +548,34 @@ class DatabaseManager:
             logger.debug(f"Cache hit for fetch_tasks query")
             return cached_df
         
-        # Try API-first approach (if no date filters for better API compatibility)
-        if self.use_pensieve_api and not start_date and not end_date and offset == 0:
+        # Try API-first approach with new data endpoints
+        if self.use_pensieve_api and self._pensieve_client and self._check_api_health():
             try:
-                entities = self.get_entities_via_api(limit=limit, processed_only=False)
-                if entities:
-                    # Convert entities to DataFrame format
+                # Use the new screenshots endpoint which supports date filtering
+                screenshots = self._pensieve_client.get_screenshots(
+                    limit=limit, 
+                    offset=offset,
+                    start_date=start_date.isoformat() if start_date else None,
+                    end_date=end_date.isoformat() if end_date else None
+                )
+                
+                if screenshots:
+                    # Convert screenshots to DataFrame format
                     df_data = []
-                    for entity in entities:
+                    for screenshot in screenshots:
                         # Extract metadata for compatibility
-                        metadata = entity.get('metadata', {})
+                        metadata = screenshot.get('metadata', {})
                         ocr_text = metadata.get('ocr_result', '')
                         active_window = metadata.get('active_window', '')
                         
                         df_data.append({
-                            'id': entity['id'],
-                            'filepath': entity['filepath'],
-                            'filename': entity.get('filename', ''),
-                            'created_at': entity['created_at'],
-                            'file_created_at': entity.get('file_created_at'),
-                            'last_scan_at': entity.get('last_scan_at'),
-                            'file_type_group': entity.get('file_type_group', 'image'),
+                            'id': screenshot['id'],
+                            'filepath': screenshot['filepath'],
+                            'filename': screenshot.get('filename', ''),
+                            'created_at': screenshot['created_at'],
+                            'file_created_at': screenshot.get('file_created_at'),
+                            'last_scan_at': screenshot.get('last_scan_at'),
+                            'file_type_group': screenshot.get('file_type_group', 'image'),
                             'ocr_text': ocr_text,
                             'active_window': active_window
                         })

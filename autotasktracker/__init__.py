@@ -24,7 +24,7 @@ from autotasktracker.core import (
 )
 
 # Configuration
-from autotasktracker.config import Config, get_config
+from autotasktracker.config import AutoTaskSettings, get_config
 
 # AI capabilities - import directly to avoid circular imports
 from autotasktracker.ai.vlm_processor import SmartVLMProcessor as VLMProcessor
@@ -54,7 +54,7 @@ __all__ = [
     'TimeTracker',
     
     # Configuration
-    'Config',
+    'AutoTaskSettings',
     'get_config',
     
     # AI capabilities
