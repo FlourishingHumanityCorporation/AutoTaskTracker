@@ -428,62 +428,53 @@ class SimpleMutationTester:
                 logger.warning(f"Cannot create temp file: {e}")
                 return None
             
+            # Use the robust temporary_file_mutation context manager
             try:
-                # Backup original file
-                backup_content = source_file.read_text()
-                
-                # Apply mutation to original file
-                source_file.write_text(mutated_content)
-                
-                # Run the specific test file with enhanced error handling
-                try:
-                    timeout = self.config.mutation.timeout_seconds
-                    logger.info(f"Running pytest on {test_file} with mutation at line {line_idx}")
-                    result = subprocess.run([
-                        'python', '-m', 'pytest', str(test_file), '-v', '--tb=no', '-q'
-                    ], capture_output=True, text=True, cwd=self.project_root, timeout=timeout)
-                    logger.info(f"Test result: return code={result.returncode}, stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars")
-                except subprocess.TimeoutExpired:
-                    timeout = self.config.mutation.timeout_seconds
-                    logger.warning(f"Test execution timeout ({timeout}s) for {test_file}")
-                    return None
-                except FileNotFoundError:
-                    logger.warning("pytest not found - cannot run mutation tests")
-                    return None
-                
-                # Analyze test results
-                tests_failed = []
-                tests_passed = []
-                
-                if result.returncode != 0:
-                    # Some tests failed - good! They caught the mutation
-                    tests_failed = self._parse_test_failures(result.stdout + result.stderr)
-                else:
-                    # Tests passed - bad! They missed the mutation
-                    tests_passed = self._parse_test_names(test_file)
-                
-                # Calculate effectiveness with safety check
-                total_tests = len(tests_failed) + len(tests_passed)
-                effectiveness = len(tests_failed) / max(total_tests, 1) if total_tests > 0 else 0.0
-                
-                return MutationResult(
-                    mutation_type=mutation['type'],
-                    original_code=mutation['original'],
-                    mutated_code=mutation['mutated'],
-                    tests_failed=tests_failed,
-                    tests_passed=tests_passed,
-                    file_path=source_file,
-                    line_number=line_idx + 1,
-                    effectiveness_score=effectiveness
-                )
-                
-            finally:
-                # Always restore original file
-                if backup_content is not None:
+                with temporary_file_mutation(source_file, mutated_content):
+                    # Run the specific test file with enhanced error handling
                     try:
-                        source_file.write_text(backup_content)
-                    except (OSError, IOError) as restore_error:
-                        logger.error(f"CRITICAL: Could not restore {source_file}: {restore_error}")
+                        timeout = self.config.mutation.timeout_seconds
+                        logger.info(f"Running pytest on {test_file} with mutation at line {line_idx}")
+                        result = subprocess.run([
+                            'python', '-m', 'pytest', str(test_file), '-v', '--tb=no', '-q'
+                        ], capture_output=True, text=True, cwd=self.project_root, timeout=timeout)
+                        logger.info(f"Test result: return code={result.returncode}, stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars")
+                    except subprocess.TimeoutExpired:
+                        timeout = self.config.mutation.timeout_seconds
+                        logger.warning(f"Test execution timeout ({timeout}s) for {test_file}")
+                        return None
+                    except FileNotFoundError:
+                        logger.warning("pytest not found - cannot run mutation tests")
+                        return None
+                    
+                    # Analyze test results
+                    tests_failed = []
+                    tests_passed = []
+                    
+                    if result.returncode != 0:
+                        # Some tests failed - good! They caught the mutation
+                        tests_failed = self._parse_test_failures(result.stdout + result.stderr)
+                    else:
+                        # Tests passed - bad! They missed the mutation
+                        tests_passed = self._parse_test_names(test_file)
+                    
+                    # Calculate effectiveness with safety check
+                    total_tests = len(tests_failed) + len(tests_passed)
+                    effectiveness = len(tests_failed) / max(total_tests, 1) if total_tests > 0 else 0.0
+                    
+                    return MutationResult(
+                        mutation_type=mutation['type'],
+                        original_code=mutation['original'],
+                        mutated_code=mutation['mutated'],
+                        tests_failed=tests_failed,
+                        tests_passed=tests_passed,
+                        file_path=source_file,
+                        line_number=line_idx + 1,
+                        effectiveness_score=effectiveness
+                    )
+            except (FileNotFoundError, PermissionError, OSError) as e:
+                logger.error(f"File mutation failed for {source_file}: {e}")
+                return None
                 
         except (TypeError, ValueError, AttributeError) as e:
             logger.error(f"Mutation testing failed for {test_file}: {e}", exc_info=True)

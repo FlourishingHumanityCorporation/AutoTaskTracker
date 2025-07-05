@@ -363,14 +363,14 @@ class TestConfig:
         with patch.dict(os.environ, {}, clear=True):
             reset_config()
             config = get_config()
+            
+            # Validate config initialization
+            assert isinstance(config, AutoTaskSettings), "Should have valid AutoTaskSettings instance"
+            assert hasattr(config, 'get_service_url'), "Config should have get_service_url method"
+            assert callable(config.get_service_url), "get_service_url should be callable"
         
-        # Validate config initialization
-        assert isinstance(config, AutoTaskSettings), "Should have valid AutoTaskSettings instance"
-        assert hasattr(config, 'get_service_url'), "Config should have get_service_url method"
-        assert callable(config.get_service_url), "get_service_url should be callable"
-        
-        # Test all valid services with comprehensive URL validation
-        service_tests = [
+            # Test all valid services with comprehensive URL validation
+            service_tests = [
             ('memos', 8839, 'http://localhost:8839'),
             ('task_board', 8502, 'http://localhost:8502'),
             ('analytics', 8503, 'http://localhost:8503'),
@@ -378,36 +378,36 @@ class TestConfig:
             # Note: 'notifications' is not in the service_ports map in get_service_url
         ]
         
-        url_generation_times = []
+            url_generation_times = []
+            
+            for service_name, expected_port, expected_url in service_tests:
+                # Test URL generation performance
+                gen_start = time.time()
+                actual_url = config.get_service_url(service_name)
+                gen_time = time.time() - gen_start
+                url_generation_times.append(gen_time)
+                
+                # Validate URL format and content
+                assert actual_url == expected_url, f"URL for {service_name} should be {expected_url}, got {actual_url}"
+                assert isinstance(actual_url, str), f"URL for {service_name} should be string"
+                assert actual_url.startswith('http://'), f"URL for {service_name} should start with http://"
+                assert 'localhost' in actual_url, f"URL for {service_name} should contain localhost"
+                assert str(expected_port) in actual_url, f"URL for {service_name} should contain port {expected_port}"
+                
+                # Validate URL structure with regex
+                url_pattern = r'^http://localhost:\d{4,5}$'
+                assert re.match(url_pattern, actual_url), f"URL for {service_name} should match valid pattern"
+                
+                # Validate port extraction from URL
+                port_from_url = int(actual_url.split(':')[-1])
+                assert port_from_url == expected_port, f"Port in URL should match expected {expected_port}"
+                assert 1024 <= port_from_url <= 65535, f"Port in URL should be in valid range"
+                
+                # Test performance
+                assert gen_time < 0.01, f"URL generation for {service_name} should be very fast, took {gen_time:.4f}s"
         
-        for service_name, expected_port, expected_url in service_tests:
-            # Test URL generation performance
-            gen_start = time.time()
-            actual_url = config.get_service_url(service_name)
-            gen_time = time.time() - gen_start
-            url_generation_times.append(gen_time)
-            
-            # Validate URL format and content
-            assert actual_url == expected_url, f"URL for {service_name} should be {expected_url}, got {actual_url}"
-            assert isinstance(actual_url, str), f"URL for {service_name} should be string"
-            assert actual_url.startswith('http://'), f"URL for {service_name} should start with http://"
-            assert 'localhost' in actual_url, f"URL for {service_name} should contain localhost"
-            assert str(expected_port) in actual_url, f"URL for {service_name} should contain port {expected_port}"
-            
-            # Validate URL structure with regex
-            url_pattern = r'^http://localhost:\d{4,5}$'
-            assert re.match(url_pattern, actual_url), f"URL for {service_name} should match valid pattern"
-            
-            # Validate port extraction from URL
-            port_from_url = int(actual_url.split(':')[-1])
-            assert port_from_url == expected_port, f"Port in URL should match expected {expected_port}"
-            assert 1024 <= port_from_url <= 65535, f"Port in URL should be in valid range"
-            
-            # Test performance
-            assert gen_time < 0.01, f"URL generation for {service_name} should be very fast, took {gen_time:.4f}s"
-        
-        # Test invalid service names with comprehensive error handling
-        invalid_services = [
+            # Test invalid service names with comprehensive error handling
+            invalid_services = [
             'invalid_service',
             '',
             'task-board',  # Wrong separator  
@@ -417,33 +417,33 @@ class TestConfig:
             None  # None input
         ]
         
-        # Test case insensitivity separately
-        case_variants = ['MEMOS', 'Memos', 'MeMoS']
-        for variant in case_variants:
-            url = config.get_service_url(variant)
-            assert url == 'http://localhost:8839', f"Case variant '{variant}' should work"
+            # Test case insensitivity separately
+            case_variants = ['MEMOS', 'Memos', 'MeMoS']
+            for variant in case_variants:
+                url = config.get_service_url(variant)
+                assert url == 'http://localhost:8839', f"Case variant '{variant}' should work"
+            
+            for invalid_service in invalid_services:
+                error_start = time.time()
+                try:
+                    result = config.get_service_url(invalid_service)
+                    error_time = time.time() - error_start
+                    
+                    # Should return empty string for invalid services
+                    assert result == "", f"Invalid service '{invalid_service}' should return empty string, got '{result}'"
+                    assert isinstance(result, str), f"Result for invalid service should be string"
+                    assert error_time < 0.01, f"Error handling should be fast for '{invalid_service}'"
+                    
+                except (TypeError, AttributeError) as e:
+                    # Acceptable to raise these errors for None or malformed inputs
+                    error_time = time.time() - error_start
+                    assert error_time < 0.01, f"Exception handling should be fast for '{invalid_service}'"
+                    if invalid_service is None:
+                        assert 'None' in str(e) or 'attribute' in str(e), "Should have appropriate error for None input"
         
-        for invalid_service in invalid_services:
-            error_start = time.time()
-            try:
-                result = config.get_service_url(invalid_service)
-                error_time = time.time() - error_start
-                
-                # Should return empty string for invalid services
-                assert result == "", f"Invalid service '{invalid_service}' should return empty string, got '{result}'"
-                assert isinstance(result, str), f"Result for invalid service should be string"
-                assert error_time < 0.01, f"Error handling should be fast for '{invalid_service}'"
-                
-            except (TypeError, AttributeError) as e:
-                # Acceptable to raise these errors for None or malformed inputs
-                error_time = time.time() - error_start
-                assert error_time < 0.01, f"Exception handling should be fast for '{invalid_service}'"
-                if invalid_service is None:
-                    assert 'None' in str(e) or 'attribute' in str(e), "Should have appropriate error for None input"
-        
-        # Validate overall performance
-        avg_url_time = sum(url_generation_times) / len(url_generation_times)
-        assert avg_url_time < 0.005, f"Average URL generation should be very fast, was {avg_url_time:.4f}s"
+            # Validate overall performance
+            avg_url_time = sum(url_generation_times) / len(url_generation_times)
+            assert avg_url_time < 0.005, f"Average URL generation should be very fast, was {avg_url_time:.4f}s"
         
         # Test edge case - custom ports using environment variables
         with patch.dict(os.environ, {'AUTOTASK_SERVER__MEMOS_PORT': '9999'}):
@@ -453,10 +453,10 @@ class TestConfig:
             assert custom_url == 'http://localhost:9999', "Should handle custom ports correctly"
             assert '9999' in custom_url, "Custom port should appear in URL"
         
-        # Test business logic - ensure URL uniqueness
-        all_urls = [config.get_service_url(service) for service, _, _ in service_tests]
-        unique_urls = set(all_urls)
-        assert len(unique_urls) == len(all_urls), "All service URLs should be unique"
+            # Test business logic - ensure URL uniqueness
+            all_urls = [config.get_service_url(service) for service, _, _ in service_tests]
+            unique_urls = set(all_urls)
+            assert len(unique_urls) == len(all_urls), "All service URLs should be unique"
         
         total_test_time = time.time() - start_time
         assert total_test_time < 0.5, f"Complete URL generation test should be fast, took {total_test_time:.3f}s"

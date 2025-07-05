@@ -149,7 +149,7 @@ class TestVLMExtractionOnRealScreenshots:
         
         print(f"\n🔍 Testing VLM on single screenshot:")
         print(f"   File: {Path(test_screenshot['filepath']).name}")
-        print(f"   Window: {test_screenshot["active_window"][:60]}...")
+        print(f"   Window: {test_screenshot['active_window'][:60]}...")
         
         start_time = time.time()
         
@@ -252,7 +252,7 @@ class TestVLMExtractionOnRealScreenshots:
             # Show sample descriptions
             print(f"\n   Sample descriptions:")
             for result in results[:2]:
-                print(f"     Window: {result['screenshot']["active_window"][:50]}...")
+                print(f"     Window: {result['screenshot']['active_window'][:50]}...")
                 print(f"     VLM: {result['description'][:100]}...")
                 print()
             

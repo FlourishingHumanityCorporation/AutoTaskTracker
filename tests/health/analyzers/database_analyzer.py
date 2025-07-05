@@ -25,23 +25,32 @@ class DatabaseAccessAnalyzer:
         self.project_root = project_root
     
     def analyze_sqlite_access(self, file_path: Path) -> List[str]:
-        """Detect direct SQLite access to Pensieve database."""
+        """Detect direct SQLite access to ANY database (should use DatabaseManager)."""
         violations = []
         
-        # Patterns that indicate direct SQLite access to memos database
+        # Patterns that indicate direct SQLite access
         sqlite_patterns = [
-            r'sqlite3\.connect\s*\(\s*["\'].*memos.*database\.db',
-            r'sqlite3\.connect\s*\(\s*.*expanduser.*memos',
-            r'conn\s*=\s*sqlite3\.connect.*memos',
-            r'database\.db["\'].*sqlite3\.connect',
+            r'sqlite3\.connect\s*\(',  # ANY sqlite3.connect usage
+            r'conn\s*=\s*sqlite3\.connect',
+            r'connection\s*=\s*sqlite3\.connect',
+            r'db\s*=\s*sqlite3\.connect',
         ]
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 
-            # Skip test files and DatabaseManager itself
-            if 'test_' in file_path.name or file_path.name == 'database.py':
+            # Skip test files, tools, DatabaseManager, and certain legitimate low-level access
+            skip_patterns = [
+                ('tests/' in str(file_path) and 'test_' in file_path.name),  # Test files
+                file_path.name == 'database.py',  # DatabaseManager itself
+                '/tools/' in str(file_path),  # Development tools
+                'inspector' in file_path.name,  # Database inspection tools
+                'migration' in file_path.name,  # Database migration scripts
+                'setup' in file_path.name,  # Setup scripts
+            ]
+            
+            if any(skip_patterns):
                 return violations
                 
             for pattern in sqlite_patterns:

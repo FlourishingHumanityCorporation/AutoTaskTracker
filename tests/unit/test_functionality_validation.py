@@ -25,7 +25,7 @@ from pathlib import Path
 # Import modules to test
 from autotasktracker.core.database import DatabaseManager
 from autotasktracker.core.task_extractor import TaskExtractor
-from autotasktracker.utils.config import Config
+from autotasktracker.config import get_config
 
 
 class TestEnhancedFunctionalityValidation:
@@ -249,7 +249,7 @@ class TestEnhancedFunctionalityValidation:
         
         # Test configuration creation with validation
         config_start = time.time()
-        config = Config()
+        config = get_config()
         config_time = time.time() - config_start
         
         # Validate initial configuration state

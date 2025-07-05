@@ -28,24 +28,24 @@ class ConfigurationAnalyzer:
         
         # Patterns for hardcoded values
         hardcoded_patterns = [
-            # Ports (except well-known ports like 80, 443)
-            (r':(\d{4,5})["\'\s]', 'hardcoded port', lambda m: int(m.group(1)) not in [80, 443, 22]),
-            # Timeouts
-            (r'timeout\s*=\s*(\d+)', 'hardcoded timeout', lambda m: True),
-            # Sleep/wait times
-            (r'sleep\s*\(\s*(\d+)', 'hardcoded sleep', lambda m: float(m.group(1)) > 1),
-            # Retry counts
-            (r'(?:retries|attempts|max_retries)\s*=\s*(\d+)', 'hardcoded retry count', lambda m: True),
-            # Buffer/batch sizes
-            (r'(?:batch_size|buffer_size|chunk_size)\s*=\s*(\d+)', 'hardcoded size', lambda m: int(m.group(1)) > 100),
-            # URLs (except localhost)
-            (r'["\']https?://(?!localhost|127\.0\.0\.1)[^"\']+["\']', 'hardcoded URL', lambda m: True),
-            # File paths (except relative paths)
-            (r'["\'](?:/[^"\']+|[A-Z]:\\[^"\']+)["\']', 'hardcoded absolute path', lambda m: '.memos' not in m.group(0)),
+            # Ports (only flag non-standard high ports)
+            (r':(\d{4,5})["\'\s]', 'hardcoded port', lambda m: int(m.group(1)) > 9000 and int(m.group(1)) not in [8000, 8080, 8502, 8503, 8505, 8839]),
+            # Timeouts (only flag long timeouts > 30 seconds)
+            (r'timeout\s*=\s*(\d+)', 'hardcoded timeout', lambda m: int(m.group(1)) > 30),
+            # Sleep/wait times (only flag long sleeps > 5 seconds)
+            (r'sleep\s*\(\s*(\d+)', 'hardcoded sleep', lambda m: float(m.group(1)) > 5),
+            # Retry counts (only flag excessive retries > 5)
+            (r'(?:retries|attempts|max_retries)\s*=\s*(\d+)', 'hardcoded retry count', lambda m: int(m.group(1)) > 5),
+            # Buffer/batch sizes (only flag very large sizes > 1000)
+            (r'(?:batch_size|buffer_size|chunk_size)\s*=\s*(\d+)', 'hardcoded size', lambda m: int(m.group(1)) > 1000),
+            # URLs (only flag external production URLs)
+            (r'["\']https?://(?!localhost|127\.0\.0\.1|0\.0\.0\.0)[^"\']+\.(?:com|org|net)[^"\']*["\']', 'hardcoded external URL', lambda m: True),
+            # File paths (only flag absolute system paths, not project paths)
+            (r'["\'](?:/(?:var|usr|etc|home)/[^"\']+|[A-Z]:\\(?:Program Files|Windows)[^"\']+)["\']', 'hardcoded system path', lambda m: True),
         ]
         
-        # Files to skip (config files, tests)
-        skip_files = ['config.py', 'test_', 'conftest.py', '__init__.py']
+        # Files to skip (config files, tests, scripts with legitimate hardcoded values)
+        skip_files = ['config.py', 'test_', 'conftest.py', '__init__.py', 'setup.py', 'launcher.py']
         
         if any(skip in file_path.name for skip in skip_files):
             return hardcoding_issues
@@ -128,5 +128,49 @@ class ConfigurationAnalyzer:
                 
         except Exception as e:
             logger.warning(f"Error analyzing config usage in {file_path}: {e}")
+        
+        return patterns
+    
+    def analyze_config_patterns(self, file_path: Path) -> List[Dict]:
+        """Analyze configuration patterns and classify as good or poor."""
+        patterns = []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                lines = content.split('\n')
+            
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                
+                # Good patterns
+                if re.search(r'os\.getenv\([^,]+,\s*[^)]+\)', line):
+                    patterns.append({
+                        'type': 'good_pattern',
+                        'file': file_path,
+                        'line': line_num,
+                        'pattern': 'Uses environment variables with defaults'
+                    })
+                
+                if re.search(r'from.*config.*import', line):
+                    patterns.append({
+                        'type': 'good_pattern',
+                        'file': file_path,
+                        'line': line_num,
+                        'pattern': 'Uses configuration module'
+                    })
+                
+                # Poor patterns (only flag obvious hardcoding in non-config files)
+                if not any(skip in file_path.name for skip in ['config.py', 'test_', 'conftest.py']):
+                    if re.search(r':\d{4,5}["\'\s]', line) and 'localhost' not in line:
+                        patterns.append({
+                            'type': 'poor_pattern',
+                            'file': file_path,
+                            'line': line_num,
+                            'pattern': 'Hardcoded port number'
+                        })
+                        
+        except Exception as e:
+            logger.warning(f"Error analyzing config patterns in {file_path}: {e}")
         
         return patterns

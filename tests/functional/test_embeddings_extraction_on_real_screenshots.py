@@ -203,7 +203,7 @@ class TestEmbeddingsExtractionOnRealScreenshots:
                 continue
             
             print(f"\n   Processing screenshot {screenshot['id']}:")
-            print(f"     Window: {screenshot["active_window"][:50]}...")
+            print(f"     Window: {screenshot['active_window'][:50]}...")
             print(f"     Text length: {len(combined_text)} chars")
             
             start_time = time.time()
@@ -330,9 +330,9 @@ class TestEmbeddingsExtractionOnRealScreenshots:
                     # Show top results
                     for i, result in enumerate(results[:2]):
                         print(f"     {i+1}. Score: {result.get('similarity_score', 0):.3f}")
-                        print(f"        Window: {result.get("active_window", 'Unknown')[:50]}...")
+                        print(f"        Window: {result.get('active_window', 'Unknown')[:50]}...")
                         if result.get("tasks"):
-                            print(f"        Task: {result.get("tasks")}")
+                            print(f"        Task: {result.get('tasks')}")
                 else:
                     print(f"     ⚠️ No results found")
                     

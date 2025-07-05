@@ -111,7 +111,7 @@ class ErrorHandlingAnalyzer:
         
         # Patterns for file operations that need validation
         file_operations = [
-            (r'open\s*\(\s*([^,\)]+)', 'file open', True),
+            (r'\bopen\s*\(\s*([^,\)]+)', 'file open', True),
             (r'Image\.open\s*\(\s*([^,\)]+)', 'image open', True),
             (r'pd\.read_csv\s*\(\s*([^,\)]+)', 'CSV read', True),
             (r'Path\s*\(\s*([^)]+)\)\.read_text', 'file read', True),

@@ -73,14 +73,15 @@ def categorize_files(files: List[Path]) -> dict:
     
     for file_path in files:
         path_str = str(file_path)
-        if '/tests/' in path_str or path_str.startswith('test_') or path_str.endswith('_test.py'):
+        # Only consider files in tests/ directory as test files
+        if 'tests/' in path_str:
             test_files.append(file_path)
-        elif '/scripts/' in path_str:
+        elif 'scripts/' in path_str:
             script_files.append(file_path)
-        elif '/dashboards/' in path_str:
+        elif 'dashboards/' in path_str:
             dashboard_files.append(file_path)
             production_files.append(file_path)
-        elif '/autotasktracker/' in path_str:
+        elif 'autotasktracker/' in path_str:
             production_files.append(file_path)
     
     return {

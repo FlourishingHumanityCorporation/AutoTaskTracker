@@ -359,7 +359,7 @@ class TestExternalServiceMonitoring:
         # Test memos health endpoint if service is running
         try:
             from autotasktracker.config import get_config
-        response = requests.get(f'http://{get_config().SERVER_HOST}:{get_config().MEMOS_PORT}/api/v1/status', timeout=2)
+            response = requests.get(f'http://{get_config().SERVER_HOST}:{get_config().MEMOS_PORT}/api/v1/status', timeout=2)
             # If we get a response, service is running
             assert response.status_code in [200, 404, 405]  # Various valid responses
         except requests.exceptions.RequestException:

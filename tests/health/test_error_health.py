@@ -22,25 +22,12 @@ logger = logging.getLogger(__name__)
 class TestErrorHealth:
     """Error handling pattern health checks."""
     
-    @classmethod
-    def setup_class(cls):
-        """Setup test environment."""
-        cls.project_root = Path(__file__).parent.parent.parent
-        cls.error_analyzer = ErrorHandlingAnalyzer(cls.project_root)
-        cls.auto_fixer = PensieveHealthAutoFixer(dry_run=not os.getenv('PENSIEVE_AUTO_FIX'))
-        cls.analyzer = ParallelAnalyzer()
-        
-        # Use shared file selection to ensure identical file lists across all health tests
-        cls.python_files = get_health_test_files(cls.project_root)
-        
-        # Categorize files using shared logic
-        categories = categorize_files(cls.python_files)
-        cls.script_files = categories['script_files']
-        cls.test_files = categories['test_files']
-        cls.production_files = categories['production_files']
-        cls.dashboard_files = categories['dashboard_files']
+    def setup_method(self, method):
+        """Setup test environment using shared fixtures."""
+        self.auto_fixer = PensieveHealthAutoFixer(dry_run=not os.getenv('PENSIEVE_AUTO_FIX'))
+        self.analyzer = ParallelAnalyzer()
     
-    def test_error_handling_patterns(self):
+    def test_error_handling_patterns(self, production_files, script_files, error_analyzer, max_files_per_test, project_root):
         """Test error handling patterns using parallel processing with auto-fix."""
         # Skip in incremental mode to avoid hanging
         from tests.health.analyzers.utils import IncrementalTestRunner
@@ -48,14 +35,11 @@ class TestErrorHealth:
             print("⏩ Skipping expensive error handling analysis in incremental mode")
             return
             
-        # Limit files based on environment
-        max_slow_test_files = int(os.getenv('PENSIEVE_MAX_FILES', '50'))
-        
         # Limit files for performance - focus on production code
-        files_to_check = self.production_files + self.script_files
-        if len(files_to_check) > max_slow_test_files:
-            files_to_check = files_to_check[:max_slow_test_files]
-            print(f"ℹ️  Analyzing {max_slow_test_files} files for error patterns (set PENSIEVE_MAX_FILES to analyze more)")
+        files_to_check = production_files + script_files
+        if len(files_to_check) > max_files_per_test:
+            files_to_check = files_to_check[:max_files_per_test]
+            print(f"ℹ️  Analyzing {max_files_per_test} files for error patterns (set PENSIEVE_MAX_FILES_PER_TEST to analyze more)")
             
         results = self.analyzer.analyze_files_parallel(
             files_to_check,
@@ -88,7 +72,7 @@ Found {total_issues} error handling issues in {len(issues_by_file)} files:
 """
             for file_path, issues in list(issues_by_file.items())[:5]:
                 try:
-                    rel_path = file_path.relative_to(self.project_root)
+                    rel_path = file_path.relative_to(project_root)
                 except ValueError:
                     rel_path = file_path.name
                 error_msg += f"❌ {rel_path}\n"
@@ -125,12 +109,12 @@ Found {total_issues} error handling issues in {len(issues_by_file)} files:
             
             raise AssertionError(error_msg)
     
-    def test_retry_logic_implementation(self):
+    def test_retry_logic_implementation(self, all_python_files, error_analyzer):
         """Test for proper retry logic with exponential backoff."""
         all_retry_issues = []
         
-        for file_path in self.python_files:
-            issues = self.error_analyzer.analyze_retry_logic(file_path)
+        for file_path in all_python_files:
+            issues = error_analyzer.analyze_retry_logic(file_path)
             all_retry_issues.extend(issues)
         
         if all_retry_issues:
@@ -140,7 +124,7 @@ Found {total_issues} error handling issues in {len(issues_by_file)} files:
 Found {len(all_retry_issues)} files with network operations but no retry logic:
 
 {chr(10).join(f'''
-⚠️ {issue["file"].relative_to(self.project_root) if issue["file"].is_relative_to(self.project_root) else issue["file"].name}
+⚠️ {issue["file"].name}
    Reason: {issue["reason"]} without retry logic
 ''' for issue in all_retry_issues[:10])}
 {f'... and {len(all_retry_issues) - 10} more' if len(all_retry_issues) > 10 else ''}
@@ -169,18 +153,15 @@ for attempt in range(max_retries):
 """
             print(warning_msg)  # Warning, not error
     
-    def test_file_operation_validation(self):
+    def test_file_operation_validation(self, production_files, script_files, error_analyzer, max_files_per_test):
         """Test that file operations include proper validation."""
         all_validation_issues = []
         
-        # Limit files for performance
-        max_slow_test_files = int(os.getenv('PENSIEVE_MAX_FILES', '50'))
-        
         # Only check production files
-        files_to_check = (self.production_files + self.script_files)[:max_slow_test_files]
+        files_to_check = (production_files + script_files)[:max_files_per_test]
         
         for file_path in files_to_check:
-            issues = self.error_analyzer.analyze_file_operations(file_path)
+            issues = error_analyzer.analyze_file_operations(file_path)
             all_validation_issues.extend(issues)
         
         if all_validation_issues:
@@ -189,7 +170,7 @@ for attempt in range(max_retries):
 
 Found {len(all_validation_issues)} file operations without validation:
 """ + chr(10).join(f'''
-❌ {issue["file"].relative_to(self.project_root) if issue["file"].is_relative_to(self.project_root) else issue["file"].name}:{issue["line"]}
+❌ {issue["file"].name}:{issue["line"]}
    Function: {issue["function"]}()
    Operation: {issue["operation"]}
    Code: {issue["code"]}

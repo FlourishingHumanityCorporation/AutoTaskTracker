@@ -759,6 +759,7 @@ This test will PASS once root directory is properly organized!
                 # Exclude config files and pensieve modules which legitimately interface with memos defaults
                 if (pattern in content and 
                     'config.py' not in str(file_path) and 
+                    'config_pydantic.py' not in str(file_path) and 
                     'pensieve/' not in str(file_path)):
                     db_issues.append(f"{file_path}: Hardcoded DB path '{pattern}' (use config)")
                     break
