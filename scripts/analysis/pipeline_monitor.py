@@ -89,7 +89,7 @@ class PipelineMonitor:
             total_entities = cursor.fetchone()[0]
             
             # Processed entities
-            cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = "tasks"")
+            cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = 'tasks'")
             processed_entities = cursor.fetchone()[0]
             
             # Recent processing (last hour)

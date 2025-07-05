@@ -72,7 +72,7 @@ def run_tests_and_analyze():
         except subprocess.TimeoutExpired:
             logger.error(f"  {RED}⏱️  Timeout{RESET}")
         except Exception as e:
-            print(f"  {RED}❌ Error: {e}{RESET}")
+            logger.error(f"  {RED}❌ Error: {e}{RESET}")
     
     # Summary
     print(f"\n{BLUE}=== Overall Results ==={RESET}")

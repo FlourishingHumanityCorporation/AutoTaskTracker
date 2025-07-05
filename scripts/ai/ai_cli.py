@@ -50,12 +50,27 @@ def check_ai_status():
         print("   Install with: pip install sentence-transformers")
     
     try:
-        import requests
-        response = requests.get(get_config().get_ollama_url(), timeout=2)
-        print("✅ Ollama server running")
-    except:
-        print("⚠️  Ollama server not running (VLM features disabled)")
-        print("   Start with: ollama serve")
+        # Try to check via Pensieve API first
+        from autotasktracker.pensieve.api_client import PensieveAPIClient, PensieveAPIError
+        api_client = PensieveAPIClient()
+        health_status = api_client.get_health()
+        
+        if health_status and health_status.get('ollama_available'):
+            print("✅ Ollama server running (via Pensieve API)")
+        else:
+            # Fallback to direct check
+            import requests
+            response = requests.get(get_config().get_ollama_url(), timeout=2)
+            print("✅ Ollama server running")
+    except (PensieveAPIError, Exception):
+        # Fallback to direct check on API failure
+        try:
+            import requests
+            response = requests.get(get_config().get_ollama_url(), timeout=2)
+            print("✅ Ollama server running")
+        except:
+            print("⚠️  Ollama server not running (VLM features disabled)")
+            print("   Start with: ollama serve")
     
     # Check if minicpm-v model exists
     try:

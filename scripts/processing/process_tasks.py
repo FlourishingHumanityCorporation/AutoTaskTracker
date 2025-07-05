@@ -160,7 +160,7 @@ def _process_via_database(limit=None):
                         
                 except sqlite3.IntegrityError:
                     # Already exists, skip
-                    pass
+                    logger.debug("Silent exception handled")
                 except Exception as e:
                     logger.error(f"Error processing entity {entity_id}: {e}")
             

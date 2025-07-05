@@ -221,7 +221,7 @@ class PensieveEmbeddingsGenerator:
                                 if isinstance(item, list) and len(item) >= 2:
                                     text_parts.append(str(item[1]))
                 except:
-                    pass
+                    logger.debug("Silent exception handled")
             
             combined_text = " ".join(text_parts)
             
@@ -244,7 +244,7 @@ class PensieveEmbeddingsGenerator:
                     print(f"  ✅ Processed {i+1}/{len(screenshots)} ({rate:.1f} screenshots/sec)")
                     
             except Exception as e:
-                print(f"  ❌ Error processing screenshot {screenshot['id']}: {e}")
+                logger.error(f"  ❌ Error processing screenshot {screenshot['id']}: {e}")
         
         elapsed = time.time() - start_time
         print(f"\n✅ Generated {success_count} embeddings in {elapsed:.1f} seconds")

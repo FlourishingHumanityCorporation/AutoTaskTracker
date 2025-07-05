@@ -114,7 +114,7 @@ class DashboardManager:
                 return None
                 
         except Exception as e:
-            print(f"❌ Error starting dashboard: {e}")
+            logger.error(f"❌ Error starting dashboard: {e}")
             return None
     
     def stop_dashboard(self, dashboard_type=None, pid=None):
@@ -130,7 +130,7 @@ class DashboardManager:
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
                 print(f"✅ Stopped process {pid}")
             except Exception as e:
-                print(f"❌ Error stopping PID {pid}: {e}")
+                logger.error(f"❌ Error stopping PID {pid}: {e}")
         
         elif dashboard_type:
             # Stop specific dashboard type
@@ -153,7 +153,7 @@ class DashboardManager:
                     print(f"✅ Stopped {dashboard_type} dashboard")
                     
                 except Exception as e:
-                    print(f"❌ Error stopping {dashboard_type}: {e}")
+                    logger.error(f"❌ Error stopping {dashboard_type}: {e}")
             else:
                 print(f"⚠️ {dashboard_type} dashboard not found in running processes")
     
@@ -168,7 +168,7 @@ class DashboardManager:
             subprocess.run(['pkill', '-f', 'streamlit'], check=False)
             print("🧹 Cleaned up any remaining streamlit processes")
         except Exception:
-            pass
+            logger.debug("Operation failed silently")
     
     def status(self):
         """Show status of all dashboards."""
@@ -231,7 +231,7 @@ class DashboardManager:
                         self.processes[dashboard_type] = info
                     except psutil.NoSuchProcess:
                         # Process died, remove from tracking
-                        pass
+                        logger.debug("Silent exception handled")
                         
         except Exception as e:
             logger.error(f"Failed to load process info: {e}")

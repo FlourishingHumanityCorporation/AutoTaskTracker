@@ -220,7 +220,7 @@ Be concise but specific. Focus on actionable insights."""
         
         processed = 0
         for screenshot in screenshots:
-            logger.info(f"Analyzing: {screenshot["tasks"]}")
+            logger.info(f"Analyzing: {screenshot['tasks']}")
             
             analysis = self.analyze_screenshot(screenshot)
             if analysis:

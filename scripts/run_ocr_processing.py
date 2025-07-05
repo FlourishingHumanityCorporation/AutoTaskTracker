@@ -20,26 +20,59 @@ logger = logging.getLogger(__name__)
 def process_screenshots_with_ocr(limit=100):
     """Process screenshots using OCR and store results."""
     from autotasktracker.core import DatabaseManager
+    from autotasktracker.pensieve.api_client import PensieveAPIClient
     
     db = DatabaseManager()
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
+    
+    # Try to use Pensieve API first for fetching unprocessed screenshots
+    try:
+        api_client = PensieveAPIClient()
+        # Get all screenshots
+        screenshots = api_client.get_screenshots(limit=limit * 2)  # Get more to filter
         
-        # Find unprocessed screenshots
-        cursor.execute("""
-            SELECT e.id, e.filepath 
-            FROM entities e
-            WHERE e.file_type_group = 'image'
-            AND NOT EXISTS (
-                SELECT 1 FROM metadata_entries 
-                WHERE entity_id = e.id 
-                AND key IN ("ocr_result", "ocr_result")
-            )
-            LIMIT ?
-        """, (limit,))
+        if screenshots:
+            # Filter unprocessed ones
+            unprocessed = []
+            for screenshot in screenshots:
+                metadata = screenshot.get('metadata', {})
+                if 'ocr_result' not in metadata:
+                    unprocessed.append({
+                        'id': screenshot['id'],
+                        'filepath': screenshot['filepath']
+                    })
+                    if len(unprocessed) >= limit:
+                        break
+            
+            logger.info(f"Found {len(unprocessed)} unprocessed screenshots via API")
+            
+            if unprocessed:
+                # Convert to expected format
+                unprocessed = [(s['id'], s['filepath']) for s in unprocessed]
+        else:
+            # Fall back to direct database query
+            raise Exception("No screenshots returned from API")
+    except Exception as e:
+        logger.debug(f"API not available, using direct database: {e}")
         
-        unprocessed = cursor.fetchall()
-        logger.info(f"Found {len(unprocessed)} unprocessed screenshots")
+        # Fallback to direct database query
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Find unprocessed screenshots
+            cursor.execute("""
+                SELECT e.id, e.filepath 
+                FROM entities e
+                WHERE e.file_type_group = 'image'
+                AND NOT EXISTS (
+                    SELECT 1 FROM metadata_entries 
+                    WHERE entity_id = e.id 
+                    AND key IN ("ocr_result", "ocr_result")
+                )
+                LIMIT ?
+            """, (limit,))
+            
+            unprocessed = cursor.fetchall()
+            logger.info(f"Found {len(unprocessed)} unprocessed screenshots")
         
         if not unprocessed:
             logger.info("No unprocessed screenshots found")
@@ -56,7 +89,7 @@ def process_screenshots_with_ocr(limit=100):
             ocr_method = 'ocrmac_python'
             logger.info("Using ocrmac Python module for OCR")
         except ImportError:
-            pass
+            logger.debug("Optional dependency not available")
         
         # Try pytesseract as fallback
         if not ocr_available:
@@ -67,11 +100,18 @@ def process_screenshots_with_ocr(limit=100):
                 ocr_method = 'pytesseract'
                 logger.info("Using pytesseract for OCR")
             except ImportError:
-                pass
+                logger.debug("Optional dependency not available")
         
         if not ocr_available:
             logger.error("No OCR capability available. Install ocrmac or pytesseract.")
             return
+        
+        # Initialize API client for storing results (if available)
+        api_client = None
+        try:
+            api_client = PensieveAPIClient()
+        except Exception as e:
+            logger.debug(f"API client not available: {e}")
         
         processed_count = 0
         for entity_id, filepath in unprocessed:
@@ -103,17 +143,34 @@ def process_screenshots_with_ocr(limit=100):
                     ocr_text = pytesseract.image_to_string(img)
                 
                 if ocr_text:
-                    # Store OCR result
-                    cursor.execute("""
-                        INSERT INTO metadata_entries 
-                        (entity_id, key, value, source_type, source, data_type, created_at, updated_at)
-                        VALUES (?, "ocr_result", ?, 'plugin', 'manual_ocr', 'text', datetime('now'), datetime('now'))
-                    """, (entity_id, ocr_text))
+                    # Try to store via API first
+                    stored_via_api = False
+                    try:
+                        if api_client:
+                            success = api_client.update_task_status(
+                                entity_id,
+                                status='processed',
+                                metadata={'ocr_result': ocr_text}
+                            )
+                            if success:
+                                logger.debug(f"Stored OCR result via API for entity {entity_id}")
+                                stored_via_api = True
+                    except Exception as e:
+                        logger.debug(f"API storage failed: {e}")
                     
-                    # Also mark as processed by OCR plugin
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO entity_plugin_status 
-                        (entity_id, plugin_id, processed_at)
+                    if not stored_via_api:
+                        # Fallback to direct database storage
+                        # Store OCR result
+                        cursor.execute("""
+                            INSERT INTO metadata_entries 
+                            (entity_id, key, value, source_type, source, data_type, created_at, updated_at)
+                            VALUES (?, "ocr_result", ?, 'plugin', 'manual_ocr', 'text', datetime('now'), datetime('now'))
+                        """, (entity_id, ocr_text))
+                        
+                        # Also mark as processed by OCR plugin
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO entity_plugin_status 
+                            (entity_id, plugin_id, processed_at)
                         VALUES (?, 2, datetime('now'))
                     """, (entity_id,))
                     

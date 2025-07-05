@@ -267,7 +267,7 @@ class AutoProcessor:
             cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = 'ocr_text'")
             ocr_count = cursor.fetchone()[0]
             
-            cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = "tasks"")
+            cursor.execute("SELECT COUNT(DISTINCT entity_id) FROM metadata_entries WHERE key = 'tasks'")
             task_count = cursor.fetchone()[0]
         
         logger.info(f"\nCoverage:")

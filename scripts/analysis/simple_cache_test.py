@@ -8,7 +8,6 @@ import sys
 import os
 import time
 import logging
-import sqlite3
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 # Import only what we need
 from autotasktracker.pensieve.cache_manager import PensieveCacheManager
+from autotasktracker.core.database import DatabaseManager
 
 def get_database_path():
     """Get the database path."""
@@ -32,14 +32,10 @@ def test_cache_performance():
     cache = PensieveCacheManager()
     cache.clear()
     
-    # Database path
-    db_path = get_database_path()
+    # Initialize DatabaseManager
+    db_manager = DatabaseManager()
     
-    if not os.path.exists(db_path):
-        logger.error(f"Database not found at {db_path}")
-        return False
-    
-    logger.info(f"Using database: {db_path}")
+    logger.info("Using DatabaseManager for all database operations")
     
     # Test queries
     queries = [
@@ -57,13 +53,13 @@ def test_cache_performance():
         # Cold cache test
         cache.clear()
         start_time = time.time()
-        with sqlite3.connect(db_path) as conn:
+        with db_manager.get_connection() as conn:
             result = conn.execute(query).fetchall()
         cold_time = time.time() - start_time
         
         # Warm cache test (repeat same query)
         start_time = time.time()
-        with sqlite3.connect(db_path) as conn:
+        with db_manager.get_connection() as conn:
             result2 = conn.execute(query).fetchall()
         warm_time = time.time() - start_time
         
