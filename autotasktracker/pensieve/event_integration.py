@@ -17,6 +17,7 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 from autotasktracker.pensieve.api_client import get_pensieve_client
 from autotasktracker.pensieve.config_sync import get_synced_config
+# DatabaseManager import moved to avoid circular dependency
 
 logger = logging.getLogger(__name__)
 

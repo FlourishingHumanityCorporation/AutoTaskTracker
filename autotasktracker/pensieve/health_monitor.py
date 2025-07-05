@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 from autotasktracker.pensieve.api_client import get_pensieve_client
 from autotasktracker.pensieve.config_reader import get_pensieve_config_reader
+from autotasktracker.core.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -92,12 +93,16 @@ class PensieveHealthMonitor:
                 api_error = str(e)
                 api_response_time = (time.time() - start_time) * 1000
             
-            # Check database accessibility
+            # Check database accessibility with DatabaseManager
             database_accessible = False
             try:
-                # Try to read Pensieve config which requires database access
-                pensieve_config = config_reader.read_pensieve_config()
-                database_accessible = bool(pensieve_config.database_path)
+                # Try to use DatabaseManager to verify database connection
+                db_manager = DatabaseManager()
+                with db_manager.get_connection(readonly=True) as conn:
+                    # Simple query to verify connection
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT 1")
+                    database_accessible = True
             except Exception as e:
                 logger.debug(f"Database accessibility check failed: {e}")
             

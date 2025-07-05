@@ -15,6 +15,9 @@ from typing import Dict, Any, Callable, List, Optional
 from dataclasses import dataclass, asdict
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
+import uuid
+from collections import defaultdict
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -23,7 +26,7 @@ from pydantic import BaseModel
 
 from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
 from autotasktracker.pensieve.cache_manager import get_cache_manager
-from autotasktracker.core import DatabaseManager
+# DatabaseManager import moved to avoid circular dependency
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +40,88 @@ class WebhookPayload(BaseModel):
     source: str = "pensieve_webhook"
 
 
+class EventType(Enum):
+    """Enhanced granular event types."""
+    # Entity events
+    ENTITY_CREATED = "entity.created"
+    ENTITY_UPDATED = "entity.updated" 
+    ENTITY_DELETED = "entity.deleted"
+    ENTITY_PROCESSED = "entity.processed"
+    
+    # Processing events
+    OCR_COMPLETED = "processing.ocr_completed"
+    VLM_COMPLETED = "processing.vlm_completed"
+    AI_ANALYSIS_COMPLETED = "processing.ai_analysis_completed"
+    TASK_EXTRACTED = "processing.task_extracted"
+    
+    # System events
+    SYSTEM_STATUS_CHANGED = "system.status_changed"
+    ERROR_OCCURRED = "system.error_occurred"
+    PERFORMANCE_ALERT = "system.performance_alert"
+    
+    # Dashboard events
+    DASHBOARD_REFRESH_NEEDED = "dashboard.refresh_needed"
+    CACHE_INVALIDATED = "dashboard.cache_invalidated"
+    
+    # Custom events
+    CUSTOM_EVENT = "custom.event"
+
+
+@dataclass
+class EventFilter:
+    """Filter criteria for event subscriptions."""
+    entity_ids: Optional[List[int]] = None
+    source_filters: Optional[List[str]] = None
+    min_confidence: Optional[float] = None
+    categories: Optional[List[str]] = None
+    time_window_seconds: Optional[int] = None
+
+
+@dataclass
+class Subscription:
+    """Event subscription with enhanced filtering."""
+    id: str
+    event_types: List[EventType]
+    handler: Callable[[PensieveEvent], None]
+    filters: EventFilter
+    created_at: datetime
+    last_triggered: Optional[datetime] = None
+    trigger_count: int = 0
+    active: bool = True
+
+
 @dataclass
 class WebhookStats:
-    """Webhook processing statistics."""
+    """Enhanced webhook processing statistics."""
     requests_received: int = 0
     requests_processed: int = 0
     requests_failed: int = 0
     last_request_time: Optional[datetime] = None
     average_processing_time_ms: float = 0.0
     uptime_seconds: float = 0.0
+    
+    # Enhanced statistics
+    events_by_type: Optional[Dict[str, int]] = None
+    active_subscriptions: int = 0
+    filtered_events: int = 0
+    
+    def __post_init__(self):
+        if self.events_by_type is None:
+            self.events_by_type = {}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'requests_received': self.requests_received,
+            'requests_processed': self.requests_processed,
+            'requests_failed': self.requests_failed,
+            'last_request_time': self.last_request_time.isoformat() if self.last_request_time else None,
+            'average_processing_time_ms': self.average_processing_time_ms,
+            'uptime_seconds': self.uptime_seconds,
+            'events_by_type': dict(self.events_by_type) if self.events_by_type else {},
+            'active_subscriptions': self.active_subscriptions,
+            'filtered_events': self.filtered_events
+        }
 
 
 class WebhookServer:
@@ -67,13 +143,20 @@ class WebhookServer:
         # Components
         self.event_processor = get_event_processor()
         self.cache_manager = get_cache_manager()
-        self.db_manager = DatabaseManager(use_pensieve_api=True)
+        # DatabaseManager import moved to avoid circular dependency
+        try:
+            from autotasktracker.core.database import DatabaseManager
+            self.db_manager = DatabaseManager(use_pensieve_api=True)
+        except ImportError:
+            logger.warning("DatabaseManager not available in webhook server")
+            self.db_manager = None
         
         # Threading for background processing
         self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="WebhookProcessor")
         
-        # Request handlers
-        self.handlers: Dict[str, List[Callable[[PensieveEvent], None]]] = {}
+        # Enhanced subscription management
+        self.subscriptions: Dict[str, Subscription] = {}
+        self.handlers: Dict[str, List[Callable[[PensieveEvent], None]]] = {}  # Keep for backward compatibility
         
         # Setup routes
         self._setup_routes()
@@ -89,7 +172,7 @@ class WebhookServer:
             return {
                 "status": "healthy",
                 "uptime_seconds": time.time() - self.start_time,
-                "stats": asdict(self.stats)
+                "stats": self.stats.to_dict()
             }
         
         @self.app.post("/webhook/entity/created")
@@ -127,7 +210,7 @@ class WebhookServer:
         async def get_stats():
             """Get webhook processing statistics."""
             self.stats.uptime_seconds = time.time() - self.start_time
-            return asdict(self.stats)
+            return self.stats.to_dict()
         
         @self.app.get("/handlers")
         async def get_handlers():
@@ -135,6 +218,45 @@ class WebhookServer:
             return {
                 event_type: len(handlers) 
                 for event_type, handlers in self.handlers.items()
+            }
+        
+        @self.app.post("/webhook/autotask/tag")
+        async def autotask_tag_event(payload: WebhookPayload, background_tasks: BackgroundTasks):
+            """Handle AutoTaskTracker tagging events."""
+            return await self._process_webhook(payload, "autotask_tag", background_tasks)
+        
+        @self.app.post("/webhook/autotask/task_extracted")
+        async def autotask_task_extracted(payload: WebhookPayload, background_tasks: BackgroundTasks):
+            """Handle task extraction completion events."""
+            return await self._process_webhook(payload, "autotask_task_extracted", background_tasks)
+        
+        @self.app.post("/webhook/autotask/dashboard_update")
+        async def autotask_dashboard_update(payload: WebhookPayload, background_tasks: BackgroundTasks):
+            """Handle dashboard update events."""
+            return await self._process_webhook(payload, "autotask_dashboard_update", background_tasks)
+        
+        @self.app.get("/webhook/endpoints")
+        async def list_webhook_endpoints():
+            """List all available webhook endpoints."""
+            return {
+                "pensieve_webhooks": [
+                    "/webhook/entity/created",
+                    "/webhook/entity/updated", 
+                    "/webhook/entity/processed",
+                    "/webhook/metadata/updated",
+                    "/webhook/generic"
+                ],
+                "autotask_webhooks": [
+                    "/webhook/autotask/tag",
+                    "/webhook/autotask/task_extracted",
+                    "/webhook/autotask/dashboard_update"
+                ],
+                "utility_endpoints": [
+                    "/health",
+                    "/stats",
+                    "/handlers",
+                    "/webhook/endpoints"
+                ]
             }
     
     async def _process_webhook(self, payload: WebhookPayload, event_type: str, 
@@ -299,6 +421,175 @@ class WebhookServer:
                 logger.info(f"Unregistered webhook handler for {event_type}")
             except ValueError:
                 logger.warning(f"Handler not found for {event_type}")
+    
+    def subscribe(self, 
+                  event_types: List[EventType], 
+                  handler: Callable[[PensieveEvent], None],
+                  filters: Optional[EventFilter] = None) -> str:
+        """Subscribe to events with enhanced filtering.
+        
+        Args:
+            event_types: List of event types to subscribe to
+            handler: Handler function to call when events match
+            filters: Optional event filters
+            
+        Returns:
+            Subscription ID for management
+        """
+        subscription_id = str(uuid.uuid4())
+        
+        subscription = Subscription(
+            id=subscription_id,
+            event_types=event_types,
+            handler=handler,
+            filters=filters or EventFilter(),
+            created_at=datetime.now()
+        )
+        
+        self.subscriptions[subscription_id] = subscription
+        self.stats.active_subscriptions = len(self.subscriptions)
+        
+        event_names = [et.value for et in event_types]
+        logger.info(f"Created subscription {subscription_id[:8]} for events: {event_names}")
+        
+        return subscription_id
+    
+    def unsubscribe(self, subscription_id: str) -> bool:
+        """Unsubscribe from events.
+        
+        Args:
+            subscription_id: ID of subscription to remove
+            
+        Returns:
+            True if subscription was found and removed
+        """
+        if subscription_id in self.subscriptions:
+            del self.subscriptions[subscription_id]
+            self.stats.active_subscriptions = len(self.subscriptions)
+            logger.info(f"Removed subscription {subscription_id[:8]}")
+            return True
+        else:
+            logger.warning(f"Subscription {subscription_id[:8]} not found")
+            return False
+    
+    def update_subscription(self, subscription_id: str, 
+                           event_types: Optional[List[EventType]] = None,
+                           filters: Optional[EventFilter] = None,
+                           active: Optional[bool] = None) -> bool:
+        """Update an existing subscription.
+        
+        Args:
+            subscription_id: ID of subscription to update
+            event_types: New event types (optional)
+            filters: New filters (optional)
+            active: New active status (optional)
+            
+        Returns:
+            True if subscription was updated
+        """
+        if subscription_id not in self.subscriptions:
+            logger.warning(f"Subscription {subscription_id[:8]} not found for update")
+            return False
+        
+        subscription = self.subscriptions[subscription_id]
+        
+        if event_types is not None:
+            subscription.event_types = event_types
+        if filters is not None:
+            subscription.filters = filters
+        if active is not None:
+            subscription.active = active
+        
+        logger.info(f"Updated subscription {subscription_id[:8]}")
+        return True
+    
+    def get_subscription_stats(self) -> Dict[str, Any]:
+        """Get detailed subscription statistics."""
+        stats = {
+            'total_subscriptions': len(self.subscriptions),
+            'active_subscriptions': sum(1 for s in self.subscriptions.values() if s.active),
+            'inactive_subscriptions': sum(1 for s in self.subscriptions.values() if not s.active),
+            'event_type_counts': defaultdict(int),
+            'subscription_details': []
+        }
+        
+        for subscription in self.subscriptions.values():
+            for event_type in subscription.event_types:
+                stats['event_type_counts'][event_type.value] += 1
+            
+            stats['subscription_details'].append({
+                'id': subscription.id[:8],
+                'event_types': [et.value for et in subscription.event_types],
+                'trigger_count': subscription.trigger_count,
+                'last_triggered': subscription.last_triggered,
+                'active': subscription.active,
+                'created_at': subscription.created_at
+            })
+        
+        return stats
+    
+    def _matches_filters(self, event: PensieveEvent, filters: EventFilter) -> bool:
+        """Check if an event matches subscription filters."""
+        # Entity ID filter
+        if filters.entity_ids is not None:
+            if event.entity_id not in filters.entity_ids:
+                return False
+        
+        # Source filter
+        if filters.source_filters is not None:
+            if not any(source in event.source for source in filters.source_filters):
+                return False
+        
+        # Confidence filter
+        if filters.min_confidence is not None:
+            event_confidence = event.metadata.get('confidence', 0.0)
+            if event_confidence < filters.min_confidence:
+                return False
+        
+        # Category filter
+        if filters.categories is not None:
+            event_category = event.metadata.get('category')
+            if event_category not in filters.categories:
+                return False
+        
+        # Time window filter
+        if filters.time_window_seconds is not None:
+            event_time = datetime.fromisoformat(event.timestamp.replace('Z', '+00:00'))
+            time_diff = (datetime.now() - event_time).total_seconds()
+            if time_diff > filters.time_window_seconds:
+                return False
+        
+        return True
+    
+    def _trigger_subscriptions(self, event: PensieveEvent, event_type: EventType):
+        """Trigger matching subscriptions for an event."""
+        matched_subscriptions = 0
+        
+        for subscription in self.subscriptions.values():
+            if not subscription.active:
+                continue
+            
+            # Check if event type matches
+            if event_type not in subscription.event_types:
+                continue
+            
+            # Check filters
+            if not self._matches_filters(event, subscription.filters):
+                self.stats.filtered_events += 1
+                continue
+            
+            # Trigger the handler
+            try:
+                subscription.handler(event)
+                subscription.last_triggered = datetime.now()
+                subscription.trigger_count += 1
+                matched_subscriptions += 1
+                
+            except Exception as e:
+                logger.error(f"Subscription {subscription.id[:8]} handler failed: {e}")
+        
+        if matched_subscriptions > 0:
+            logger.debug(f"Triggered {matched_subscriptions} subscriptions for {event_type.value}")
     
     def start_server(self, background: bool = False):
         """Start the webhook server.

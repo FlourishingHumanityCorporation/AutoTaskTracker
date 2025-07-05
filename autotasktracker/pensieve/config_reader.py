@@ -55,13 +55,13 @@ class PensieveConfigReader:
     def get_memos_status(self) -> Dict[str, Any]:
         """Get current memos service status."""
         try:
-            # Use memos command directly (it should be in PATH)
+            # Use python -m memos.commands since memos is not in PATH
             result = subprocess.run(
-                ["memos", "ps"],
+                ["python", "-m", "memos.commands", "ps"],
                 capture_output=True,
-                    text=True,
-                    timeout=10
-                )
+                text=True,
+                timeout=10
+            )
             
             if result.returncode == 0:
                 return {

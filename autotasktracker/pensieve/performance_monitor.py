@@ -14,6 +14,8 @@ import statistics
 import json
 from pathlib import Path
 
+# DatabaseManager import moved to avoid circular dependency
+
 logger = logging.getLogger(__name__)
 
 
@@ -392,8 +394,12 @@ class PerformanceMonitor:
                 filepath = Path(filepath)
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 
-                with open(filepath, 'w') as f:
-                    json.dump(export_data, f, indent=2, default=str)
+                try:
+                    with open(filepath, 'w') as f:
+                        json.dump(export_data, f, indent=2, default=str)
+                except IOError as e:
+                    logger.error(f"Failed to export metrics to {filepath}: {e}")
+                    raise
                 
                 logger.info(f"Metrics exported to {filepath}")
             

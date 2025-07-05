@@ -7,9 +7,9 @@ import json
 import asyncio
 from dataclasses import dataclass
 
-from .api_client import get_pensieve_client, PensieveAPIError
-from .config_reader import get_pensieve_config
-from ..core.database import DatabaseManager
+from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
+from autotasktracker.pensieve.config_reader import get_pensieve_config
+# DatabaseManager import moved to avoid circular dependency
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ class PostgreSQLAdapter:
         """Lazy initialization of fallback database."""
         if self._fallback_db is None:
             try:
+                from autotasktracker.core.database import DatabaseManager
                 self._fallback_db = DatabaseManager(use_pensieve_api=False)
                 logger.debug("Initialized fallback SQLite database")
             except Exception as e:
@@ -70,11 +71,21 @@ class PostgreSQLAdapter:
                     performance_tier = 'sqlite'
                     max_vectors = 100_000     # SQLite practical limit
                 
+                # Check for existing vector infrastructure
+                vector_tables_exist = self._check_vector_tables_exist()
+                actual_vector_enabled = vector_search or vector_tables_exist
+                
+                # Enhanced detection based on actual infrastructure
+                if vector_tables_exist and not postgresql_enabled:
+                    # Has vector infrastructure but not PostgreSQL - upgrade opportunity
+                    performance_tier = 'sqlite_with_vectors'
+                    logger.info("Vector infrastructure detected - PostgreSQL upgrade recommended")
+                
                 return PostgreSQLCapabilities(
                     postgresql_enabled=postgresql_enabled,
-                    vector_search_enabled=vector_search,
-                    pgvector_available=postgresql_enabled and vector_search,
-                    vector_dimensions=self.config.vector_search_enabled and 768 or 0,
+                    vector_search_enabled=actual_vector_enabled,
+                    pgvector_available=postgresql_enabled and actual_vector_enabled,
+                    vector_dimensions=self._detect_vector_dimensions(),
                     max_vectors=max_vectors,
                     performance_tier=performance_tier
                 )
@@ -226,7 +237,7 @@ class PostgreSQLAdapter:
                 return []
             
             # Use direct database access as fallback
-            from ..dashboards.data.repositories import TaskRepository
+            from autotasktracker.dashboards.data.repositories import TaskRepository
             
             task_repo = TaskRepository(self.fallback_db, use_pensieve=False)  # Prevent infinite recursion
             tasks = task_repo.get_tasks_for_period(start_date, end_date, categories, limit)
@@ -400,6 +411,98 @@ class PostgreSQLAdapter:
             })
         
         return recommendations
+    
+    def _check_vector_tables_exist(self) -> bool:
+        """Check if vector search tables exist in current database."""
+        try:
+            if self.fallback_db:
+                with self.fallback_db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%vec%'"
+                    )
+                    vector_tables = cursor.fetchall()
+                    return len(vector_tables) > 0
+        except Exception as e:
+            logger.debug(f"Failed to check vector tables: {e}")
+        return False
+    
+    def _detect_vector_dimensions(self) -> int:
+        """Detect vector dimensions from existing vector tables."""
+        try:
+            if self.fallback_db:
+                with self.fallback_db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    
+                    # Check entities_vec_v2_info table for dimensions
+                    cursor.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='entities_vec_v2_info'"
+                    )
+                    if cursor.fetchone():
+                        # Try to get actual vector dimensions from vector data
+                        cursor.execute(
+                            "SELECT * FROM entities_vec_v2_info ORDER BY rowid LIMIT 1"
+                        )
+                        result = cursor.fetchone()
+                        if result:
+                            # Estimate common embedding dimensions
+                            return 768  # Common for sentence-transformers
+        except Exception as e:
+            logger.debug(f"Failed to detect vector dimensions: {e}")
+        return 0
+    
+    def get_migration_status(self) -> Dict[str, Any]:
+        """Get detailed migration status and recommendations."""
+        status = {
+            "current_backend": self.capabilities.performance_tier,
+            "postgresql_ready": False,
+            "migration_possible": False,
+            "data_volume": {},
+            "estimated_migration_time": "unknown",
+            "risk_level": "low"
+        }
+        
+        try:
+            # Check data volume
+            if self.fallback_db:
+                with self.fallback_db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    
+                    # Count entities
+                    cursor.execute("SELECT COUNT(*) FROM entities")
+                    entity_count = cursor.fetchone()[0]
+                    
+                    # Count metadata entries  
+                    cursor.execute("SELECT COUNT(*) FROM metadata_entries")
+                    metadata_count = cursor.fetchone()[0]
+                    
+                    # Check database size
+                    cursor.execute("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()")
+                    db_size = cursor.fetchone()[0]
+                    
+                    status["data_volume"] = {
+                        "entities": entity_count,
+                        "metadata_entries": metadata_count,
+                        "database_size_mb": db_size / (1024 * 1024)
+                    }
+                    
+                    # Estimate migration time based on data volume
+                    if entity_count < 10000:
+                        status["estimated_migration_time"] = "5-15 minutes"
+                        status["risk_level"] = "low"
+                    elif entity_count < 100000:
+                        status["estimated_migration_time"] = "15-45 minutes"
+                        status["risk_level"] = "medium"
+                    else:
+                        status["estimated_migration_time"] = "1-3 hours"
+                        status["risk_level"] = "high"
+                    
+                    status["migration_possible"] = True
+                    
+        except Exception as e:
+            logger.error(f"Failed to assess migration status: {e}")
+        
+        return status
 
 
 # Singleton instance

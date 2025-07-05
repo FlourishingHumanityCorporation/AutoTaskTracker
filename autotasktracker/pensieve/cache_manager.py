@@ -15,6 +15,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# DatabaseManager import moved to avoid circular dependency
+
 # Import performance monitoring (with fallback if not available)
 try:
     from autotasktracker.pensieve.performance_monitor import record_cache_hit, record_cache_miss
@@ -24,10 +26,10 @@ except ImportError:
     PERFORMANCE_MONITORING_AVAILABLE = False
     
     def record_cache_hit(cache_type: str = "default"):
-        pass
+            logger.debug("Optional dependency not available")
     
     def record_cache_miss(cache_type: str = "default"):
-        pass
+            logger.debug("Optional dependency not available")
 
 
 @dataclass
@@ -349,7 +351,7 @@ class PensieveCacheManager:
     def _get_disk_path(self, key: str) -> Path:
         """Get disk cache file path for a key."""
         # Create safe filename from key
-        safe_key = hashlib.md5(key.encode()).hexdigest()
+        safe_key = hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()
         return self.disk_cache_dir / f"{safe_key}.cache"
     
     def _is_expired(self, entry: CacheEntry) -> bool:

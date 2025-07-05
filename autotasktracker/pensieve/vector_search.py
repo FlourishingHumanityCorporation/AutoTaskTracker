@@ -8,9 +8,10 @@ import json
 from dataclasses import dataclass, asdict
 import asyncio
 
-from .postgresql_adapter import get_postgresql_adapter
-from .api_client import get_pensieve_client
-from .advanced_search import SearchQuery, SearchResult, get_advanced_search
+from autotasktracker.pensieve.postgresql_adapter import get_postgresql_adapter
+from autotasktracker.pensieve.api_client import get_pensieve_client
+from autotasktracker.pensieve.advanced_search import SearchQuery, SearchResult, get_advanced_search
+# DatabaseManager import moved to avoid circular dependency
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,7 @@ class EnhancedVectorSearch:
                 logger.debug("Pensieve embedding API not yet implemented, using fallback")
             
             # Fallback to basic embedding generation
-            from ..ai.embeddings_search import generate_embedding
+            from autotasktracker.ai.embeddings_search import generate_embedding
             embedding = generate_embedding(text)
             
             if embedding and len(embedding) == self.capabilities.vector_dimensions:

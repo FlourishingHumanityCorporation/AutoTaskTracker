@@ -15,7 +15,7 @@ from urllib3.util.retry import Retry
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 from autotasktracker.pensieve.health_monitor import get_health_monitor
 from autotasktracker.core.task_extractor import get_task_extractor
-from autotasktracker.core import ActivityCategorizer
+from autotasktracker.core import ActivityCategorizer, DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ class EventProcessor:
         events = []
         
         try:
-            from autotasktracker.core import DatabaseManager
+            # DatabaseManager import moved to avoid circular dependency
             
             # Use direct database access for change detection
             db = DatabaseManager(use_pensieve_api=False)  # Direct SQLite for speed

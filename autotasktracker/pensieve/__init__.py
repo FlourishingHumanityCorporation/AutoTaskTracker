@@ -12,7 +12,7 @@ achieving 90%+ utilization of Pensieve capabilities through:
 - Multi-tier caching system
 """
 
-from .api_client import (
+from autotasktracker.pensieve.api_client import (
     get_pensieve_client, 
     reset_pensieve_client,
     PensieveAPIClient,
@@ -21,13 +21,13 @@ from .api_client import (
     PensieveAPIError
 )
 
-from .cache_manager import (
+from autotasktracker.pensieve.cache_manager import (
     get_cache_manager,
     reset_cache_manager,
     PensieveCacheManager
 )
 
-from .config_sync import (
+from autotasktracker.pensieve.config_sync import (
     get_pensieve_config_sync,
     get_synced_config,
     reset_config_sync,
@@ -35,7 +35,7 @@ from .config_sync import (
     SyncedConfiguration
 )
 
-from .event_integration import (
+from autotasktracker.pensieve.event_integration import (
     get_event_integrator,
     start_event_integration,
     reset_event_integrator,
@@ -47,15 +47,15 @@ from .event_integration import (
     DashboardNotifier
 )
 
-from .enhanced_search import (
-    get_enhanced_search,
-    reset_enhanced_search,
+from autotasktracker.pensieve.advanced_search import (
+    get_advanced_search,
+    reset_advanced_search,
     PensieveEnhancedSearch,
     SearchResult,
     SearchQuery
 )
 
-from .backend_optimizer import (
+from autotasktracker.pensieve.backend_optimizer import (
     get_backend_optimizer,
     auto_optimize_backend,
     reset_backend_optimizer,
@@ -101,8 +101,8 @@ __all__ = [
     "DashboardNotifier",
     
     # Enhanced Search
-    "get_enhanced_search",
-    "reset_enhanced_search",
+    "get_advanced_search",
+    "reset_advanced_search",
     "PensieveEnhancedSearch",
     "SearchResult",
     "SearchQuery",
