@@ -1,0 +1,60 @@
+{
+  "timestamp": "2025-07-05T14:14:09.421827",
+  "project": "AutoTaskTracker",
+  "security_tools": {
+    "semgrep": {
+      "status": "failed",
+      "error": "[Errno 2] No such file or directory: 'semgrep'"
+    },
+    "bandit": {
+      "status": "failed",
+      "error": "[Errno 2] No such file or directory: 'bandit'"
+    },
+    "pip_audit": {
+      "status": "failed",
+      "error": "[Errno 2] No such file or directory: 'pip-audit'"
+    }
+  },
+  "code_analysis": {
+    "total_files": 81,
+    "total_lines": 30604,
+    "ai_pattern_violations": 0,
+    "security_hotspots": [],
+    "violations_per_kloc": 0.0
+  },
+  "dependency_analysis": {
+    "total_dependencies": 0,
+    "direct_dependencies": 22,
+    "security_advisories": 0,
+    "package_ages": {},
+    "risk_distribution": {
+      "low": 0,
+      "medium": 0,
+      "high": 0
+    }
+  },
+  "compliance_score": {
+    "score": 100.0,
+    "passed_checks": 6,
+    "total_checks": 6,
+    "details": {
+      "sast_configured": true,
+      "sca_configured": true,
+      "dast_available": true,
+      "ci_integrated": true,
+      "documentation_complete": true,
+      "git_hooks_enabled": true
+    }
+  },
+  "trends": {
+    "findings_trend": "stable",
+    "new_vulnerabilities_week": 0,
+    "fixed_vulnerabilities_week": 0,
+    "avg_time_to_fix": "< 24 hours"
+  },
+  "recommendations": [
+    "Fix semgrep configuration - currently failing",
+    "Fix bandit configuration - currently failing",
+    "Fix pip_audit configuration - currently failing"
+  ]
+}

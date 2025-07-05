@@ -1,0 +1,76 @@
+#!/bin/bash
+# AutoTaskTracker Pre-Commit Hook
+# Validates AI-generated code security before commit
+
+echo "🔍 Running pre-commit security checks..."
+
+# Check if we're in the right directory
+if [ ! -f "autotasktracker.py" ]; then
+    echo "❌ Error: Not in AutoTaskTracker root directory"
+    exit 1
+fi
+
+# 1. Run Semgrep for AI-specific patterns
+echo "→ Checking for AI code vulnerabilities..."
+if ! semgrep --config=.semgrep.yml autotasktracker/ --quiet --error; then
+    echo "❌ Semgrep found security issues. Run 'semgrep --config=.semgrep.yml autotasktracker/' for details."
+    exit 1
+fi
+
+# 2. Check for modified requirements.txt
+if git diff --cached --name-only | grep -q "requirements.txt"; then
+    echo "→ Validating package changes..."
+    if ! python scripts/security/package_validator.py --requirements requirements.txt; then
+        echo "❌ Package validation failed. Check for suspicious packages."
+        exit 1
+    fi
+fi
+
+# 3. Quick Bandit scan on changed Python files
+CHANGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' | grep -v test)
+if [ ! -z "$CHANGED_PY_FILES" ]; then
+    echo "→ Running Bandit security scan on changed files..."
+    if ! bandit --configfile .bandit $CHANGED_PY_FILES --severity-level high --quiet; then
+        echo "❌ Bandit found high-severity issues in changed files."
+        exit 1
+    fi
+fi
+
+# 4. Check for common AI patterns in staged files
+echo "→ Checking for dangerous patterns..."
+DANGEROUS_PATTERNS=(
+    "sqlite3.connect("
+    "eval("
+    "exec("
+    "print("
+    "except:"
+    "api_key.*=.*[\"\']"
+    "password.*=.*[\"\']"
+)
+
+for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+    if git diff --cached | grep -E "$pattern" | grep -v "^-"; then
+        echo "⚠️  Warning: Found potentially dangerous pattern: $pattern"
+        echo "   Please review carefully or fix before committing."
+        # Note: This is a warning, not a block, for the Workshop risk profile
+    fi
+done
+
+# 5. Run quick health checks if test files changed
+if git diff --cached --name-only | grep -q "test"; then
+    echo "→ Running quick health test validation..."
+    pytest tests/health/test_metatesting_security.py::TestMetaTestingSecurity::test_meta_testing_compliance_score -v --tb=short -q
+fi
+
+echo "✅ Pre-commit security checks passed!"
+echo ""
+echo "Remember:"
+echo "- Review AI-generated code as you would a junior developer's"
+echo "- Verify all package suggestions before accepting"
+echo "- Ensure proper error handling and input validation"
+echo ""
+
+# Optional: Add commit message reminder
+echo "📝 Commit message tip: Use conventional format (feat/fix/docs/chore)"
+
+exit 0

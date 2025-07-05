@@ -155,7 +155,7 @@ class PostgreSQLAdapter:
                 if not self._is_date_in_range(frame_date, start_date, end_date):
                     continue
                 
-                metadata = self.pensieve_client.get_metadata(frame.id)
+                metadata = self.pensieve_client.get_entity_metadata(frame.id)
                 
                 if "tasks" in metadata:
                     task_data = {
@@ -199,7 +199,7 @@ class PostgreSQLAdapter:
                 if not self._is_date_in_range(frame_date, start_date, end_date):
                     continue
                 
-                metadata = self.pensieve_client.get_metadata(frame.id)
+                metadata = self.pensieve_client.get_entity_metadata(frame.id)
                 
                 if "tasks" in metadata:
                     task_data = {
