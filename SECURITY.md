@@ -85,10 +85,9 @@ New dependencies must:
 
 ## 📚 Security Resources
 
-- [AI Code Security Quick Reference](docs/security/AI_CODE_SECURITY_QUICKREF.md)
-- [Integration Guide](docs/security/INTEGRATION_GUIDE.md)
-- [Maintenance Playbook](docs/security/MAINTENANCE_PLAYBOOK.md)
-- [Training Module](docs/training/AI_CODE_SECURITY_TRAINING.md)
+- [Quick Start Guide](docs/security/QUICKSTART.md) - Get started in 5 minutes
+- [Technical Reference](docs/security/REFERENCE.md) - Detailed tool configuration
+- [Troubleshooting Guide](docs/security/TROUBLESHOOTING.md) - Common issues and solutions
 
 ## 🎓 Security Training
 

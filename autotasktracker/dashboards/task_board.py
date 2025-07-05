@@ -698,8 +698,8 @@ class TaskBoardDashboard(BaseDashboard):
                     if hasattr(st, 'toast'):
                         st.toast(f"📸 Screenshot processed: {entity_details.get('filepath', f'Entity {entity_id}')}", icon="✅")
                     return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not show detailed toast notification: {e}")
         
         # Fallback notification
         if hasattr(st, 'toast'):

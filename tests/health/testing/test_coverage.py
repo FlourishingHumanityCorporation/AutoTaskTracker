@@ -52,7 +52,7 @@ class TestCoverage:
         """Safely read file content"""
         try:
             return file_path.read_text(encoding='utf-8', errors='ignore')
-        except:
+        except (OSError, PermissionError, UnicodeDecodeError):
             return ""
     
     def test_critical_functions_have_tests(self):

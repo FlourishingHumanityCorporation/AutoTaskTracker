@@ -67,9 +67,9 @@ class SimpleTestAnalyzer:
         
         try:
             content = test_file.read_text(encoding='utf-8', errors='ignore')
-        except Exception:
+        except (OSError, PermissionError, UnicodeDecodeError) as e:
             return [ActionableInsight(
-                issue="Cannot read test file",
+                issue=f"Cannot read test file: {type(e).__name__}",
                 impact="high",
                 action="Fix file encoding or permissions"
             )]

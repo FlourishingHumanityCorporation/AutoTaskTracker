@@ -204,8 +204,8 @@ class EffectivenessConfig:
             with open(file_path, 'w') as f:
                 json.dump(self.to_dict(), f, indent=2)
             logger.info(f"Configuration saved to {file_path}")
-        except Exception as e:
-            logger.error(f"Failed to save configuration to {file_path}: {e}")
+        except (OSError, PermissionError, json.JSONEncodeError) as e:
+            logger.error(f"Failed to save configuration to {file_path}: {type(e).__name__}: {e}")
             raise
     
     @classmethod
@@ -269,8 +269,8 @@ class EffectivenessConfig:
             logger.info(f"Configuration loaded from {file_path}")
             return config
             
-        except Exception as e:
-            logger.error(f"Failed to load configuration from {file_path}: {e}")
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to load configuration from {file_path}: {type(e).__name__}: {e}")
             raise
 
 

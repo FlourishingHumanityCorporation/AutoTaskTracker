@@ -351,9 +351,9 @@ class SimpleMutationTester:
                 except concurrent.futures.TimeoutError:
                     mutation = future_to_mutation[future]
                     logger.warning(f"Parallel mutation test timeout for {mutation['type']} at line {mutation['line']}")
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError, KeyError) as e:
                     mutation = future_to_mutation[future]
-                    logger.error(f"Parallel mutation test failed: {e}")
+                    logger.error(f"Parallel mutation test failed: {type(e).__name__}: {e}")
         
         return results
     
@@ -504,7 +504,8 @@ class SimpleMutationTester:
         try:
             content = test_file.read_text(encoding='utf-8')
             return re.findall(r'def (test_\w+)\(', content)
-        except Exception:
+        except (OSError, UnicodeDecodeError) as e:
+            logger.debug(f"Could not read test file {test_file}: {e}")
             return []
     
     def _analyze_mutation_results(self, test_file: Path, source_file: Path, 

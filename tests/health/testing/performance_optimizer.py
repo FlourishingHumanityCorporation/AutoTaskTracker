@@ -93,7 +93,8 @@ class AnalysisCache:
             with open(file_path, 'rb') as f:
                 content = f.read()
             return hashlib.sha256(content).hexdigest()[:16]
-        except Exception:
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Could not hash file {file_path}: {e}")
             return "unknown"
     
     def _get_config_hash(self, config: Dict) -> str:

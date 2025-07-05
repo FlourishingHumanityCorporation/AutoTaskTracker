@@ -550,8 +550,9 @@ class PostgreSQLMigrationAutomator:
                 if result.returncode == 0:
                     postgres_status['available'] = True
                     postgres_status['version'] = result.stdout.strip()
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug(f"PostgreSQL not available: {e}")
+                postgres_status['message'] = f"PostgreSQL not found: {str(e)}"
             
             # Check for pgvector (would need actual database connection)
             # This is a placeholder - actual implementation would test extension

@@ -656,8 +656,8 @@ class IntegrationHealthDashboard(BaseDashboard):
                     'description': f'Current integration coverage is {coverage}%. Consider implementing additional API endpoints.',
                     'action': 'python -m autotasktracker.pensieve.endpoint_discovery run_automated_discovery'
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not generate integration coverage recommendation: {e}")
         
         return recommendations
     
