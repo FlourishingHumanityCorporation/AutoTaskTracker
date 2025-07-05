@@ -9,8 +9,8 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import logging
 
-from .base import BaseDashboard
-from .components import (
+from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards.components import (
     TimeFilterComponent, 
     CategoryFilterComponent,
     MetricsRow,
@@ -20,9 +20,10 @@ from .components import (
     ComparisonChart,
     NoDataMessage
 )
-from .data import TaskRepository, MetricsRepository
-from .cache import cached_data, MetricsCache
+from autotasktracker.dashboards.data import TaskRepository, MetricsRepository
+from autotasktracker.dashboards.cache import cached_data, MetricsCache
 from autotasktracker.config import get_config
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

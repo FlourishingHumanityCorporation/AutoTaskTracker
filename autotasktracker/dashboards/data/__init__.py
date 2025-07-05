@@ -1,7 +1,7 @@
 """Data access layer for dashboards."""
 
-from .repositories import TaskRepository, ActivityRepository, MetricsRepository
-from .models import Task, Activity, TaskGroup, DailyMetrics
+from autotasktracker.dashboards.data.repositories import TaskRepository, ActivityRepository, MetricsRepository
+from autotasktracker.dashboards.data.models import Task, Activity, TaskGroup, DailyMetrics
 
 __all__ = [
     'TaskRepository',

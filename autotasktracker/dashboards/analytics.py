@@ -7,7 +7,7 @@ import logging
 
 # Removed sys.path hack - using proper package imports
 
-from autotasktracker.dashboards import BaseDashboard
+from autotasktracker.dashboards.base import BaseDashboard
 from autotasktracker.dashboards.components import (
     TimeFilterComponent, 
     CategoryFilterComponent,
@@ -18,6 +18,7 @@ from autotasktracker.dashboards.components import (
     TrendChart,
     NoDataMessage
 )
+from autotasktracker.dashboards.components.performance_display import PerformanceMetricsDisplay
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.dashboards.cache import MetricsCache
 from autotasktracker.config import get_config
@@ -273,6 +274,31 @@ class AnalyticsDashboard(BaseDashboard):
                 st.write("• You're very active! Consider tracking break time")
             if most_used_app[1] > total_duration * 0.4:
                 st.write(f"• {most_used_app[0]} dominates your time - consider diversifying")
+    
+    def render_performance_monitoring(self):
+        """Render performance and API monitoring section."""
+        st.subheader("🔧 System Performance & Integration Health")
+        
+        # Create tabs for different performance views
+        tab1, tab2, tab3, tab4 = st.tabs(["API Integration", "Webhook Health", "Performance Metrics", "Response Times"])
+        
+        with tab1:
+            PerformanceMetricsDisplay.render_api_integration_status()
+        
+        with tab2:
+            PerformanceMetricsDisplay.render_webhook_health_status()
+            st.divider()
+            PerformanceMetricsDisplay.render_webhook_activity_chart()
+        
+        with tab3:
+            PerformanceMetricsDisplay.render_comprehensive_metrics()
+        
+        with tab4:
+            col1, col2 = st.columns(2)
+            with col1:
+                PerformanceMetricsDisplay.render_response_time_metrics()
+            with col2:
+                PerformanceMetricsDisplay.render_cache_metrics(show_details=True)
                 
     def run(self):
         """Main dashboard execution."""
@@ -309,6 +335,11 @@ class AnalyticsDashboard(BaseDashboard):
         
         # Insights section
         self.render_insights(task_repo, start_date, end_date)
+        
+        st.divider()
+        
+        # Performance and API monitoring section
+        self.render_performance_monitoring()
         
 
 def main():

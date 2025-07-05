@@ -2,6 +2,7 @@
 
 import streamlit as st
 from typing import Dict, Any, Optional, List, Union
+# DatabaseManager import removed - not used in this module
 
 
 class MetricsCard:

@@ -5,14 +5,15 @@ from datetime import datetime, timedelta
 import pandas as pd
 import logging
 
-from .base import BaseDashboard
-from .components import (
+from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards.components import (
     TimeFilterComponent,
     MetricsRow,
     NoDataMessage
 )
-from .data import TaskRepository, MetricsRepository
-from .cache import cached_data
+from autotasktracker.dashboards.data import TaskRepository, MetricsRepository
+from autotasktracker.dashboards.cache import cached_data
+from autotasktracker.core import DatabaseManager
 from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)

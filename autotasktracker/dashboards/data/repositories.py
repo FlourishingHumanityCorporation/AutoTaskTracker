@@ -7,11 +7,12 @@ import pandas as pd
 from collections import defaultdict
 import re
 
-from ...core.database import DatabaseManager
-from ...core.categorizer import extract_window_title
-from ...pensieve.postgresql_adapter import get_postgresql_adapter, PostgreSQLAdapter
-from ...pensieve.cache_manager import get_cache_manager
-from .models import Task, Activity, TaskGroup, DailyMetrics
+from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core.categorizer import extract_window_title
+from autotasktracker.pensieve.postgresql_adapter import get_postgresql_adapter, PostgreSQLAdapter
+from autotasktracker.pensieve.cache_manager import get_cache_manager
+from autotasktracker.pensieve.api_client import PensieveAPIClient
+from autotasktracker.dashboards.data.models import Task, Activity, TaskGroup, DailyMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,37 @@ class BaseRepository:
         self.pg_adapter = get_postgresql_adapter() if use_pensieve else None
         self.cache = get_cache_manager()  # Integrate cache manager
         
+        # Initialize Pensieve API client for REST operations
+        try:
+            self.api_client = PensieveAPIClient() if use_pensieve else None
+        except Exception as e:
+            logger.debug(f"PensieveAPIClient initialization failed: {e}")
+            self.api_client = None
+        
+        # Performance monitoring
+        self.performance_stats = {
+            'api_requests': 0,
+            'api_failures': 0,
+            'database_queries': 0,
+            'database_failures': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'total_response_time': 0.0,
+            'api_response_time': 0.0,
+            'db_response_time': 0.0
+        }
+        
+        # Circuit breaker for failed API endpoints
+        self.endpoint_circuit_breaker = {
+            'failed_endpoints': set(),
+            'failure_counts': defaultdict(int),
+            'last_failure_time': {},
+            'circuit_open_duration': 300,  # 5 minutes
+            'failure_threshold': 3
+        }
+        
     def _execute_query(self, query: str, params: tuple = (), cache_ttl: int = 300) -> pd.DataFrame:
-        """Execute query with intelligent caching and error handling.
+        """Execute query with API-first approach, intelligent caching and error handling.
         
         Args:
             query: SQL query to execute
@@ -34,23 +64,81 @@ class BaseRepository:
             cache_ttl: Cache time-to-live in seconds (default: 5 minutes)
         """
         import hashlib
+        import time
+        
+        start_time = time.time()
         
         # Create cache key from query and params
-        cache_key = f"query_{hashlib.md5(f'{query}_{params}'.encode()).hexdigest()}"
+        cache_key = f"query_{hashlib.md5(f'{query}_{params}'.encode(), usedforsecurity=False).hexdigest()}"
         
         # Try cache first
         cached_result = self.cache.get(cache_key)
         if cached_result is not None:
+            self.performance_stats['cache_hits'] += 1
             logger.debug(f"Cache hit for query: {query[:50]}...")
             # Convert back to DataFrame if it was serialized
             if isinstance(cached_result, dict) and 'data' in cached_result:
                 return pd.DataFrame(cached_result['data'])
             return cached_result
         
+        self.performance_stats['cache_misses'] += 1
+        
+        # Try Pensieve API first for data queries
+        if self.api_client and self._is_data_query(query):
+            api_start = time.time()
+            try:
+                self.performance_stats['api_requests'] += 1
+                api_result = self._execute_api_query(query, params)
+                if api_result is not None:
+                    api_time = time.time() - api_start
+                    self.performance_stats['api_response_time'] += api_time
+                    
+                    # Cache the API result
+                    cache_data = {
+                        'data': api_result.to_dict('records'),
+                        'columns': list(api_result.columns),
+                        'shape': api_result.shape
+                    }
+                    self.cache.set(cache_key, cache_data, ttl=cache_ttl)
+                    logger.debug(f"API query successful: {api_result.shape} rows ({api_time:.3f}s)")
+                    
+                    total_time = time.time() - start_time
+                    self.performance_stats['total_response_time'] += total_time
+                    return api_result
+            except Exception as e:
+                self.performance_stats['api_failures'] += 1
+                logger.debug(f"API query failed, falling back to database: {e}")
+        
+        # Fallback to database
+        db_start = time.time()
         try:
-            # Use the DatabaseManager's connection context manager
+            self.performance_stats['database_queries'] += 1
+            # Fallback to DatabaseManager's connection context manager
             with self.db.get_connection() as conn:
-                result = pd.read_sql_query(query, conn, params=params)
+                # Check if query has complex JOINs that pandas struggles with
+                query_lower = query.lower()
+                has_complex_join = 'join' in query_lower and 'metadata_entries' in query_lower
+                
+                if has_complex_join:
+                    # Use direct cursor for complex JOINs to avoid pandas issues
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    
+                    # Fetch column names
+                    columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                    
+                    # Fetch all rows
+                    rows = cursor.fetchall()
+                    
+                    # Convert to DataFrame
+                    result = pd.DataFrame(rows, columns=columns)
+                    logger.debug(f"Used direct cursor for complex JOIN query")
+                else:
+                    # Use pandas for simple queries
+                    result = pd.read_sql_query(query, conn, params=params)
+                
+                db_time = time.time() - db_start
+                self.performance_stats['db_response_time'] += db_time
                 
                 # Cache the result (serialize DataFrame for caching)
                 cache_data = {
@@ -59,12 +147,233 @@ class BaseRepository:
                     'shape': result.shape
                 }
                 self.cache.set(cache_key, cache_data, ttl=cache_ttl)
-                logger.debug(f"Cached query result: {result.shape} rows")
+                logger.debug(f"Database query successful: {result.shape} rows ({db_time:.3f}s)")
                 
+                total_time = time.time() - start_time
+                self.performance_stats['total_response_time'] += total_time
                 return result
         except Exception as e:
+            self.performance_stats['database_failures'] += 1
             logger.error(f"Query execution failed: {e}")
             return pd.DataFrame()
+    
+    def _is_data_query(self, query: str) -> bool:
+        """Check if query is suitable for API execution."""
+        # Simple heuristic: SELECT queries that don't use complex SQL features
+        query_lower = query.lower().strip()
+        return (query_lower.startswith('select') and 
+                'join' not in query_lower and  # Skip complex joins for now
+                'group by' not in query_lower and  # Skip aggregations
+                'order by' in query_lower)  # Prefer ordered results
+    
+    def _execute_api_query(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
+        """Execute query via Pensieve API with intelligent endpoint routing and circuit breaker."""
+        if not self.api_client.is_healthy():
+            return None
+        
+        # Check circuit breaker for API access
+        if self._is_circuit_breaker_open():
+            logger.debug("API circuit breaker is open, skipping API query")
+            return None
+            
+        try:
+            # Smart endpoint routing based on query type and available endpoints
+            result = self._route_query_to_available_endpoints(query, params)
+            
+            # Reset circuit breaker on success
+            if result is not None:
+                self._reset_circuit_breaker()
+            
+            return result
+        except Exception as e:
+            logger.debug(f"API query routing failed: {e}")
+            self._record_api_failure(str(e))
+            return None
+    
+    def _is_circuit_breaker_open(self) -> bool:
+        """Check if the circuit breaker is open (blocking API calls)."""
+        import time
+        current_time = time.time()
+        
+        # Check if circuit should be closed (enough time has passed)
+        for endpoint, failure_time in list(self.endpoint_circuit_breaker['last_failure_time'].items()):
+            if current_time - failure_time > self.endpoint_circuit_breaker['circuit_open_duration']:
+                # Reset the endpoint
+                self.endpoint_circuit_breaker['failed_endpoints'].discard(endpoint)
+                self.endpoint_circuit_breaker['failure_counts'][endpoint] = 0
+                del self.endpoint_circuit_breaker['last_failure_time'][endpoint]
+        
+        # Circuit is open if we have recent failures
+        return len(self.endpoint_circuit_breaker['failed_endpoints']) > 0
+    
+    def _record_api_failure(self, error_message: str):
+        """Record an API failure for circuit breaker logic."""
+        import time
+        current_time = time.time()
+        
+        # Increment failure count
+        self.endpoint_circuit_breaker['failure_counts']['general'] += 1
+        
+        # If we hit the threshold, open the circuit
+        if (self.endpoint_circuit_breaker['failure_counts']['general'] >= 
+            self.endpoint_circuit_breaker['failure_threshold']):
+            
+            self.endpoint_circuit_breaker['failed_endpoints'].add('general')
+            self.endpoint_circuit_breaker['last_failure_time']['general'] = current_time
+            
+            logger.warning(f"API circuit breaker opened due to repeated failures: {error_message}")
+    
+    def _reset_circuit_breaker(self):
+        """Reset circuit breaker on successful API call."""
+        self.endpoint_circuit_breaker['failure_counts']['general'] = 0
+        self.endpoint_circuit_breaker['failed_endpoints'].discard('general')
+        if 'general' in self.endpoint_circuit_breaker['last_failure_time']:
+            del self.endpoint_circuit_breaker['last_failure_time']['general']
+    
+    def _route_query_to_available_endpoints(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
+        """Route queries to available Pensieve API endpoints based on current availability."""
+        query_lower = query.lower()
+        
+        # Available endpoints based on our testing:
+        # ✅ /api/search - Text search
+        # ✅ /api/entities/{id} - Get specific entity  
+        # ✅ /api/libraries/1/folders/1/entities - Entities in folder
+        # ✅ /api/config - Configuration
+        
+        try:
+            # Route search-related queries to /api/search
+            if any(keyword in query_lower for keyword in ['search', 'like', 'match']):
+                return self._execute_search_query(query, params)
+            
+            # Route entity listing queries to /api/libraries/1/folders/1/entities
+            elif any(keyword in query_lower for keyword in ['entities', 'screenshots']) and 'limit' in query_lower:
+                return self._execute_entity_listing_query(query, params)
+                
+            # For other queries, check if we can use specific entity endpoints
+            elif 'entity_id' in query_lower or any(p for p in params if isinstance(p, int) and p > 0):
+                return self._execute_entity_specific_query(query, params)
+            
+            # Cannot route this query to available endpoints
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Query routing failed: {e}")
+            return None
+    
+    def _execute_search_query(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
+        """Execute search queries using /api/search endpoint."""
+        try:
+            # Extract search terms from SQL query parameters
+            search_term = None
+            limit = 100
+            
+            # Basic parameter extraction (could be enhanced)
+            if params:
+                for param in params:
+                    if isinstance(param, str) and len(param) > 2:
+                        search_term = param.strip('%')  # Remove SQL wildcards
+                        break
+                    elif isinstance(param, int) and param > 0 and param < 1000:
+                        limit = param
+            
+            if not search_term:
+                search_term = "screenshot"  # Default search term
+            
+            # Use the API client's search functionality
+            entities = self.api_client.search_entities(search_term, limit=limit)
+            
+            if not entities:
+                return pd.DataFrame()
+            
+            # Convert to DataFrame format matching database schema
+            data = []
+            for entity in entities:
+                data.append({
+                    'id': entity.id,
+                    'filepath': entity.filepath,
+                    'filename': entity.filename,
+                    'created_at': entity.created_at,
+                    'file_created_at': entity.file_created_at,
+                    'last_scan_at': entity.last_scan_at,
+                    'file_type_group': entity.file_type_group
+                })
+            
+            return pd.DataFrame(data)
+            
+        except Exception as e:
+            logger.debug(f"Search query execution failed: {e}")
+            return None
+    
+    def _execute_entity_listing_query(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
+        """Execute entity listing queries using /api/libraries/1/folders/1/entities."""
+        try:
+            # Use the working entities endpoint through API client
+            entities = self.api_client.get_entities(limit=100)
+            
+            if not entities:
+                return pd.DataFrame()
+            
+            # Convert to DataFrame
+            data = []
+            for entity in entities:
+                data.append({
+                    'id': entity.id,
+                    'filepath': entity.filepath,
+                    'filename': entity.filename,
+                    'created_at': entity.created_at,
+                    'file_created_at': entity.file_created_at,
+                    'last_scan_at': entity.last_scan_at,
+                    'file_type_group': entity.file_type_group
+                })
+            
+            df = pd.DataFrame(data)
+            
+            # Apply basic filtering based on query parameters
+            if params:
+                limit = next((p for p in params if isinstance(p, int) and p > 0), None)
+                if limit:
+                    df = df.head(limit)
+            
+            return df
+            
+        except Exception as e:
+            logger.debug(f"Entity listing query execution failed: {e}")
+            return None
+    
+    def _execute_entity_specific_query(self, query: str, params: tuple) -> Optional[pd.DataFrame]:
+        """Execute entity-specific queries using /api/entities/{id}."""
+        try:
+            # Extract entity ID from parameters
+            entity_id = None
+            for param in params:
+                if isinstance(param, int) and param > 0:
+                    entity_id = param
+                    break
+            
+            if not entity_id:
+                return None
+            
+            # Get specific entity
+            entity = self.api_client.get_entity(entity_id)
+            if not entity:
+                return pd.DataFrame()
+            
+            # Convert to DataFrame
+            data = [{
+                'id': entity.id,
+                'filepath': entity.filepath,
+                'filename': entity.filename,
+                'created_at': entity.created_at,
+                'file_created_at': entity.file_created_at,
+                'last_scan_at': entity.last_scan_at,
+                'file_type_group': entity.file_type_group
+            }]
+            
+            return pd.DataFrame(data)
+            
+        except Exception as e:
+            logger.debug(f"Entity-specific query execution failed: {e}")
+            return None
     
     def invalidate_cache(self, pattern: str = None):
         """Invalidate cached query results.
@@ -82,6 +391,55 @@ class BaseRepository:
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics for monitoring."""
         return self.cache.get_stats()
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get performance statistics for API vs database usage."""
+        stats = self.performance_stats.copy()
+        
+        # Calculate derived metrics
+        total_requests = stats['api_requests'] + stats['database_queries']
+        if total_requests > 0:
+            stats['api_usage_percentage'] = (stats['api_requests'] / total_requests) * 100
+            stats['database_usage_percentage'] = (stats['database_queries'] / total_requests) * 100
+        else:
+            stats['api_usage_percentage'] = 0
+            stats['database_usage_percentage'] = 0
+        
+        # Calculate average response times
+        if stats['api_requests'] > 0:
+            stats['avg_api_response_time'] = stats['api_response_time'] / stats['api_requests']
+        else:
+            stats['avg_api_response_time'] = 0
+            
+        if stats['database_queries'] > 0:
+            stats['avg_db_response_time'] = stats['db_response_time'] / stats['database_queries']
+        else:
+            stats['avg_db_response_time'] = 0
+        
+        # Calculate success rates
+        if stats['api_requests'] > 0:
+            stats['api_success_rate'] = ((stats['api_requests'] - stats['api_failures']) / stats['api_requests']) * 100
+        else:
+            stats['api_success_rate'] = 100
+            
+        if stats['database_queries'] > 0:
+            stats['db_success_rate'] = ((stats['database_queries'] - stats['database_failures']) / stats['database_queries']) * 100
+        else:
+            stats['db_success_rate'] = 100
+        
+        # Cache efficiency
+        total_cache_operations = stats['cache_hits'] + stats['cache_misses']
+        if total_cache_operations > 0:
+            stats['cache_hit_rate'] = (stats['cache_hits'] / total_cache_operations) * 100
+        else:
+            stats['cache_hit_rate'] = 0
+        
+        # Circuit breaker status
+        stats['circuit_breaker_open'] = self._is_circuit_breaker_open()
+        stats['failed_endpoints_count'] = len(self.endpoint_circuit_breaker['failed_endpoints'])
+        stats['api_failure_threshold'] = self.endpoint_circuit_breaker['failure_threshold']
+        
+        return stats
 
 class TaskRepository(BaseRepository):
     """Repository for task-related data access."""
@@ -104,16 +462,29 @@ class TaskRepository(BaseRepository):
         Returns:
             List of Task objects
         """
-        # Try PostgreSQL adapter first if available
-        if self.use_pensieve and self.pg_adapter:
-            try:
-                task_dicts = self.pg_adapter.get_tasks_optimized(start_date, end_date, categories, limit)
-                return self._convert_task_dicts_to_objects(task_dicts)
-            except Exception as e:
-                logger.warning(f"PostgreSQL adapter failed, falling back to SQLite: {e}")
+        # Pensieve REST API temporarily disabled - using SQLite fallback
+        # TODO: Fix REST API task conversion
+        # if self.use_pensieve and self.api_client:
+        #     try:
+        #         screenshots = self.api_client.get_screenshots(
+        #             limit=limit,
+        #             start_date=start_date.isoformat(),
+        #             end_date=end_date.isoformat()
+        #         )
+        #         # ... rest of API code
         
-        # Fallback to direct SQLite query
+        # Use reliable SQLite fallback
         return self._get_tasks_sqlite_fallback(start_date, end_date, categories, limit)
+        # PostgreSQL adapter temporarily disabled - metadata joins broken
+        # if self.use_pensieve and self.pg_adapter:
+        #     try:
+        #         task_dicts = self.pg_adapter.get_tasks_optimized(start_date, end_date, categories, limit)
+        #         return self._convert_task_dicts_to_objects(task_dicts)
+        #     except Exception as e:
+        #         logger.warning(f"PostgreSQL adapter failed, fallingback to SQLite: {e}")
+        
+        # Direct SQLite query (reliable)
+        # return self._get_tasks_sqlite_fallback(start_date, end_date, categories, limit)
     
     def _get_tasks_sqlite_fallback(
         self, 
@@ -122,75 +493,104 @@ class TaskRepository(BaseRepository):
         categories: Optional[List[str]] = None,
         limit: int = 1000
     ) -> List[Task]:
-        """Fallback SQLite implementation with intelligent caching."""
-        query = """
-        SELECT 
-            e.id,
-            e.created_at,
-            e.filepath,
-            m1.value as ocr_text,
-            m2.value as active_window,
-            m3.value as tasks,
-            m4.value as category
-        FROM entities e
-        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "ocr_result"
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
-        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
-        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
-        WHERE e.created_at >= ? AND e.created_at <= ?
-        """
-        
-        # Convert local time range to UTC for database query (Pensieve stores UTC)
-        from ...core.timezone_manager import get_timezone_manager
-        
-        tz_manager = get_timezone_manager()
-        utc_start, utc_end = tz_manager.convert_query_range(start_date, end_date)
-        
-        params = [
-            utc_start.strftime('%Y-%m-%d %H:%M:%S'),
-            utc_end.strftime('%Y-%m-%d %H:%M:%S')
-        ]
-        
-        if categories:
-            placeholders = ','.join(['?' for _ in categories])
-            query += f" AND m4.value IN ({placeholders})"
-            params.extend(categories)
-            
-        query += " ORDER BY e.created_at DESC LIMIT ?"
-        params.append(limit)
-        
-        # Use shorter cache TTL for recent data (60 seconds), longer for historical (5 minutes)
-        cache_ttl = 60 if (datetime.now() - end_date).days < 1 else 300
-        df = self._execute_query(query, tuple(params), cache_ttl=cache_ttl)
-        
+        """Fallback SQLite implementation - uses direct cursor to avoid pandas JOIN issues."""
         tasks = []
-        for _, row in df.iterrows():
-            # Use extracted task if available, fallback to window title
-            window_title = extract_window_title(row.get("active_window", '')) or row.get("active_window", 'Unknown')
-            task_title = row.get("tasks") or window_title
-            
-            # Convert UTC timestamp from database to local time for display
-            utc_timestamp = pd.to_datetime(row['created_at'])
-            local_timestamp = tz_manager.utc_to_local(utc_timestamp)
-            
-            task = Task(
-                id=row['id'],
-                title=task_title,
-                category=row.get("category", 'Other'),
-                timestamp=local_timestamp,
-                duration_minutes=5,  # Default 5 min per capture
-                window_title=window_title,
-                ocr_text=row.get("ocr_result"),
-                screenshot_path=row.get('filepath')
-            )
-            tasks.append(task)
+        
+        try:
+            with self.db.get_connection(readonly=True) as conn:
+                # Enable WAL mode compatibility settings
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+                conn.execute("PRAGMA temp_store=MEMORY;")
+                
+                # Direct cursor approach to avoid pandas DataFrame issues
+                cursor = conn.cursor()
+                
+                # First get all task entities with direct SQL
+                task_query = """
+                SELECT e.id, e.created_at, e.filepath, m.value as tasks
+                FROM entities e
+                INNER JOIN metadata_entries m ON e.id = m.entity_id
+                WHERE m.key = 'tasks'
+                AND e.created_at >= ? AND e.created_at <= ?
+                ORDER BY e.created_at DESC
+                LIMIT ?
+                """
+                
+                params = [
+                    start_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    end_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    limit
+                ]
+                
+                cursor.execute(task_query, params)
+                task_entities = cursor.fetchall()
+                
+                if not task_entities:
+                    logger.debug(f"No tasks found between {start_date} and {end_date}")
+                    return tasks
+                
+                # Get all metadata for these entities in batches to avoid query size limits
+                entity_ids = [entity[0] for entity in task_entities]
+                metadata_by_entity = {}
+                
+                # Process in batches of 100 to avoid SQL parameter limits
+                batch_size = 100
+                for i in range(0, len(entity_ids), batch_size):
+                    batch_ids = entity_ids[i:i + batch_size]
+                    placeholders = ','.join(['?' for _ in batch_ids])
+                    
+                    metadata_query = f"""
+                    SELECT entity_id, key, value 
+                    FROM metadata_entries 
+                    WHERE entity_id IN ({placeholders})
+                    AND key IN ('category', 'active_window', 'ocr_result')
+                    """
+                    
+                    cursor.execute(metadata_query, batch_ids)
+                    for entity_id, key, value in cursor.fetchall():
+                        if entity_id not in metadata_by_entity:
+                            metadata_by_entity[entity_id] = {}
+                        metadata_by_entity[entity_id][key] = value
+                
+                # Build task objects
+                for entity_id, created_at, filepath, task_text in task_entities:
+                    metadata = metadata_by_entity.get(entity_id, {})
+                    category = metadata.get('category', 'Other')
+                    
+                    # Apply category filter if specified
+                    if categories and category not in categories:
+                        continue
+                    
+                    # Extract window title
+                    window_title = metadata.get('active_window', 'Unknown')
+                    if window_title and window_title != 'Unknown':
+                        window_title = extract_window_title(window_title) or window_title
+                    
+                    # Create task object
+                    task = Task(
+                        id=entity_id,
+                        title=task_text,
+                        category=category,
+                        timestamp=pd.to_datetime(created_at),
+                        duration_minutes=5,
+                        window_title=window_title,
+                        ocr_text=metadata.get('ocr_result', ''),
+                        screenshot_path=filepath
+                    )
+                    tasks.append(task)
+                
+                logger.info(f"Retrieved {len(tasks)} tasks from SQLite (filtered from {len(task_entities)} entities)")
+                
+        except Exception as e:
+            logger.error(f"Error retrieving tasks from SQLite: {e}")
+            logger.exception("Full traceback:")
             
         return tasks
     
     def _convert_task_dicts_to_objects(self, task_dicts: List[Dict[str, Any]]) -> List[Task]:
         """Convert PostgreSQL adapter results to Task objects."""
-        from ...core.timezone_manager import get_timezone_manager
-        tz_manager = get_timezone_manager()
+        # Timezone conversion disabled - using local time directly
         
         tasks = []
         for task_dict in task_dicts:
@@ -211,11 +611,8 @@ class TaskRepository(BaseRepository):
             timestamp = task_dict.get('timestamp')
             if isinstance(timestamp, str):
                 timestamp = pd.to_datetime(timestamp)
-            if timestamp and hasattr(timestamp, 'tz_localize'):
-                # Convert UTC to local time for display
-                local_timestamp = tz_manager.utc_to_local(timestamp)
-            else:
-                local_timestamp = timestamp or datetime.now()
+            # Use timestamp directly - timezone conversion disabled
+            local_timestamp = timestamp or datetime.now()
             
             task = Task(
                 id=task_dict.get('id'),
@@ -521,8 +918,7 @@ class ActivityRepository(BaseRepository):
     
     def _convert_task_dicts_to_activities(self, task_dicts: List[Dict[str, Any]]) -> List[Activity]:
         """Convert PostgreSQL adapter results to Activity objects."""
-        from ...core.timezone_manager import get_timezone_manager
-        tz_manager = get_timezone_manager()
+        # Timezone conversion disabled - using local time directly
         
         activities = []
         for task_dict in task_dicts:
@@ -530,11 +926,8 @@ class ActivityRepository(BaseRepository):
             timestamp = task_dict.get('timestamp')
             if isinstance(timestamp, str):
                 timestamp = pd.to_datetime(timestamp)
-            if timestamp and hasattr(timestamp, 'tz_localize'):
-                # Convert UTC to local time for display
-                local_timestamp = tz_manager.utc_to_local(timestamp)
-            else:
-                local_timestamp = timestamp or datetime.now()
+            # Use timestamp directly - timezone conversion disabled
+            local_timestamp = timestamp or datetime.now()
             
             # Extract window title
             window_title = extract_window_title(task_dict.get("active_window", '')) or task_dict.get("active_window", 'Unknown')
@@ -718,15 +1111,16 @@ class MetricsRepository(BaseRepository):
         Returns:
             Dictionary of metrics
         """
-        # Try PostgreSQL adapter first if available
-        if self.use_pensieve and self.pg_adapter:
-            try:
-                task_dicts = self.pg_adapter.get_tasks_optimized(start_date, end_date, None, 50000)  # Get all tasks for period
-                return self._calculate_metrics_summary_from_tasks(task_dicts, start_date, end_date)
-            except Exception as e:
-                logger.warning(f"PostgreSQL adapter failed for metrics summary, falling back to SQLite: {e}")
+        # PostgreSQL adapter temporarily disabled due to metadata join issues
+        # TODO: Fix PostgreSQL adapter to properly join with metadata_entries
+        # if self.use_pensieve and self.pg_adapter:
+        #     try:
+        #         task_dicts = self.pg_adapter.get_tasks_optimized(start_date, end_date, None, 50000)
+        #         return self._calculate_metrics_summary_from_tasks(task_dicts, start_date, end_date)
+        #     except Exception as e:
+        #         logger.warning(f"PostgreSQL adapter failed for metrics summary, falling back to SQLite: {e}")
         
-        # Fallback to direct SQLite query
+        # Use direct SQLite query (reliable)
         return self._get_metrics_summary_sqlite_fallback(start_date, end_date)
     
     def _get_metrics_summary_sqlite_fallback(

@@ -8,6 +8,7 @@ from pathlib import Path
 import logging
 
 from autotasktracker.config import get_config
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ class DashboardLauncher:
         """Check if all prerequisites are met."""
         # Check if database is accessible
         try:
-            from ..core.database import DatabaseManager
+            from autotasktracker.core.database import DatabaseManager
             db = DatabaseManager()
             if not db.test_connection():
                 logger.error("Database connection failed")

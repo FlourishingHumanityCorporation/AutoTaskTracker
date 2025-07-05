@@ -5,8 +5,8 @@ import streamlit as st
 from datetime import datetime
 import logging
 
-from .base import BaseDashboard
-from .components import (
+from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards.components import (
     TimeFilterComponent,
     CategoryFilterComponent, 
     MetricsRow,
@@ -15,8 +15,9 @@ from .components import (
     NoDataMessage,
     DataTable
 )
-from .data import TaskRepository, MetricsRepository
+from autotasktracker.dashboards.data import TaskRepository, MetricsRepository
 from autotasktracker.config import get_config
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

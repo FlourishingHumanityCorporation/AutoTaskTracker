@@ -1,9 +1,9 @@
 """Reusable UI components for dashboards."""
 
-from .filters import TimeFilterComponent, CategoryFilterComponent
-from .metrics import MetricsCard, MetricsRow
-from .data_display import TaskGroup, ActivityCard, NoDataMessage, DataTable, EnhancedSearch
-from .visualizations import (
+from autotasktracker.dashboards.components.filters import TimeFilterComponent, CategoryFilterComponent
+from autotasktracker.dashboards.components.metrics import MetricsCard, MetricsRow
+from autotasktracker.dashboards.components.data_display import TaskGroup, ActivityCard, NoDataMessage, DataTable, EnhancedSearch
+from autotasktracker.dashboards.components.visualizations import (
     CategoryPieChart, TimelineChart, HourlyActivityChart,
     ProductivityHeatmap, TaskDurationChart, TrendChart, ComparisonChart
 )

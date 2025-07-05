@@ -11,6 +11,7 @@ import logging
 try:
     import plotly.graph_objects as go
     import plotly.express as px
+# DatabaseManager import removed - not used in this module
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False

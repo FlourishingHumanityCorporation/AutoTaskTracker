@@ -15,7 +15,7 @@ from autotasktracker import (
     ActivityCategorizer,
     extract_task_summary,
     extract_window_title,
-    Config,
+    AutoTaskSettings,
     get_config
 )
 from autotasktracker.core import TimeTracker

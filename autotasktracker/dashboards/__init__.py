@@ -8,23 +8,24 @@ Usage:
 """
 
 # Main dashboard functions  
-from .task_board import main as task_board_main
-from .analytics import main as analytics_main
-from .timetracker import main as timetracker_main
-from .launcher import main as launcher_main
+from autotasktracker.dashboards.task_board import main as task_board_main
+from autotasktracker.dashboards.analytics import main as analytics_main
+from autotasktracker.dashboards.timetracker import main as timetracker_main
+from autotasktracker.dashboards.launcher import main as launcher_main
 
 # Dashboard components
-from .base import BaseDashboard
-from .cache import DashboardCache
-from .notifications import TaskNotifier
+from autotasktracker.dashboards.base import BaseDashboard
+from autotasktracker.dashboards.cache import DashboardCache
+from autotasktracker.dashboards.notifications import TaskNotifier
 
 # Utilities
-from .utils import format_datetime, safe_divide, get_color_palette
-from .templates import DashboardTemplate
+from autotasktracker.dashboards.utils import format_datetime, safe_divide, get_color_palette
+from autotasktracker.dashboards.templates import DashboardTemplate
 
 # Data components
-from .data.repositories import TaskRepository, MetricsRepository
-from .data.models import Task
+from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
+from autotasktracker.dashboards.data.models import Task
+# DatabaseManager import removed - not used in this module
 
 __all__ = [
     # Main functions

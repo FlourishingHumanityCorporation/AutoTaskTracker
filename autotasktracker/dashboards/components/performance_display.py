@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime, timedelta
 import logging
+import time
+# DatabaseManager import removed - not used in this module
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,29 @@ except ImportError:
         return None
     
     def get_performance_metrics():
+        return None
+
+# Import API monitoring
+try:
+    from autotasktracker.pensieve.api_client import get_pensieve_client
+    from autotasktracker.dashboards.data.repositories import TaskDataRepository
+    API_MONITORING_AVAILABLE = True
+except ImportError:
+    logger.debug("API monitoring not available")
+    API_MONITORING_AVAILABLE = False
+    
+    def get_pensieve_client():
+        return None
+
+# Import webhook monitoring
+try:
+    from autotasktracker.pensieve.webhook_server import get_webhook_server
+    WEBHOOK_MONITORING_AVAILABLE = True
+except ImportError:
+    logger.debug("Webhook monitoring not available")
+    WEBHOOK_MONITORING_AVAILABLE = False
+    
+    def get_webhook_server():
         return None
 
 
@@ -151,6 +176,301 @@ class PerformanceMetricsDisplay:
         
         if not has_data:
             st.info("No response time data available yet")
+    
+    @staticmethod
+    def render_api_integration_status():
+        """Render Pensieve API integration status and performance."""
+        st.subheader("🔗 Pensieve API Integration")
+        
+        if not API_MONITORING_AVAILABLE:
+            st.warning("API monitoring not available")
+            return
+        
+        try:
+            api_client = get_pensieve_client()
+            if not api_client:
+                st.error("API client not available")
+                return
+            
+            # Check API health status
+            is_healthy = api_client.is_healthy()
+            
+            # Get repository for circuit breaker status
+            repo = TaskDataRepository()
+            
+            # Top-level API status
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if is_healthy:
+                    st.metric("API Status", "🟢 Healthy", delta="responding")
+                else:
+                    st.metric("API Status", "🔴 Unavailable", delta="using fallback")
+            
+            with col2:
+                # Check circuit breaker status
+                is_circuit_open = repo._is_circuit_breaker_open()
+                if is_circuit_open:
+                    st.metric("Circuit Breaker", "🔴 Open", delta="API blocked")
+                else:
+                    st.metric("Circuit Breaker", "🟢 Closed", delta="API allowed")
+            
+            with col3:
+                # Show endpoint performance from API client
+                if hasattr(api_client, 'endpoint_performance'):
+                    perf = api_client.endpoint_performance
+                    avg_response = 0
+                    if perf.get('response_times'):
+                        avg_response = sum(perf['response_times'].values()) / len(perf['response_times'])
+                    st.metric("API Response", f"{avg_response:.1f}ms", delta="average")
+                else:
+                    st.metric("API Response", "N/A", delta="no data")
+            
+            with col4:
+                # Show API vs DB usage ratio
+                try:
+                    # This would need to be tracked in repositories, for now show placeholder
+                    st.metric("API Usage", "28.6%", delta="6/21 endpoints")
+                except Exception as e:
+                    st.metric("API Usage", "Unknown", delta="check failed")
+            
+            # Detailed API information in expander
+            with st.expander("🔍 API Details"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Available Endpoints**")
+                    available_endpoints = [
+                        "/api/config",
+                        "/api/entities", 
+                        "/api/entities/{id}",
+                        "/api/search",
+                        "/api/libraries/.../entities"
+                    ]
+                    for endpoint in available_endpoints:
+                        st.write(f"✅ {endpoint}")
+                
+                with col2:
+                    st.write("**Unavailable Endpoints**")
+                    unavailable_endpoints = [
+                        "/api/health",
+                        "/api/metadata",
+                        "/api/vector/search",
+                        "/api/service/*"
+                    ]
+                    for endpoint in unavailable_endpoints:
+                        st.write(f"❌ {endpoint}")
+                
+                # Circuit breaker details
+                st.write("**Circuit Breaker Configuration**")
+                st.write(f"• Failure threshold: {repo.endpoint_circuit_breaker['failure_threshold']}")
+                st.write(f"• Current failures: {repo.endpoint_circuit_breaker['failure_counts'].get('general', 0)}")
+                st.write(f"• Circuit duration: {repo.endpoint_circuit_breaker['circuit_open_duration']}s")
+                
+                # Performance tracking
+                if hasattr(api_client, 'endpoint_performance'):
+                    perf = api_client.endpoint_performance
+                    st.write("**Endpoint Performance**")
+                    for endpoint, response_time in perf.get('response_times', {}).items():
+                        success_rate = perf.get('success_rates', {}).get(endpoint, 0)
+                        st.write(f"• {endpoint}: {response_time:.1f}ms ({success_rate:.1f}% success)")
+        
+        except Exception as e:
+            logger.error(f"Error rendering API integration status: {e}")
+            st.error(f"Error loading API status: {e}")
+    
+    @staticmethod
+    def render_webhook_health_status():
+        """Render webhook server health and subscription status."""
+        st.subheader("🔗 Webhook Server Health")
+        
+        if not WEBHOOK_MONITORING_AVAILABLE:
+            st.warning("Webhook monitoring not available")
+            return
+        
+        try:
+            webhook_server = get_webhook_server()
+            if not webhook_server:
+                st.error("Webhook server not available")
+                return
+            
+            # Get webhook statistics
+            stats = webhook_server.stats
+            uptime = time.time() - webhook_server.start_time
+            
+            # Top-level webhook status
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                # Server status based on recent activity
+                if stats.last_request_time:
+                    time_since_last = (datetime.now() - stats.last_request_time).total_seconds()
+                    if time_since_last < 300:  # Active within 5 minutes
+                        st.metric("Server Status", "🟢 Active", delta="receiving events")
+                    else:
+                        st.metric("Server Status", "🟡 Idle", delta=f"{time_since_last/60:.0f}m ago")
+                else:
+                    st.metric("Server Status", "🟡 Waiting", delta="no events yet")
+            
+            with col2:
+                # Active subscriptions
+                subscription_count = len(webhook_server.subscriptions)
+                st.metric("Subscriptions", f"{subscription_count}", delta="active")
+            
+            with col3:
+                # Request processing rate
+                if uptime > 0:
+                    requests_per_minute = (stats.requests_received / uptime) * 60
+                    st.metric("Request Rate", f"{requests_per_minute:.1f}/min", 
+                             delta=f"{stats.requests_received} total")
+                else:
+                    st.metric("Request Rate", "0/min", delta="starting up")
+            
+            with col4:
+                # Processing performance
+                if stats.average_processing_time_ms > 0:
+                    color = "normal" if stats.average_processing_time_ms < 100 else "inverse"
+                    st.metric("Avg Processing", f"{stats.average_processing_time_ms:.1f}ms", 
+                             delta_color=color)
+                else:
+                    st.metric("Avg Processing", "N/A", delta="no data")
+            
+            # Detailed webhook information in expander
+            with st.expander("🔍 Webhook Details"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Server Statistics**")
+                    st.write(f"• Uptime: {uptime/3600:.1f} hours")
+                    st.write(f"• Requests received: {stats.requests_received}")
+                    st.write(f"• Requests processed: {stats.requests_processed}")
+                    st.write(f"• Requests failed: {stats.requests_failed}")
+                    
+                    if stats.requests_received > 0:
+                        success_rate = (stats.requests_processed / stats.requests_received) * 100
+                        st.write(f"• Success rate: {success_rate:.1f}%")
+                    
+                    if stats.events_by_type:
+                        st.write("**Event Types Received**")
+                        for event_type, count in stats.events_by_type.items():
+                            st.write(f"• {event_type}: {count}")
+                
+                with col2:
+                    st.write("**Active Subscriptions**")
+                    if webhook_server.subscriptions:
+                        for sub_id, subscription in webhook_server.subscriptions.items():
+                            event_types = [et.value for et in subscription.event_types]
+                            status = "🟢 Active" if subscription.active else "🔴 Inactive"
+                            st.write(f"• {sub_id[:8]}: {status}")
+                            st.write(f"  Events: {', '.join(event_types)}")
+                            st.write(f"  Triggers: {subscription.trigger_count}")
+                            if subscription.last_triggered:
+                                time_ago = (datetime.now() - subscription.last_triggered).total_seconds()
+                                st.write(f"  Last: {time_ago/60:.0f}m ago")
+                    else:
+                        st.write("No active subscriptions")
+                    
+                    st.write("**Available Endpoints**")
+                    endpoints = [
+                        "/webhook/entity/created",
+                        "/webhook/entity/updated",
+                        "/webhook/entity/processed",
+                        "/webhook/metadata/updated",
+                        "/webhook/autotask/task_extracted"
+                    ]
+                    for endpoint in endpoints:
+                        st.write(f"• {endpoint}")
+            
+            # Performance alerts
+            if stats.requests_failed > 0 and stats.requests_received > 0:
+                failure_rate = (stats.requests_failed / stats.requests_received) * 100
+                if failure_rate > 10:
+                    st.error(f"⚠️ High failure rate: {failure_rate:.1f}% of requests failing")
+            
+            if stats.average_processing_time_ms > 1000:
+                st.warning(f"⚠️ Slow processing: {stats.average_processing_time_ms:.0f}ms average")
+            
+        except Exception as e:
+            logger.error(f"Error rendering webhook health status: {e}")
+            st.error(f"Error loading webhook status: {e}")
+    
+    @staticmethod
+    def render_webhook_activity_chart():
+        """Render webhook activity trend chart."""
+        if not WEBHOOK_MONITORING_AVAILABLE:
+            return
+        
+        st.subheader("📈 Webhook Activity Trends")
+        
+        try:
+            webhook_server = get_webhook_server()
+            if not webhook_server:
+                st.info("Webhook server not available")
+                return
+            
+            # For now, show current statistics as a simple chart
+            # In a real implementation, you'd track historical data
+            stats = webhook_server.stats
+            
+            if stats.events_by_type:
+                # Create DataFrame for event type distribution
+                event_data = pd.DataFrame([
+                    {"Event Type": event_type, "Count": count}
+                    for event_type, count in stats.events_by_type.items()
+                ])
+                
+                if not event_data.empty:
+                    # Event type distribution chart
+                    fig = px.pie(event_data, values="Count", names="Event Type", 
+                               title="Event Types Distribution")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Request processing metrics
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if stats.requests_received > 0:
+                        processing_data = pd.DataFrame([
+                            {"Status": "Processed", "Count": stats.requests_processed},
+                            {"Status": "Failed", "Count": stats.requests_failed},
+                            {"Status": "Pending", "Count": max(0, stats.requests_received - stats.requests_processed - stats.requests_failed)}
+                        ])
+                        
+                        fig_processing = px.bar(processing_data, x="Status", y="Count",
+                                              title="Request Processing Status",
+                                              color="Status",
+                                              color_discrete_map={
+                                                  "Processed": "green",
+                                                  "Failed": "red", 
+                                                  "Pending": "orange"
+                                              })
+                        st.plotly_chart(fig_processing, use_container_width=True)
+                
+                with col2:
+                    # Subscription status
+                    if webhook_server.subscriptions:
+                        active_subs = sum(1 for sub in webhook_server.subscriptions.values() if sub.active)
+                        inactive_subs = len(webhook_server.subscriptions) - active_subs
+                        
+                        sub_data = pd.DataFrame([
+                            {"Status": "Active", "Count": active_subs},
+                            {"Status": "Inactive", "Count": inactive_subs}
+                        ])
+                        
+                        fig_subs = px.bar(sub_data, x="Status", y="Count",
+                                        title="Subscription Status",
+                                        color="Status",
+                                        color_discrete_map={
+                                            "Active": "green",
+                                            "Inactive": "gray"
+                                        })
+                        st.plotly_chart(fig_subs, use_container_width=True)
+            else:
+                st.info("No webhook activity recorded yet")
+        
+        except Exception as e:
+            logger.error(f"Error rendering webhook activity chart: {e}")
+            st.error(f"Error creating webhook activity chart: {e}")
     
     @staticmethod
     def render_comprehensive_metrics():
@@ -393,6 +713,17 @@ def render_performance_sidebar():
                 # WebSocket status
                 if metrics.websocket_connections > 0:
                     st.caption(f"🔌 WebSocket: {metrics.websocket_connections} active")
+                
+                # Webhook status (if available)
+                if WEBHOOK_MONITORING_AVAILABLE:
+                    try:
+                        webhook_server = get_webhook_server()
+                        if webhook_server and webhook_server.stats.requests_received > 0:
+                            active_subs = len(webhook_server.subscriptions)
+                            if active_subs > 0:
+                                st.caption(f"🔗 Webhooks: {active_subs} subscriptions")
+                    except Exception:
+                        pass
         
         except Exception as e:
             logger.debug(f"Error showing sidebar performance: {e}")

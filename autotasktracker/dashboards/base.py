@@ -180,7 +180,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
         
         if time_filter == "Today":
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif time_filter == "Yesterday":
             yesterday = now - timedelta(days=1)
             start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -356,7 +356,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
                 
         except Exception:
             # Don't show cache status if there's an error
-            pass
+            logger.debug("Operation failed silently")
     
     def setup_realtime_updates(self):
         """Setup real-time dashboard updates with WebSocket integration."""

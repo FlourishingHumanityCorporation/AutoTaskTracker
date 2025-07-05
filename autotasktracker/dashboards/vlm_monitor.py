@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import subprocess
 import json
 
-from autotasktracker import DatabaseManager, Config, get_config
+from autotasktracker import DatabaseManager, AutoTaskSettings, get_config
 
 # Initialize configuration
 config = get_config()

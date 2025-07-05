@@ -1,5 +1,6 @@
 """
 WebSocket client for real-time dashboard updates.
+from autotasktracker.core import DatabaseManager
 Replaces polling-based refresh with true WebSocket event listening.
 """
 

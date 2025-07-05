@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Optional, Dict
 from functools import wraps
 
+from autotasktracker.core.database import DatabaseManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,8 +32,8 @@ class DashboardCache:
         sorted_params = sorted(kwargs.items())
         param_str = json.dumps(sorted_params, default=str)
         
-        # Create hash for compact key
-        hash_obj = hashlib.md5(param_str.encode())
+        # Create hash for compact key (not used for security)
+        hash_obj = hashlib.md5(param_str.encode(), usedforsecurity=False)
         return f"{prefix}_{hash_obj.hexdigest()}"
     
     @staticmethod
@@ -147,27 +149,29 @@ class QueryCache:
     def get_cached_query(
         query: str,
         params: tuple,
-        db_manager: Any
+        db_manager: Optional[Any] = None
     ) -> Any:
         """Cache database query results.
         
         Args:
             query: SQL query
             params: Query parameters
-            db_manager: Database manager instance
+            db_manager: Database manager instance (optional, will create if None)
             
         Returns:
             Query results
         """
+        if db_manager is None:
+            db_manager = DatabaseManager()
         return db_manager.execute_query(query, params)
     
     @staticmethod
     def get_time_filtered_data(
-        db_manager: Any,
         start_date: datetime,
         end_date: datetime,
         limit: int = 1000,
-        ttl_seconds: int = 300
+        ttl_seconds: int = 300,
+        db_manager: Optional[Any] = None
     ) -> Any:
         """Get cached time-filtered data.
         
@@ -199,6 +203,10 @@ class QueryCache:
             end_date.strftime('%Y-%m-%d %H:%M:%S'),
             limit
         )
+        
+        # Use default DatabaseManager if not provided
+        if db_manager is None:
+            db_manager = DatabaseManager()
         
         cache_key = DashboardCache.create_cache_key(
             "time_filtered_data",

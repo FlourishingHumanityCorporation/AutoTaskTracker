@@ -12,7 +12,7 @@ from PIL import Image
 
 # Enhanced search capabilities  
 try:
-    from ...pensieve.enhanced_search import get_enhanced_search, SearchQuery
+    from autotasktracker.pensieve.advanced_search import get_advanced_search, SearchQuery
     ENHANCED_SEARCH_AVAILABLE = True
 except ImportError:
     ENHANCED_SEARCH_AVAILABLE = False
@@ -23,7 +23,7 @@ class EnhancedSearch:
     
     @staticmethod
     def render(
-        key: str = "enhanced_search",
+        key: str = "advanced_search",
         placeholder: str = "🔍 Search...",
         show_search_type: bool = True,
         default_type: str = "Text"
@@ -87,7 +87,7 @@ class EnhancedSearch:
             len(query) > 3):
             
             try:
-                enhanced_search = get_enhanced_search()
+                advanced_search = get_advanced_search()
                 search_query = SearchQuery(
                     query=query,
                     search_type=search_type,
@@ -96,7 +96,7 @@ class EnhancedSearch:
                 )
                 
                 # Get entity IDs that match the search
-                search_results = enhanced_search.search(search_query)
+                search_results = advanced_search.search(search_query)
                 matching_ids = {result.entity.id for result in search_results}
                 
                 # Filter data to matching entities if ID column exists
@@ -145,7 +145,7 @@ class TaskGroup:
             expanded: Whether to expand by default
         """
         # Format time period display using proper timezone manager
-        from ...core.timezone_manager import get_timezone_manager
+        from autotasktracker.core.timezone_manager import get_timezone_manager
         
         tz_manager = get_timezone_manager()
         if end_time:
