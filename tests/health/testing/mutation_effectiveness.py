@@ -609,7 +609,7 @@ class EffectivenessValidator:
                  project_root: Path, 
                  config_manager: Optional[ConfigManagerProtocol] = None, 
                  performance_optimizer: Optional[PerformanceOptimizerProtocol] = None, 
-                 mutation_tester: Optional['SimpleMutationTester'] = None) -> None:
+                 mutation_tester: Optional[Any] = None) -> None:
         """Initialize effectiveness validator with dependency injection.
         
         Args:
@@ -627,7 +627,9 @@ class EffectivenessValidator:
         
         # Initialize mutation tester via dependency injection or default
         if mutation_tester is None:
-            self.mutation_tester = SimpleMutationTester(project_root, self.config)
+            # Use RefactoredMutationTester for better performance and maintainability
+            from .mutation_tester_refactored import RefactoredMutationTester
+            self.mutation_tester = RefactoredMutationTester(project_root, self.config)
         else:
             self.mutation_tester = mutation_tester
         
