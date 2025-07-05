@@ -1,0 +1,50 @@
+{
+  "description": "Comprehensive CI/CD configuration - thorough analysis for production readiness",
+  "mutation": {
+    "max_mutations_per_file": 20,
+    "timeout_seconds": 60,
+    "max_file_size_kb": 200,
+    "skip_patterns": [
+      "__pycache__",
+      ".git",
+      "node_modules",
+      ".pytest_cache"
+    ],
+    "mutation_types": [
+      "off_by_one",
+      "boolean_flip",
+      "operator_change", 
+      "condition_flip",
+      "boundary_shift",
+      "return_change"
+    ]
+  },
+  "analysis": {
+    "max_files_per_test": 50,
+    "max_analysis_time_seconds": 900,
+    "min_effectiveness_threshold": 70.0,
+    "warning_effectiveness_threshold": 85.0,
+    "max_function_lines": 50,
+    "max_hardcoded_items": 2
+  },
+  "validation": {
+    "mutation_weight": 0.6,
+    "bug_pattern_weight": 0.3,
+    "integration_weight": 0.1,
+    "critical_threshold": 70.0,
+    "warning_threshold": 85.0,
+    "max_overall_score": 100.0
+  },
+  "performance": {
+    "enable_parallel_execution": true,
+    "max_worker_threads": 8
+  },
+  "logging": {
+    "log_level": "INFO",
+    "log_detailed_errors": true
+  },
+  "output": {
+    "max_recommendations": 10,
+    "include_examples": true
+  }
+}

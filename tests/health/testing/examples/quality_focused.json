@@ -1,0 +1,50 @@
+{
+  "description": "Quality-focused configuration - strict standards for critical code paths",
+  "mutation": {
+    "max_mutations_per_file": 15,
+    "timeout_seconds": 45,
+    "max_file_size_kb": 150,
+    "skip_patterns": [
+      "__pycache__",
+      ".git",
+      "node_modules",
+      ".pytest_cache",
+      "test_*_draft.py",
+      "*_experimental.py"
+    ],
+    "mutation_types": [
+      "off_by_one",
+      "boolean_flip",
+      "condition_flip",
+      "boundary_shift"
+    ]
+  },
+  "analysis": {
+    "max_files_per_test": 25,
+    "max_analysis_time_seconds": 600,
+    "min_effectiveness_threshold": 80.0,
+    "warning_effectiveness_threshold": 90.0,
+    "max_function_lines": 25,
+    "max_hardcoded_items": 1
+  },
+  "validation": {
+    "mutation_weight": 0.5,
+    "bug_pattern_weight": 0.4,
+    "integration_weight": 0.1,
+    "critical_threshold": 80.0,
+    "warning_threshold": 90.0,
+    "max_overall_score": 100.0
+  },
+  "performance": {
+    "enable_parallel_execution": true,
+    "max_worker_threads": 4
+  },
+  "logging": {
+    "log_level": "INFO", 
+    "log_detailed_errors": true
+  },
+  "output": {
+    "max_recommendations": 7,
+    "include_examples": true
+  }
+}

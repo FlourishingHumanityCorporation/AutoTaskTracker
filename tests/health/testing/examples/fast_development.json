@@ -1,0 +1,48 @@
+{
+  "description": "Fast development configuration - optimized for quick feedback during development",
+  "mutation": {
+    "max_mutations_per_file": 3,
+    "timeout_seconds": 10,
+    "max_file_size_kb": 50,
+    "skip_patterns": [
+      "__pycache__",
+      ".git",
+      "node_modules",
+      ".pytest_cache",
+      "*.pyc",
+      "temp_*"
+    ],
+    "mutation_types": [
+      "off_by_one",
+      "boolean_flip"
+    ]
+  },
+  "analysis": {
+    "max_files_per_test": 5,
+    "max_analysis_time_seconds": 60,
+    "min_effectiveness_threshold": 40.0,
+    "warning_effectiveness_threshold": 60.0,
+    "max_function_lines": 20,
+    "max_hardcoded_items": 5
+  },
+  "validation": {
+    "mutation_weight": 0.7,
+    "bug_pattern_weight": 0.2,
+    "integration_weight": 0.1,
+    "critical_threshold": 40.0,
+    "warning_threshold": 60.0,
+    "max_overall_score": 100.0
+  },
+  "performance": {
+    "enable_parallel_execution": true,
+    "max_worker_threads": 2
+  },
+  "logging": {
+    "log_level": "WARNING",
+    "log_detailed_errors": false
+  },
+  "output": {
+    "max_recommendations": 3,
+    "include_examples": true
+  }
+}
