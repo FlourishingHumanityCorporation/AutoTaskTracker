@@ -25,7 +25,7 @@ from tests.health.testing.shared_utilities import ValidationLimits
 class TestMutationConfig:
     """Test the MutationConfig dataclass."""
     
-    def test_default_values(self):
+    def test_mutation_config_default_values(self):
         """Test MutationConfig default values."""
         config = MutationConfig()
         
@@ -40,7 +40,7 @@ class TestMutationConfig:
             'boundary_shift'
         ]
     
-    def test_custom_values(self):
+    def test_mutation_config_custom_values(self):
         """Test MutationConfig with custom values."""
         config = MutationConfig(
             max_mutations_per_file=50,
@@ -60,7 +60,7 @@ class TestMutationConfig:
 class TestAnalysisConfig:
     """Test the AnalysisConfig dataclass."""
     
-    def test_default_values(self):
+    def test_analysis_config_default_values(self):
         """Test AnalysisConfig default values."""
         config = AnalysisConfig()
         
@@ -71,7 +71,7 @@ class TestAnalysisConfig:
         assert config.max_function_lines == ValidationLimits.MAX_FUNCTION_LINES
         assert config.max_hardcoded_items == ValidationLimits.MAX_HARDCODED_ITEMS
     
-    def test_custom_values(self):
+    def test_analysis_config_custom_values(self):
         """Test AnalysisConfig with custom values."""
         config = AnalysisConfig(
             max_files_per_test=25,
@@ -93,7 +93,7 @@ class TestAnalysisConfig:
 class TestValidationConfig:
     """Test the ValidationConfig dataclass."""
     
-    def test_default_values(self):
+    def test_validation_config_default_values(self):
         """Test ValidationConfig default values."""
         config = ValidationConfig()
         
@@ -104,7 +104,7 @@ class TestValidationConfig:
         assert config.warning_threshold == ValidationLimits.WARNING_EFFECTIVENESS_THRESHOLD
         assert config.max_overall_score == 100.0
     
-    def test_custom_values(self):
+    def test_validation_config_custom_values(self):
         """Test ValidationConfig with custom values."""
         config = ValidationConfig(
             mutation_weight=0.5,
@@ -125,7 +125,7 @@ class TestValidationConfig:
 class TestEffectivenessConfig:
     """Test the EffectivenessConfig dataclass."""
     
-    def test_default_values(self):
+    def test_effectiveness_config_default_values(self):
         """Test EffectivenessConfig default values."""
         config = EffectivenessConfig()
         
@@ -368,7 +368,7 @@ class TestConfigManager:
         # Cleanup
         shutil.rmtree(temp_dir)
     
-    def test_initialization(self, temp_project_root):
+    def test_config_manager_initialization(self, temp_project_root):
         """Test ConfigManager initialization."""
         manager = ConfigManager(temp_project_root)
         

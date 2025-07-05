@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+from .retry_utils import GitOperations, with_retry, RetryConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,13 +56,9 @@ class GitBugAnalyzer:
         since_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
         
         try:
-            # Get commits that look like bug fixes
-            result = subprocess.run([
-                'git', 'log', '--oneline', '--since', since_date,
-                '--grep=fix', '--grep=bug', '--grep=error', 
-                '--grep=issue', '--grep=crash', '--grep=fail',
-                '--ignore-case'
-            ], capture_output=True, text=True, cwd=self.project_root)
+            # Get commits that look like bug fixes using retry logic
+            git_ops = GitOperations(self.project_root)
+            result = self._get_bug_commits_with_retry(since_date)
             
             if result.returncode != 0:
                 logger.warning("Could not access Git history")
@@ -91,13 +89,35 @@ class GitBugAnalyzer:
             logger.warning(f"Git analysis failed: {e}")
             return []
     
+    @with_retry(RetryConfig(max_attempts=3), exceptions=(subprocess.CalledProcessError, OSError))
+    def _get_bug_commits_with_retry(self, since_date: str) -> subprocess.CompletedProcess:
+        """Get bug commits with retry logic."""
+        return subprocess.run([
+            'git', 'log', '--oneline', '--since', since_date,
+            '--grep=fix', '--grep=bug', '--grep=error', 
+            '--grep=issue', '--grep=crash', '--grep=fail',
+            '--ignore-case'
+        ], capture_output=True, text=True, cwd=self.project_root, check=True)
+    
+    @with_retry(RetryConfig(max_attempts=3), exceptions=(subprocess.CalledProcessError, OSError))
+    def _get_commit_files_with_retry(self, commit_hash: str) -> subprocess.CompletedProcess:
+        """Get commit files with retry logic."""
+        return subprocess.run([
+            'git', 'show', '--name-only', commit_hash
+        ], capture_output=True, text=True, cwd=self.project_root, check=True)
+    
+    @with_retry(RetryConfig(max_attempts=3), exceptions=(subprocess.CalledProcessError, OSError))
+    def _get_commit_diff_with_retry(self, commit_hash: str) -> subprocess.CompletedProcess:
+        """Get commit diff with retry logic."""
+        return subprocess.run([
+            'git', 'show', commit_hash
+        ], capture_output=True, text=True, cwd=self.project_root, check=True)
+    
     def _analyze_bug_commit(self, commit_hash: str, description: str) -> Optional[BugPattern]:
         """Analyze a specific commit to extract bug pattern."""
         try:
             # Get the diff for this commit
-            result = subprocess.run([
-                'git', 'show', '--name-only', commit_hash
-            ], capture_output=True, text=True, cwd=self.project_root)
+            result = self._get_commit_files_with_retry(commit_hash)
             
             if result.returncode != 0:
                 return None
@@ -114,9 +134,7 @@ class GitBugAnalyzer:
                 return None
                 
             # Get the actual diff
-            diff_result = subprocess.run([
-                'git', 'show', commit_hash
-            ], capture_output=True, text=True, cwd=self.project_root)
+            diff_result = self._get_commit_diff_with_retry(commit_hash)
             
             if diff_result.returncode != 0:
                 return None
@@ -327,7 +345,8 @@ class TestBugCorrelationAnalyzer:
         try:
             content = test_file.read_text(encoding='utf-8')
             return any(re.search(pattern, content, re.IGNORECASE) for pattern in patterns)
-        except Exception:
+        except (OSError, UnicodeDecodeError, PermissionError) as e:
+            logger.warning(f"Could not read test file {test_file}: {e}")
             return False
     
     def _generate_bug_correlation_recommendation(self, bug_type: str, effectiveness: float,

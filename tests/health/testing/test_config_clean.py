@@ -31,7 +31,7 @@ except ImportError:
 class TestMutationConfig:
     """Test mutation configuration component."""
     
-    def test_default_values(self):
+    def test_mutation_config_clean_default_values(self):
         """Test default configuration values."""
         config = MutationConfig()
         

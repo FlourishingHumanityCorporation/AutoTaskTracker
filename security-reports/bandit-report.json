@@ -1,17 +1,17 @@
 {
   "errors": [],
-  "generated_at": "2025-07-05T22:03:17Z",
+  "generated_at": "2025-07-05T21:36:05Z",
   "metrics": {
     "_totals": {
-      "CONFIDENCE.HIGH": 34,
+      "CONFIDENCE.HIGH": 32,
       "CONFIDENCE.LOW": 4,
       "CONFIDENCE.MEDIUM": 0,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 34,
+      "SEVERITY.LOW": 32,
       "SEVERITY.MEDIUM": 4,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 24483,
+      "loc": 23018,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -115,7 +115,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 786,
+      "loc": 776,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -388,7 +388,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 243,
+      "loc": 238,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -587,19 +587,6 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "autotasktracker/dashboards/data/query_utils.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 212,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
     "autotasktracker/dashboards/data/repositories.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 1,
@@ -610,19 +597,6 @@
       "SEVERITY.MEDIUM": 1,
       "SEVERITY.UNDEFINED": 0,
       "loc": 891,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "autotasktracker/dashboards/data/text_utils.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 227,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -687,7 +661,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 714,
+      "loc": 598,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -821,45 +795,6 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "autotasktracker/pensieve/backend_coordinator.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 177,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "autotasktracker/pensieve/backend_detection.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 162,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "autotasktracker/pensieve/backend_optimization.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 118,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
     "autotasktracker/pensieve/backend_optimizer.py": {
       "CONFIDENCE.HIGH": 6,
       "CONFIDENCE.LOW": 0,
@@ -974,32 +909,6 @@
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
       "loc": 663,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "autotasktracker/pensieve/migration_execution.py": {
-      "CONFIDENCE.HIGH": 2,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 2,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 263,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "autotasktracker/pensieve/migration_planning.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 0,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 0,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 175,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -1163,8 +1072,8 @@
   "results": [
     {
       "code": "542                     \n543                     metadata_query = f\"\"\"\n544                     SELECT entity_id, key, value \n545                     FROM metadata_entries \n546                     WHERE entity_id IN ({placeholders})\n547                     AND key IN ('category', 'active_window', 'ocr_result')\n548                     \"\"\"\n549                     \n",
-      "col_offset": 37,
-      "end_col_offset": 23,
+      "col_offset": 41,
+      "end_col_offset": 40,
       "filename": "autotasktracker/dashboards/data/repositories.py",
       "issue_confidence": "LOW",
       "issue_cwe": {
@@ -1188,8 +1097,8 @@
     },
     {
       "code": "272                 \n273                 sql = f\"\"\"\n274                     SELECT DISTINCT e.id, e.filepath, e.filename, e.created_at, \n275                            e.file_created_at, e.last_scan_at, e.file_type_group\n276                     FROM entities e\n277                     LEFT JOIN metadata_entries me ON e.id = me.entity_id\n278                     WHERE {' AND '.join(where_conditions) if where_conditions else '1=1'}\n279                     ORDER BY e.created_at DESC\n280                     LIMIT ? OFFSET ?\n281                 \"\"\"\n282                 \n",
-      "col_offset": 22,
-      "end_col_offset": 19,
+      "col_offset": 26,
+      "end_col_offset": 26,
       "filename": "autotasktracker/pensieve/advanced_search.py",
       "issue_confidence": "LOW",
       "issue_cwe": {
@@ -1216,8 +1125,8 @@
     },
     {
       "code": "182                     placeholders = \",\".join(\"?\" * len(tags))\n183                     query = f\"\"\"\n184                     SELECT e.*, GROUP_CONCAT(t.name, ',') as entity_tags\n185                     FROM entities e\n186                     JOIN entity_tags et ON e.id = et.entity_id\n187                     JOIN tags t ON et.tag_id = t.id\n188                     WHERE e.id IN (\n189                         SELECT entity_id\n190                         FROM entity_tags et2\n191                         JOIN tags t2 ON et2.tag_id = t2.id\n192                         WHERE t2.name IN ({placeholders})\n193                         GROUP BY entity_id\n194                         HAVING COUNT(DISTINCT t2.name) = ?\n195                     )\n196                     GROUP BY e.id\n197                     ORDER BY e.created_at DESC\n198                     LIMIT ?\n199                     \"\"\"\n200                     params = tags + [len(tags), limit]\n",
-      "col_offset": 28,
-      "end_col_offset": 23,
+      "col_offset": 32,
+      "end_col_offset": 42,
       "filename": "autotasktracker/pensieve/tagging_integration.py",
       "issue_confidence": "LOW",
       "issue_cwe": {
@@ -1252,8 +1161,8 @@
     },
     {
       "code": "204                     placeholders = \",\".join(\"?\" * len(tags))\n205                     query = f\"\"\"\n206                     SELECT DISTINCT e.*, GROUP_CONCAT(t.name, ',') as entity_tags\n207                     FROM entities e\n208                     JOIN entity_tags et ON e.id = et.entity_id\n209                     JOIN tags t ON et.tag_id = t.id\n210                     WHERE t.name IN ({placeholders})\n211                     GROUP BY e.id\n212                     ORDER BY e.created_at DESC\n213                     LIMIT ?\n214                     \"\"\"\n215                     params = tags + [limit]\n",
-      "col_offset": 28,
-      "end_col_offset": 23,
+      "col_offset": 32,
+      "end_col_offset": 37,
       "filename": "autotasktracker/pensieve/tagging_integration.py",
       "issue_confidence": "LOW",
       "issue_cwe": {

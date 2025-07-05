@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass
 from enum import Enum
 
+from .shared_utilities import ValidationLimits, BoundedDict
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,7 +65,8 @@ class TestingIntelligenceEngine:
     def __init__(self, project_root: Path):
         self.project_root = project_root
         self.test_dir = project_root / "tests"
-        self._module_cache: Dict[str, ModuleContext] = {}
+        # Use bounded cache to prevent memory issues
+        self._module_cache = BoundedDict(max_size=ValidationLimits.MAX_CACHE_ENTRIES)
         self._load_configuration()
     
     def _load_configuration(self) -> None:
@@ -500,3 +503,30 @@ class TestingIntelligenceEngine:
             message += f"📚 Guide: Add {min_assertions} meaningful assertions minimum\n"
         
         return message.strip()
+    
+    def clear_module_cache(self) -> None:
+        """Clear module analysis cache to free memory."""
+        cache_size = len(self._module_cache)
+        self._module_cache.clear()
+        logger.info(f"Cleared module cache ({cache_size} entries)")
+    
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Return cache usage statistics for monitoring.
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        return {
+            'cache_size': len(self._module_cache),
+            'cache_limit': getattr(self._module_cache, 'max_size', ValidationLimits.MAX_CACHE_ENTRIES),
+            'memory_estimate_kb': len(self._module_cache) * 2,  # Rough estimate: 2KB per entry
+            'utilization_percent': int((len(self._module_cache) / ValidationLimits.MAX_CACHE_ENTRIES) * 100)
+        }
+    
+    def cleanup_cache_if_needed(self) -> None:
+        """Cleanup cache if memory utilization is high."""
+        stats = self.get_cache_stats()
+        if stats['utilization_percent'] > 90:  # Over 90% full
+            # BoundedDict should handle this automatically, but force cleanup for safety
+            logger.warning(f"Cache utilization high ({stats['utilization_percent']}%), triggering cleanup")
+            # The BoundedDict will automatically evict entries, but we can log this

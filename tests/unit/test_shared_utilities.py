@@ -533,7 +533,7 @@ class TestValidateFileForAnalysis:
 class TestSafeSubprocessRunner:
     """Test the SafeSubprocessRunner class."""
     
-    def test_initialization(self):
+    def test_safe_subprocess_runner_initialization(self):
         """Test SafeSubprocessRunner initialization."""
         runner = SafeSubprocessRunner()
         assert runner.default_timeout == ValidationLimits.DEFAULT_TIMEOUT_SECONDS
@@ -657,7 +657,7 @@ class TestStandardizeErrorMessage:
 class TestBoundedDict:
     """Test the BoundedDict class."""
     
-    def test_initialization(self):
+    def test_bounded_dict_initialization(self):
         """Test BoundedDict initialization."""
         bd = BoundedDict()
         assert bd.max_size == ValidationLimits.MAX_CACHE_ENTRIES

@@ -18,11 +18,16 @@ from tests.health.testing.mutation_effectiveness import (
     MutationType,
     MutationResult,
     TestEffectivenessReport,
-    SimpleMutationTester,
+    SimpleMutationTester,  # Legacy - for compatibility testing
     EffectivenessValidator,
     ConfigManagerProtocol,
     PerformanceOptimizerProtocol
 )
+# Import new refactored components
+from tests.health.testing.mutation_tester_refactored import RefactoredMutationTester
+from tests.health.testing.mutation_generator import MutationGenerator
+from tests.health.testing.mutation_executor import MutationExecutor
+from tests.health.testing.mutation_analyzer import MutationAnalyzer
 from tests.health.testing.config import (
     MutationConfig,
     AnalysisConfig,
@@ -918,6 +923,51 @@ class TestEdgeCasesAndErrorHandling:
         assert report.mutations_missed == 0
         assert report.effectiveness_percentage == 0.0
         assert "Test reason" in report.recommendations[0]
+
+
+class TestRefactoredMutationTester:
+    """Test suite for the new refactored mutation testing components."""
+    
+    @pytest.fixture
+    def temp_project_dir(self):
+        """Create a temporary project directory for testing."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir) / "test_project"
+            project_dir.mkdir()
+            
+            # Create basic project structure
+            (project_dir / "autotasktracker").mkdir()
+            (project_dir / "tests").mkdir()
+            
+            yield project_dir
+    
+    def test_refactored_tester_initialization(self, temp_project_dir):
+        """Test RefactoredMutationTester initialization."""
+        tester = RefactoredMutationTester(temp_project_dir)
+        assert tester.project_root == temp_project_dir
+        assert tester.config is not None
+        assert isinstance(tester.generator, MutationGenerator)
+        assert isinstance(tester.executor, MutationExecutor)
+        assert isinstance(tester.analyzer, MutationAnalyzer)
+    
+    def test_refactored_tester_with_config(self, temp_project_dir):
+        """Test RefactoredMutationTester with custom config."""
+        config = EffectivenessConfig()
+        tester = RefactoredMutationTester(temp_project_dir, config)
+        assert tester.config is config
+    
+    def test_refactored_components_exist(self):
+        """Test that all refactored components can be imported."""
+        # This test ensures the new components are properly accessible
+        assert RefactoredMutationTester is not None
+        assert MutationGenerator is not None
+        assert MutationExecutor is not None
+        assert MutationAnalyzer is not None
+    
+    def test_deprecation_warning_on_legacy_use(self, temp_project_dir):
+        """Test that using SimpleMutationTester shows deprecation warning."""
+        with pytest.warns(DeprecationWarning, match="SimpleMutationTester is deprecated"):
+            SimpleMutationTester(temp_project_dir)
 
 
 if __name__ == "__main__":

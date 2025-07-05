@@ -68,7 +68,7 @@ def check_ai_status():
             import requests
             response = requests.get(get_config().get_ollama_url(), timeout=2)
             print("✅ Ollama server running")
-        except:
+        except (requests.exceptions.RequestException, requests.exceptions.ConnectionError):
             print("⚠️  Ollama server not running (VLM features disabled)")
             print("   Start with: ollama serve")
     
@@ -81,7 +81,7 @@ def check_ai_status():
         else:
             print("⚠️  minicpm-v model not found")
             print("   Install with: ollama pull minicpm-v")
-    except:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
         print("⚠️  Could not check Ollama models")
 
 def generate_embeddings(limit=None):
@@ -153,7 +153,7 @@ def setup_ai():
         import subprocess
         subprocess.run([sys.executable, "-m", "pip", "install", "sentence-transformers"], check=True)
         print("✅ Sentence Transformers installed")
-    except Exception as e:
+    except (subprocess.CalledProcessError, OSError, ImportError) as e:
         print(f"❌ Failed to install dependencies: {e}")
         return
     
@@ -179,9 +179,9 @@ def setup_ai():
                 print("⚠️  minicpm-v model not found")
                 print("   To enable VLM, run: ollama pull minicpm-v")
                 print("   Then run: python ai_cli.py enable-vlm")
-        except:
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             print("⚠️  Could not check models")
-    except:
+    except (requests.exceptions.RequestException, requests.exceptions.ConnectionError):
         print("⚠️  Ollama not running")
         print("   To enable VLM:")
         print("   1. Install Ollama: https://ollama.ai")
@@ -243,7 +243,7 @@ Examples:
             disable_vlm()
     except KeyboardInterrupt:
         print("\n⏹️  Operation cancelled")
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError, FileNotFoundError) as e:
         logger.error(f"Error: {e}")
         sys.exit(1)
 

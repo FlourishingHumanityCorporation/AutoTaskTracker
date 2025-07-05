@@ -133,9 +133,24 @@ class TestEffectivenessReport:
 
 
 class SimpleMutationTester:
-    """Lightweight mutation testing focused on common real-world bugs."""
+    """Lightweight mutation testing focused on common real-world bugs.
+    
+    .. deprecated:: 2025.1
+        SimpleMutationTester is deprecated and will be removed in a future version.
+        Use RefactoredMutationTester from mutation_tester_refactored module instead.
+        
+        Migration:
+        from .mutation_tester_refactored import RefactoredMutationTester
+        tester = RefactoredMutationTester(project_root, config)
+    """
     
     def __init__(self, project_root: Path, config: Optional[EffectivenessConfig] = None):
+        import warnings
+        warnings.warn(
+            "SimpleMutationTester is deprecated. Use RefactoredMutationTester instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.project_root = project_root
         self.src_dir = project_root / "autotasktracker"
         self.test_dir = project_root / "tests"
@@ -638,7 +653,7 @@ class EffectivenessValidator:
         except ImportError as e:
             logger.warning(f"Performance optimizer not available: {e}")
             return None
-        except Exception as e:
+        except (AttributeError, TypeError, OSError) as e:
             logger.warning(f"Performance optimizer initialization failed: {e}")
             return None
         
@@ -732,11 +747,11 @@ class EffectivenessValidator:
                     results['actionable_recommendations'].append(
                         f"ℹ️  Note: {len(results['analysis_errors'])} analysis components had errors"
                     )
-            except Exception as e:
+            except (AttributeError, KeyError, TypeError) as e:
                 logger.warning(f"Recommendation generation failed: {e}")
                 results['actionable_recommendations'] = ["Analysis partially failed - review errors"]
                     
-        except Exception as e:
+        except (OSError, UnicodeDecodeError, ValueError, AttributeError) as e:
             error_msg = f"Effectiveness validation failed for {test_file}: {e}"
             logger.error(error_msg, exc_info=True)
             results['analysis_errors'].append(error_msg)
@@ -748,7 +763,8 @@ class EffectivenessValidator:
         """Analyze if tests check for common real-world bug patterns."""
         try:
             content = test_file.read_text(encoding='utf-8')
-        except Exception:
+        except (OSError, IOError, UnicodeDecodeError) as e:
+            logger.error(f"Failed to read test file {test_file}: {e}")
             return []
             
         patterns_found = []
@@ -775,7 +791,8 @@ class EffectivenessValidator:
         """Analyze how well tests validate real component integration."""
         try:
             content = test_file.read_text(encoding='utf-8')
-        except Exception:
+        except (OSError, IOError, UnicodeDecodeError) as e:
+            logger.error(f"Failed to read test file {test_file}: {e}")
             return 0.0
             
         integration_indicators = 0

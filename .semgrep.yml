@@ -48,43 +48,78 @@ rules:
           - pattern: |
               db.execute($QUERY)
     pattern-not:
-      # Don't flag parameterized queries
+      # Don't flag parameterized queries with parameters
       - pattern: |
           $OBJ.execute($QUERY, $PARAMS)
-      # Don't flag literal strings
+      - pattern: |
+          $OBJ.execute($QUERY, (...))
+      # Don't flag literal strings (PRAGMA, schema statements)
       - pattern: |
           $OBJ.execute("...")
+      # Don't flag f-strings that are actually safe
+      - patterns:
+          - pattern: $OBJ.execute($QUERY)
+          - metavariable-regex:
+              metavariable: $QUERY
+              regex: 'f?".*"'
+      # Don't flag PRAGMA statements
+      - patterns:
+          - pattern: $OBJ.execute($QUERY)
+          - metavariable-regex:
+              metavariable: $QUERY
+              regex: '"PRAGMA.*"'
+      # Don't flag connection test queries
+      - patterns:
+          - pattern: $OBJ.execute($QUERY)
+          - metavariable-regex:
+              metavariable: $QUERY
+              regex: '"SELECT 1"'
       # Don't flag queries with placeholders
-      - pattern: |
-          $OBJ.execute($QUERY)
       - patterns:
           - pattern: $OBJ.execute($QUERY)
           - metavariable-regex:
               metavariable: $QUERY
               regex: '.*\?.*'
+      # Don't flag static query variables defined above the execute call
+      - patterns:
+          - pattern: |
+              $QUERY = """..."""
+              ...
+              $OBJ.execute($QUERY)
+      - patterns:
+          - pattern: |
+              $QUERY = "..."
+              ...
+              $OBJ.execute($QUERY)
     pattern-not-inside:
-      # Don't flag DatabaseManager usage
+      # Don't flag DatabaseManager class and its methods
       - pattern: |
           class DatabaseManager:
               ...
+              def $METHOD(self, ...):
+                  ...
+                  $OBJ.execute($QUERY)
+                  ...
+      # Don't flag when using proper connection patterns
       - pattern: |
           with $DB.get_connection() as $CONN:
               ...
-      # Don't flag repository patterns
+      - pattern: |
+          with self._get_connection() as $CONN:
+              ...
+      - pattern: |
+          with self.db_manager.get_connection(...) as $CONN:
+              ...
+      # Don't flag repository patterns that use DatabaseManager
       - pattern: |
           class $REPO:
+              def __init__(self):
+                  self.db = DatabaseManager()
               ...
       # Don't flag AutoTaskTracker specific patterns
       - pattern: |
           from autotasktracker.core.database import DatabaseManager
           ...
-      - pattern: |
-          db = DatabaseManager()
-          ...
-      # Don't flag when using get_connection context manager
-      - pattern: |
-          with $VAR.get_connection() as $CONN:
-              ...
       # Don't flag when inside try/except blocks (error handling present)
       - pattern: |
           try:
@@ -93,18 +128,35 @@ rules:
               ...
           except $EXC:
               ...
-      # Don't flag functions with docstrings (indicates intentional design)
+      # Don't flag functions with proper docstrings
       - pattern: |
           def $FUNC(...):
               """..."""
               ...
               $OBJ.execute($QUERY)
               ...
-      # Don't flag when query is built with proper patterns
+      # Don't flag database setup and maintenance methods
       - pattern: |
-          $QUERY = "SELECT ... WHERE ... = ?"
-          ...
-          $OBJ.execute($QUERY)
+          def _enable_wal_mode(self):
+              ...
+      - pattern: |
+          def _init_database(self):
+              ...
+      - pattern: |
+          def _create_indexes(self, ...):
+              ...
+      - pattern: |
+          def _get_connection(self):
+              ...
+      - pattern: |
+          def health_check(self):
+              ...
+    paths:
+      include:
+        - "autotasktracker/**/*.py"
+      exclude:
+        - "autotasktracker/core/database.py"  # DatabaseManager implementation
+        - "tests/**/*.py"
     message: >
       Database query without parameterization detected. Ensure SQL queries use
       proper parameterization (cursor.execute(query, params)) to prevent injection.

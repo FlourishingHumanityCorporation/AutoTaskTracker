@@ -57,8 +57,8 @@ class RealIntegrationDetector:
         """Analyze whether an integration test actually tests real integration."""
         try:
             content = test_file.read_text(encoding='utf-8', errors='ignore')
-        except Exception:
-            return self._create_error_result(test_file, "Cannot read test file")
+        except (OSError, IOError, UnicodeDecodeError) as e:
+            return self._create_error_result(test_file, f"Cannot read test file: {e}")
         
         # Detect what types of integration this test should cover
         expected_integrations = self._detect_expected_integrations(test_file, content)

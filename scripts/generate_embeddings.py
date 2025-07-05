@@ -44,7 +44,7 @@ class PensieveEmbeddingsGenerator:
             try:
                 # Try to use Pensieve's embedding service if available
                 return self._generate_via_pensieve_api(text)
-            except Exception as e:
+            except (ConnectionError, requests.RequestException, AttributeError, ValueError) as e:
                 logger.warning(f"Pensieve embedding failed, using fallback: {e}")
         
         # Fallback to mock embeddings
@@ -126,7 +126,7 @@ class PensieveEmbeddingsGenerator:
             
             return screenshots
             
-        except Exception as e:
+        except (ConnectionError, requests.RequestException, AttributeError, KeyError) as e:
             logger.error(f"Failed to get screenshots via API: {e}")
             return self._get_screenshots_via_db(limit)
     
@@ -220,8 +220,8 @@ class PensieveEmbeddingsGenerator:
                             for item in ocr_data[:5]:
                                 if isinstance(item, list) and len(item) >= 2:
                                     text_parts.append(str(item[1]))
-                except:
-                    logger.debug("Silent exception handled")
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    logger.debug(f"Failed to parse OCR data: {e}")
             
             combined_text = " ".join(text_parts)
             
@@ -243,7 +243,7 @@ class PensieveEmbeddingsGenerator:
                     rate = (i + 1) / elapsed
                     print(f"  ✅ Processed {i+1}/{len(screenshots)} ({rate:.1f} screenshots/sec)")
                     
-            except Exception as e:
+            except (ValueError, KeyError, TypeError, IOError) as e:
                 logger.error(f"  ❌ Error processing screenshot {screenshot['id']}: {e}")
         
         elapsed = time.time() - start_time

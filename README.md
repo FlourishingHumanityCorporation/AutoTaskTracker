@@ -77,6 +77,40 @@ Edit `~/.memos/config.yaml`:
 - Timestamps and activity duration
 - Focus sessions and productivity patterns
 
+## Development
+
+### Testing Framework
+
+AutoTaskTracker includes a comprehensive effectiveness-based testing framework that validates test quality by actual bug-catching ability rather than just structural metrics.
+
+**New Refactored Components (Recommended):**
+- `RefactoredMutationTester` - Improved mutation testing with focused architecture
+- `MutationGenerator` - Smart mutation creation
+- `MutationExecutor` - Safe test execution with mutations
+- `MutationAnalyzer` - Result analysis and recommendations
+
+**Migration from Legacy Components:**
+If you're upgrading from the legacy `SimpleMutationTester`, see the [Migration Guide](docs/guides/mutation_testing_migration.md) for detailed instructions.
+
+**Key Improvements:**
+- 3.9x performance improvement with parallel processing
+- 5.3x speedup with smart caching
+- 67 comprehensive unit tests
+- Specific exception handling (no broad `except Exception:`)
+- Centralized configuration management
+
+**Running Tests:**
+```bash
+# Run health tests
+pytest tests/health/ -v
+
+# Run mutation testing components
+pytest tests/unit/test_mutation_refactoring.py -v
+
+# Run performance tests
+pytest tests/unit/test_parallel_analyzer.py -v
+```
+
 ## Contributing
 
 Pull requests welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

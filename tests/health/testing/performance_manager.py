@@ -50,7 +50,9 @@ class AdaptivePerformanceManager:
         self.intelligence = intelligence_engine
         self.start_time = time.time()
         self.metrics = PerformanceMetrics(0, 0, 0.0, 0, 0, 0, intelligence_engine.mode)
-        self._file_cache: Dict[str, dict] = {}
+        # Use bounded cache with size limits
+        from .shared_utilities import BoundedDict, ValidationLimits
+        self._file_cache = BoundedDict(max_size=ValidationLimits.MAX_CACHE_ENTRIES)
         self._execution_limits = self._create_execution_limits()
         
         logger.info(f"Performance manager initialized for {self.intelligence.mode.value} mode")
@@ -367,3 +369,45 @@ class AdaptivePerformanceManager:
             logger.info(f"High skip rate ({summary['files_skipped']} files). Consider:")
             logger.info("  - Increasing file size limits")
             logger.info("  - Using COMPREHENSIVE mode for full coverage")
+    
+    def clear_file_cache(self) -> None:
+        """Clear file analysis cache to free memory."""
+        cache_size = len(self._file_cache)
+        self._file_cache.clear()
+        logger.info(f"Cleared file cache ({cache_size} entries)")
+    
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Return cache usage statistics for monitoring."""
+        return {
+            'cache_size': len(self._file_cache),
+            'cache_limit': getattr(self._file_cache, 'max_size', 1000),
+            'memory_estimate_kb': len(self._file_cache) * 10,  # Rough estimate: 10KB per entry
+            'utilization_percent': int((len(self._file_cache) / 1000) * 100)
+        }
+    
+    def cleanup_expired_cache_entries(self) -> None:
+        """Remove expired cache entries based on timestamp."""
+        current_time = time.time()
+        expired_keys = [
+            key for key, data in self._file_cache.items()
+            if current_time - data.get('timestamp', 0) > 3600  # 1 hour expiration
+        ]
+        
+        for key in expired_keys:
+            del self._file_cache[key]
+        
+        if expired_keys:
+            logger.info(f"Cleaned {len(expired_keys)} expired cache entries")
+    
+    def cleanup_cache_if_needed(self) -> None:
+        """Cleanup cache if memory utilization is high."""
+        stats = self.get_cache_stats()
+        
+        # First clean expired entries
+        self.cleanup_expired_cache_entries()
+        
+        # Check if we're still over capacity
+        updated_stats = self.get_cache_stats()
+        if updated_stats['utilization_percent'] > 90:
+            logger.warning(f"Cache utilization still high ({updated_stats['utilization_percent']}%) after expiration cleanup")
+            # BoundedDict will handle LRU eviction automatically

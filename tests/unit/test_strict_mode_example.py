@@ -354,7 +354,9 @@ class TestConfigWithStrictQuality:
                 bad_config = Config(TASK_BOARD_PORT=999)  # Below 1024, should be invalid
                 validation_result = bad_config.validate()
                 error_configs.append(validation_result)
-            except Exception:
+            except (ValueError, TypeError, AttributeError) as e:
+                # Expected for invalid config values during error testing
+                logger.debug(f"Expected validation error: {e}")
                 pass
         error_time = time.perf_counter() - error_start
         

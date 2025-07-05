@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from .shared_utilities import temporary_file_mutation
 from .config import EffectivenessConfig
+from .retry_utils import FileOperations, with_retry, RetryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,9 @@ class MutationExecutor:
             MutationResult if successful, None if failed
         """
         try:
-            # Read original content
-            original_content = source_file.read_text(encoding='utf-8')
+            # Read original content with retry logic
+            file_ops = FileOperations()
+            original_content = file_ops.read_file_safe(source_file)
             lines = original_content.split('\n')
             
             # Apply mutation with validation
@@ -122,6 +124,7 @@ class MutationExecutor:
             logger.error(f"Mutation execution failed: {e}", exc_info=True)
             return None
     
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0), exceptions=(OSError,))
     def _run_test(self, test_file: Path) -> Optional[subprocess.CompletedProcess]:
         """Run pytest on a specific test file.
         
@@ -150,7 +153,8 @@ class MutationExecutor:
             return None
         except OSError as e:
             logger.error(f"Failed to run test: {e}")
-            return None
+            # Re-raise OSError to trigger retry
+            raise
     
     def _parse_test_failures(self, output: str) -> List[str]:
         """Parse test failure information from pytest output."""

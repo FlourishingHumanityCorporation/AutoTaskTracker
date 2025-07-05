@@ -367,7 +367,99 @@ This ensures every request benefits from optimal prompt engineering, improving c
 
 ---
 
+## 🧬 AGILE AI DEVELOPMENT FRAMEWORK
+
+AutoTaskTracker is an AI-powered system requiring specialized development approaches that blend agile methodology with data science experimentation.
+
+### AI Development Principles
+
+**Hypothesis-Driven Development:** Frame AI work as experiments, not feature deliverables:
+```
+We believe that <implementing VLM task extraction>
+Will result in <20% improvement in task detection accuracy>
+We will know we've succeeded when <F1-score > 0.85 on validation set>
+```
+
+**Probabilistic Acceptance Criteria:** Define "done" for AI features using statistical thresholds:
+- **Quantitative:** "Model achieves precision > 0.80 and recall > 0.85"
+- **Performance:** "Response time < 200ms for 95% of requests"
+- **Qualitative:** "Task explanations rated as 'clear and helpful' by 4/5 users"
+
+### AI Story Formats
+
+**AI-Adapted User Stories:**
+```
+As a fraud analyst reviewing transactions,
+I want to see a prioritized list of transactions with >75% fraud probability,
+so that I can focus investigation time on highest-risk cases.
+```
+
+**Data Stories (for infrastructure work):**
+```
+As a data scientist training task extraction models,
+I need access to the last 6 months of cleaned OCR text with validated labels,
+so that I can begin model training with sufficient data quality.
+```
+
+**Hypothesis Stories (for experimental work):**
+```
+We believe that adding semantic embeddings to task classification
+Will result in improved task categorization accuracy
+We will know we've succeeded when category prediction F1-score > 0.90
+```
+
+### AI Development Workflow
+
+1. **Research Phase:** Use hypothesis stories to frame experiments
+2. **Data Phase:** Write data stories for infrastructure needs
+3. **Model Phase:** Define probabilistic acceptance criteria
+4. **Integration Phase:** Use AI-adapted user stories for application features
+5. **Validation Phase:** Measure against both technical and user experience metrics
+
+### AI-Specific Quality Gates
+
+**Technical Validation:**
+- Model performance meets statistical thresholds
+- Inference latency within acceptable bounds
+- Resource utilization within budget
+
+**User Experience Validation:**
+- AI explanations are understandable to target users
+- Graceful degradation when AI is unavailable
+- Error handling provides meaningful feedback
+
+**Ethical Validation:**
+- No discriminatory bias in model predictions
+- User consent and data privacy compliance
+- Transparency in automated decision-making
+
+### Anti-Patterns to Avoid
+
+**"Solutioneering":** Don't assume AI is the solution - validate the problem first
+**"Model-Centric Development":** Focus on user outcomes, not model metrics
+**"Perfectionism Trap":** Accept probabilistic outcomes, don't chase 100% accuracy
+**"AI-First Fallacy":** Use simple rules where they work better than complex models
+
+### Integration with AutoTaskTracker
+
+**Pensieve-AI Integration:** Always check if Pensieve provides AI capabilities before custom implementation
+**Graceful Degradation:** All AI features must work with fallback mechanisms
+**Performance Monitoring:** Track both model performance and user experience metrics
+**Continuous Learning:** Use production data to improve models over time
+
+---
+
 ## 📝 RECENT CHANGES
+
+**2025-07-05: Added Agile AI Development Framework**
+- Integrated comprehensive agile AI methodology from best practices guide
+- Added hypothesis-driven development approach for AI experiments
+- Defined probabilistic acceptance criteria for AI features
+- Included ethical requirements and validation gates
+- Added AI-adapted user stories, data stories, and hypothesis stories
+- Established 5-phase AI development workflow
+- Defined anti-patterns to avoid in AI development
+- Connected framework to AutoTaskTracker's Pensieve integration
 
 **2025-07-05: Added AI prompt engineering guidelines**
 - Added "Effective AI Prompt Engineering" section with 5 key techniques

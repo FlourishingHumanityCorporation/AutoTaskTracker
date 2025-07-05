@@ -695,7 +695,7 @@ class SmartVLMProcessor:
         # Look for common task indicators
         desc_lower = description.lower()
         
-        if 'coding' in desc_lower and 'programming' in desc_lower:
+        if 'coding' in desc_lower or 'programming' in desc_lower:
             return "Software Development"
         elif 'terminal' in desc_lower or 'command' in desc_lower:
             return "Command Line Operations"

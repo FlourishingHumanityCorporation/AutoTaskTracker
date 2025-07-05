@@ -206,8 +206,9 @@ class TestConfig:
                 config = get_config()
                 # If Pydantic accepts it, it should use default
                 assert config.SHOW_SCREENSHOTS is True  # Default value
-            except Exception:
+            except (ValueError, TypeError) as e:
                 # Pydantic may raise validation error for invalid boolean
+                logger.debug(f"Expected validation error for invalid boolean: {e}")
                 pass
     
     def test_config_from_file_success(self):
@@ -523,7 +524,7 @@ class TestConfig:
                 # Pydantic validation error is acceptable
                 assert "port" in str(e).lower() or "unique" in str(e).lower() or "validation" in str(e).lower()
     
-    def test_to_dict(self):
+    def test_utils_config_to_dict(self):
         """Test conversion to dictionary."""
         # Test with environment variables
         env_vars = {
@@ -791,8 +792,10 @@ class TestConfig:
                 try:
                     config.save()  # Side effect: write to file
                     assert True, "Config save should handle environment URLs"
-                except Exception:
-                    pass  # Save may not be implemented
+                except (NotImplementedError, AttributeError, OSError) as e:
+                    # Save may not be implemented or file operation may fail
+                    logger.debug(f"Save operation failed as expected: {e}")
+                    pass
         
         # 7. STATE VALIDATION: Restore original environment state
         if original_env is not None:
@@ -817,7 +820,7 @@ class TestGlobalConfigManagement:
         """Reset global config after each test."""
         reset_config()
     
-    def test_get_config_default(self):
+    def test_utils_get_config_default(self):
         """Test getting config with defaults."""
         with patch('os.path.exists', return_value=False):
             config = get_config()
@@ -867,7 +870,7 @@ class TestGlobalConfigManagement:
                     # Note: Pydantic config doesn't log errors for corrupted files
                     # It just uses defaults from environment and settings
     
-    def test_get_config_from_file(self):
+    def test_utils_get_config_from_file(self):
         """Test getting config from environment (Pydantic doesn't use JSON files)."""
         # Test with environment variable
         with patch.dict(os.environ, {'AUTOTASK_SERVER__TASK_BOARD_PORT': '9000'}):
@@ -883,8 +886,9 @@ class TestGlobalConfigManagement:
                 config = get_config()
                 # If config loads, it should have default value
                 assert config.TASK_BOARD_PORT == 8502
-            except Exception:
+            except (ValueError, TypeError) as e:
                 # Pydantic may raise validation error for invalid port
+                logger.debug(f"Expected validation error for invalid port: {e}")
                 pass
         
         # Test empty environment uses defaults
@@ -1011,8 +1015,9 @@ class TestConfigIntegration:
                 result = invalid_config.validate()
                 # Port conflicts should be detected
                 assert result is False or (invalid_config.MEMOS_PORT != 100 and invalid_config.TIMETRACKER_PORT != 80000)
-            except Exception:
+            except (ValueError, TypeError) as e:
                 # Pydantic may raise ValidationError for port conflicts
+                logger.debug(f"Expected validation error for port conflicts: {e}")
                 pass
 
 

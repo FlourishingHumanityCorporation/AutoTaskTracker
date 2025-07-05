@@ -8,10 +8,14 @@ This is an example of how to refactor existing dashboards to use:
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime, timedelta
 import logging
 import time
 import threading
+import asyncio
+import concurrent.futures
+import requests
 
 # Real-time integration imports - lazy loaded for performance
 # These will be imported only when real-time features are enabled
@@ -112,7 +116,7 @@ class TaskBoardDashboard(BaseDashboard):
                 self._api_client = PensieveAPIClient()
                 self.use_api = True
                 logger.info("Pensieve API client initialized for real-time features")
-            except Exception as e:
+            except (ImportError, ConnectionError, TimeoutError, AttributeError) as e:
                 logger.debug(f"Pensieve API client initialization failed: {e}")
                 self.use_api = False
         return self._api_client
@@ -129,7 +133,7 @@ class TaskBoardDashboard(BaseDashboard):
                 self._webhook_server.register_handler('entity_created', self._handle_webhook_update)
                 self._webhook_server.register_handler('metadata_updated', self._handle_webhook_update)
                 logger.info("Webhook handlers registered for task board dashboard")
-            except Exception as e:
+            except (ImportError, ConnectionError, OSError, AttributeError) as e:
                 logger.debug(f"Webhook server initialization failed: {e}")
         return self._webhook_server
     
@@ -141,7 +145,7 @@ class TaskBoardDashboard(BaseDashboard):
                 from autotasktracker.pensieve.advanced_search import PensieveEnhancedSearch
                 self._advanced_search = PensieveEnhancedSearch()
                 logger.info("Advanced search initialized")
-            except Exception as e:
+            except (ImportError, AttributeError, ValueError) as e:
                 logger.debug(f"Advanced search initialization failed: {e}")
         return self._advanced_search
             
@@ -243,7 +247,7 @@ class TaskBoardDashboard(BaseDashboard):
                             st.sidebar.success("🌐 API connected")
                         else:
                             st.sidebar.warning("🌐 API limited")
-                    except Exception as e:
+                    except (ConnectionError, TimeoutError, requests.RequestException) as e:
                         logger.debug(f"API health check failed: {e}")
                         st.sidebar.warning("🌐 API fallback mode")
                 
@@ -271,21 +275,67 @@ class TaskBoardDashboard(BaseDashboard):
         # Get summary metrics
         summary = metrics_repo.get_metrics_summary(start_date, end_date)
         
-        # Display metrics
-        MetricsRow.render({
-            "📊 Total Activities": summary['total_activities'],
-            "📅 Active Days": summary['active_days'],
-            "🪟 Unique Windows": summary['unique_windows'],
-            "🏷️ Categories": summary['unique_categories']
-        })
+        # Enhanced metrics display with better visual hierarchy
+        st.markdown("### 📊 Activity Overview")
         
-        # Daily average
-        if summary['active_days'] > 0:
+        # Primary metrics in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
             st.metric(
-                "Daily Average",
-                f"{summary['avg_daily_activities']:.0f} activities",
-                help="Average number of activities per active day"
+                "📊 Total Activities", 
+                f"{summary['total_activities']:,}",
+                help="Total number of activities captured"
             )
+        
+        with col2:
+            st.metric(
+                "📅 Active Days", 
+                summary['active_days'],
+                help="Number of days with recorded activity"
+            )
+        
+        with col3:
+            st.metric(
+                "🪟 Unique Windows", 
+                summary['unique_windows'],
+                help="Number of different applications used"
+            )
+        
+        with col4:
+            st.metric(
+                "🏷️ Categories", 
+                summary['unique_categories'],
+                help="Number of different activity categories"
+            )
+        
+        # Secondary metrics with insights
+        if summary['active_days'] > 0:
+            col_a, col_b, col_c = st.columns(3)
+            
+            with col_a:
+                daily_avg = summary['avg_daily_activities']
+                st.metric(
+                    "⚡ Daily Average",
+                    f"{daily_avg:.0f} activities",
+                    help="Average activities per active day"
+                )
+            
+            with col_b:
+                apps_per_day = summary['unique_windows'] / summary['active_days']
+                st.metric(
+                    "🔄 App Variety",
+                    f"{apps_per_day:.1f} apps/day",
+                    help="Average unique applications per day"
+                )
+            
+            with col_c:
+                productivity_score = min(100, (daily_avg / 50) * 100)  # Normalize to 50 activities = 100%
+                st.metric(
+                    "🎯 Activity Score",
+                    f"{productivity_score:.0f}%",
+                    help="Activity level indicator (higher = more active)"
+                )
             
     def export_task_data_to_csv(
         self, 
@@ -477,9 +527,13 @@ class TaskBoardDashboard(BaseDashboard):
         if not self.event_processor.running:
             self.event_processor.start_processing()
         
-        # Check for real-time updates
-        if self.check_for_updates():
-            self.trigger_refresh("New data available")
+        # Add automatic refresh functionality
+        if st.session_state.get('realtime_enabled', True):
+            # Check for real-time updates
+            if self._check_auto_refresh():
+                # Clear cache and refresh
+                self._invalidate_caches()
+                st.rerun()
         
         # Capture dashboard startup
         capture_event("dashboard_startup")
@@ -560,7 +614,7 @@ class TaskBoardDashboard(BaseDashboard):
                                 else:
                                     st.info(f"🔍 No results found for '{search_result['query']}' - showing all tasks")
                                     
-                            except Exception as e:
+                            except (asyncio.TimeoutError, ConnectionError, AttributeError, ValueError) as e:
                                 logger.warning(f"Async search execution failed: {e}")
                                 st.session_state.advanced_search_results = []
                                 st.info(f"🔍 Search configured for '{search_result['query']}' - using standard search")
@@ -576,7 +630,7 @@ class TaskBoardDashboard(BaseDashboard):
                                         st.metric("Cache Hit Rate", f"{(stats['cache_hits']/stats['total_searches']*100):.1f}%")
                                     with col3:
                                         st.metric("Avg Response", f"{stats['avg_response_time']:.2f}s")
-                        except Exception as e:
+                        except (ImportError, AttributeError, ConnectionError, ValueError) as e:
                             logger.warning(f"Advanced search failed: {e}")
                             st.warning("🔍 Advanced search unavailable, using basic search")
             else:
@@ -660,6 +714,43 @@ class TaskBoardDashboard(BaseDashboard):
             show_screenshots,
             min_duration
         )
+        
+        # Add JavaScript-based auto-refresh for real-time updates
+        if st.session_state.get('realtime_enabled', True):
+            refresh_interval_seconds = st.session_state.get('refresh_interval', 30) * 1000  # Convert to milliseconds
+            
+            auto_refresh_html = f"""
+            <script>
+            // Auto-refresh functionality
+            if (!window.autotasktracker_refresh_timer) {{
+                console.log('Setting up AutoTaskTracker auto-refresh timer');
+                window.autotasktracker_refresh_timer = setInterval(function() {{
+                    console.log('AutoTaskTracker auto-refresh triggered');
+                    // Trigger Streamlit rerun by modifying a query parameter
+                    const url = new URL(window.location);
+                    url.searchParams.set('refresh', Date.now());
+                    window.history.replaceState({{}}, '', url);
+                    
+                    // Try to trigger Streamlit refresh
+                    if (window.parent && window.parent.postMessage) {{
+                        window.parent.postMessage({{
+                            type: 'streamlit:componentReady',
+                            height: 0
+                        }}, '*');
+                    }}
+                    
+                    // Alternative: reload the page if Streamlit refresh doesn't work
+                    setTimeout(function() {{
+                        window.location.reload();
+                    }}, 100);
+                }}, {refresh_interval_seconds});
+            }}
+            </script>
+            
+            <div style="display: none;">Auto-refresh active every {refresh_interval_seconds//1000} seconds</div>
+            """
+            
+            components.html(auto_refresh_html, height=0)
     
     def _handle_realtime_update(self, event):
         """Handle real-time updates from EventProcessor with API integration."""
@@ -668,7 +759,7 @@ class TaskBoardDashboard(BaseDashboard):
             if self.use_api and self.api_client:
                 try:
                     self._handle_api_realtime_update(event)
-                except Exception as e:
+                except (ConnectionError, TimeoutError, AttributeError, ValueError) as e:
                     logger.debug(f"API real-time update failed, using fallback: {e}")
                     self._handle_fallback_realtime_update(event)
             else:
@@ -697,9 +788,9 @@ class TaskBoardDashboard(BaseDashboard):
                     # Force refresh
                     st.rerun()
                     
-        except Exception as e:
+        except (ConnectionError, TimeoutError, KeyError, AttributeError) as e:
             logger.warning(f"API real-time update error: {e}")
-            raise Exception(f"API update failed: {e}")
+            raise ConnectionError(f"API update failed: {e}")
     
     def _handle_fallback_realtime_update(self, event):
         """Fallback real-time update using event processor."""
@@ -712,9 +803,9 @@ class TaskBoardDashboard(BaseDashboard):
         # Force Streamlit rerun if in active session
         try:
             st.rerun()
-        except Exception:
+        except (RuntimeError, AttributeError) as e:
             # Graceful handling if rerun fails
-            logger.debug("Could not trigger Streamlit rerun from event handler")
+            logger.debug(f"Could not trigger Streamlit rerun from event handler: {e}")
     
     def _invalidate_caches(self):
         """Invalidate relevant caches for real-time updates."""
@@ -747,8 +838,8 @@ class TaskBoardDashboard(BaseDashboard):
         # Try to trigger Streamlit rerun for immediate update
         try:
             st.rerun()
-        except Exception:
-            logger.debug("Could not trigger Streamlit rerun from webhook handler")
+        except (RuntimeError, AttributeError) as e:
+            logger.debug(f"Could not trigger Streamlit rerun from webhook handler: {e}")
     
     def _handle_entity_processed_webhook(self, event):
         """Handle entity processed webhook with enhanced notifications."""
@@ -763,7 +854,7 @@ class TaskBoardDashboard(BaseDashboard):
                     if hasattr(st, 'toast'):
                         st.toast(f"📸 Screenshot processed: {entity_details.get('filepath', f'Entity {entity_id}')}", icon="✅")
                     return
-        except Exception as e:
+        except (ConnectionError, AttributeError, KeyError) as e:
             logger.debug(f"Could not show detailed toast notification: {e}")
         
         # Fallback notification
@@ -823,12 +914,12 @@ class TaskBoardDashboard(BaseDashboard):
                         search_results = future.result(timeout=10)  # 10 second timeout
                     
                     return search_results
-                except Exception as e:
+                except (asyncio.TimeoutError, concurrent.futures.TimeoutError, OSError, AttributeError) as e:
                     logger.warning(f"Threaded async search failed: {e}")
                     st.info(f"🔍 Search configured for '{search_result['query']}' - using standard search")
                     return []
                     
-        except Exception as e:
+        except (RuntimeError, AttributeError, ValueError) as e:
             logger.warning(f"Async search handling failed: {e}")
             st.info(f"🔍 Search fallback for '{search_result['query']}'")
             return []
@@ -898,7 +989,7 @@ class TaskBoardDashboard(BaseDashboard):
                         if task_group.total_duration_minutes >= min_duration:
                             task_groups.append(task_group)
                             
-            except Exception as e:
+            except (AttributeError, KeyError, ValueError, TypeError) as e:
                 logger.warning(f"Failed to convert search result to task group: {e}")
                 continue
         

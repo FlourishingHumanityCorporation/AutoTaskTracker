@@ -52,7 +52,7 @@ class TimeFilterComponent:
                     # Score based on task count and recency
                     recency_weight = 1.0 if period_name in ["Today", "Yesterday"] else 0.7
                     period_scores[period_name] = task_count * recency_weight
-                except Exception:
+                except (AttributeError, KeyError, ValueError, sqlite3.Error):
                     period_scores[period_name] = 0
             
             # Find the best period with substantial data (at least 5 tasks)
@@ -69,7 +69,7 @@ class TimeFilterComponent:
             # If no period has enough data, default to Last 7 Days
             return best_period if best_period else "Last 7 Days"
             
-        except Exception:
+        except (AttributeError, sqlite3.Error, ConnectionError):
             return "Last 7 Days"  # Safe fallback
     
     @staticmethod
@@ -111,7 +111,7 @@ class TimeFilterComponent:
         
         if time_filter == "Today":
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif time_filter == "Yesterday":
             yesterday = now - timedelta(days=1)
             start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -119,19 +119,19 @@ class TimeFilterComponent:
         elif time_filter == "This Week":
             start = now - timedelta(days=now.weekday())
             start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif time_filter == "Last 7 Days":
             start = now - timedelta(days=7)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif time_filter == "This Month":
             start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif time_filter == "Last 30 Days":
             start = now - timedelta(days=30)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         else:  # All Time
             start = datetime(2020, 1, 1)
-            end = now
+            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
             
         return start, end
         

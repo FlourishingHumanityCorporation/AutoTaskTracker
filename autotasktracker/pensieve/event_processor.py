@@ -411,24 +411,24 @@ class EventProcessor:
                 logger.debug(f"No data to extract tasks from for entity {entity_id}")
                 return
             
-            # Extract tasks
-            tasks = self.task_extractor.extract_tasks(window_title, ocr_text)
+            # Extract task (returns single string, not list)
+            task = self.task_extractor.extract_task(window_title, ocr_text)
             
-            if tasks:
-                # Store extracted tasks using corrected API
+            if task:
+                # Store extracted task using corrected API
                 self.pensieve_client.store_entity_metadata(entity_id, 'extracted_tasks', {
-                    "tasks": tasks,
+                    "tasks": [task],  # Wrap single task in list for consistency
                     'extracted_at': datetime.now().isoformat(),
                     'method': 'event_driven',
                     'source': 'realtime_processor'
                 })
                 
                 # Categorize activity
-                category = self.categorizer.categorize_activity(window_title)
+                category = self.categorizer.categorize(window_title, ocr_text)
                 if category:
                     self.pensieve_client.store_entity_metadata(entity_id, 'activity_category', category)
                 
-                logger.info(f"Real-time processed entity {entity_id}: {len(tasks)} tasks extracted")
+                logger.info(f"Real-time processed entity {entity_id}: task extracted - {task}")
         
         except Exception as e:
             logger.error(f"Failed to extract tasks for entity {entity_id}: {e}")

@@ -74,7 +74,7 @@ class RefactoredMutationTester:
         return self.analyzer.analyze_results(test_file, source_file, results)
     
     def _find_source_file(self, test_file: Path) -> Optional[Path]:
-        """Find the source file corresponding to a test file.
+        """Enhanced source file mapping with semantic understanding.
         
         Args:
             test_file: Path to the test file
@@ -82,35 +82,26 @@ class RefactoredMutationTester:
         Returns:
             Path to corresponding source file, or None if not found
         """
-        # Common test file naming patterns
+        # Extract base name and apply semantic mapping
         test_name = test_file.stem
+        source_names = self._get_source_name_candidates(test_name)
         
-        # Remove test_ prefix
-        if test_name.startswith('test_'):
-            source_name = test_name[5:]  # Remove 'test_'
-        else:
-            source_name = test_name
-        
-        # Look for source file in common locations
-        search_paths = [
-            # Same directory as test
-            test_file.parent / f"{source_name}.py",
-            # Parent directory
-            test_file.parent.parent / f"{source_name}.py",
-            # autotasktracker directory
-            self.project_root / "autotasktracker" / f"{source_name}.py",
-            # Core module
-            self.project_root / "autotasktracker" / "core" / f"{source_name}.py",
-            # AI module
-            self.project_root / "autotasktracker" / "ai" / f"{source_name}.py",
-            # Scripts directory
-            self.project_root / "scripts" / f"{source_name}.py",
-        ]
-        
-        for candidate in search_paths:
-            if candidate.exists() and candidate.is_file():
-                logger.debug(f"Found source file: {candidate}")
+        # Search with improved path patterns
+        for source_name in source_names:
+            candidate = self._search_for_source_file(source_name, test_file)
+            if candidate:
+                logger.debug(f"Mapped {test_file.name} → {candidate.relative_to(self.project_root)}")
                 return candidate
+        
+        # Fallback: try imports analysis
+        source_from_imports = self._find_source_from_imports(test_file)
+        if source_from_imports:
+            return source_from_imports
+        
+        # Enhanced fallback: directory-based contextual search  
+        contextual_result = self._contextual_search(test_file)
+        if contextual_result:
+            return contextual_result
         
         # Try to find source file by analyzing test imports
         source_from_imports = self._find_source_from_imports(test_file)
@@ -140,6 +131,146 @@ class RefactoredMutationTester:
             
         except (OSError, UnicodeDecodeError) as e:
             logger.debug(f"Could not analyze imports in {test_file}: {e}")
+        
+        return None
+    
+    def _get_source_name_candidates(self, test_name: str) -> List[str]:
+        """Generate semantic source name candidates for enhanced mapping."""
+        candidates = []
+        
+        # Remove test_ prefix
+        if test_name.startswith('test_'):
+            base_name = test_name[5:]
+        else:
+            base_name = test_name
+        
+        # Add direct mapping
+        candidates.append(base_name)
+        
+        # Semantic mappings for common patterns
+        semantic_mappings = {
+            'notification_system': ['notifications', 'notification_manager'],
+            'dashboard_core': ['dashboard', 'base_dashboard', 'core'],
+            'comparison_pipelines': ['pipeline_comparison', 'comparison', 'pipelines'],
+            'time_tracking_accuracy': ['timetracker', 'time_tracker', 'time_tracking'],
+            'parallel_analyzer': ['performance_analyzer', 'analyzer', 'parallel_analysis'],
+            'task_board': ['task_board', 'dashboard', 'board'],
+            'ai_task_extractor': ['task_extractor', 'ai_extractor', 'extractor'],
+            'database_manager': ['database', 'db_manager', 'manager'],
+            'vlm_processor': ['vlm', 'processor', 'vision_processor'],
+            'embeddings_search': ['embeddings', 'search', 'embedding_generator']
+        }
+        
+        # Add semantic alternatives
+        if base_name in semantic_mappings:
+            candidates.extend(semantic_mappings[base_name])
+        
+        # Add common transformations
+        if '_' in base_name:
+            # Remove underscores: task_board → taskboard
+            candidates.append(base_name.replace('_', ''))
+            # Take first part: task_board → task
+            candidates.append(base_name.split('_')[0])
+            # Take last part: task_board → board
+            candidates.append(base_name.split('_')[-1])
+        
+        return candidates
+    
+    def _search_for_source_file(self, source_name: str, test_file: Path) -> Optional[Path]:
+        """Search for source file with enhanced path patterns."""
+        search_paths = [
+            # Same directory as test
+            test_file.parent / f"{source_name}.py",
+            # Parent directory  
+            test_file.parent.parent / f"{source_name}.py",
+            # Module-specific directories based on test path
+            *self._get_module_specific_paths(source_name, test_file),
+            # Common autotasktracker locations
+            self.project_root / "autotasktracker" / f"{source_name}.py",
+            self.project_root / "autotasktracker" / "core" / f"{source_name}.py",
+            self.project_root / "autotasktracker" / "ai" / f"{source_name}.py",
+            self.project_root / "autotasktracker" / "pensieve" / f"{source_name}.py",
+            self.project_root / "autotasktracker" / "dashboards" / f"{source_name}.py",
+            self.project_root / "autotasktracker" / "utils" / f"{source_name}.py",
+            # Scripts directories
+            self.project_root / "scripts" / f"{source_name}.py",
+            self.project_root / "scripts" / "ai" / f"{source_name}.py",
+            self.project_root / "scripts" / "processing" / f"{source_name}.py",
+        ]
+        
+        for candidate in search_paths:
+            if candidate.exists() and candidate.is_file():
+                return candidate
+        
+        return None
+    
+    def _get_module_specific_paths(self, source_name: str, test_file: Path) -> List[Path]:
+        """Generate module-specific search paths based on test file location."""
+        paths = []
+        
+        # Determine module from test path
+        test_path_str = str(test_file)
+        
+        if 'dashboard' in test_path_str or 'ui' in test_path_str:
+            paths.extend([
+                self.project_root / "autotasktracker" / "dashboards" / f"{source_name}.py",
+                self.project_root / "autotasktracker" / "dashboards" / "components" / f"{source_name}.py",
+            ])
+        
+        if 'comparison' in test_path_str:
+            paths.extend([
+                self.project_root / "autotasktracker" / "comparison" / f"{source_name}.py",
+                self.project_root / "autotasktracker" / "comparison" / "analysis" / f"{source_name}.py",
+                self.project_root / "autotasktracker" / "comparison" / "dashboards" / f"{source_name}.py",
+            ])
+        
+        if 'ai' in test_path_str or 'vlm' in test_path_str or 'embedding' in test_path_str:
+            paths.extend([
+                self.project_root / "autotasktracker" / "ai" / f"{source_name}.py",
+                self.project_root / "scripts" / "ai" / f"{source_name}.py",
+            ])
+        
+        if 'pensieve' in test_path_str:
+            paths.extend([
+                self.project_root / "autotasktracker" / "pensieve" / f"{source_name}.py",
+            ])
+        
+        return paths
+    
+    def _contextual_search(self, test_file: Path) -> Optional[Path]:
+        """Contextual search based on test file content and naming patterns."""
+        try:
+            content = test_file.read_text(encoding='utf-8')
+            
+            # Look for import patterns to infer source modules
+            import_patterns = [
+                r'from autotasktracker\.(\w+)\.(\w+) import',
+                r'from autotasktracker\.(\w+) import (\w+)',
+                r'import autotasktracker\.(\w+)\.(\w+)',
+            ]
+            
+            for pattern in import_patterns:
+                matches = re.findall(pattern, content)
+                for match in matches:
+                    if len(match) == 2:
+                        module, name = match
+                        candidate = self.project_root / "autotasktracker" / module / f"{name}.py"
+                        if candidate.exists():
+                            logger.debug(f"Found via contextual analysis: {candidate}")
+                            return candidate
+            
+            # Look for class names in test content  
+            class_pattern = r'class\s+Test(\w+)'
+            class_matches = re.findall(class_pattern, content)
+            for class_name in class_matches:
+                # Convert TestTaskBoard → task_board
+                source_name = re.sub(r'([A-Z])', r'_\1', class_name).lower().lstrip('_')
+                candidate = self._search_for_source_file(source_name, test_file)
+                if candidate:
+                    return candidate
+                    
+        except (OSError, UnicodeDecodeError) as e:
+            logger.debug(f"Contextual search failed for {test_file}: {e}")
         
         return None
 

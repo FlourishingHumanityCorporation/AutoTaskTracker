@@ -193,7 +193,7 @@ class DatabaseManager:
             conn.execute("SELECT 1")
             return conn
         except (Empty, sqlite3.Error):
-            # Pool empty or connection invalid, create new one
+            # Pool empty and connection invalid, create new one
             with self._pool_lock:
                 if self._active_connections < self._max_connections:
                     self._active_connections += 1
@@ -219,7 +219,7 @@ class DatabaseManager:
             # Put back in appropriate pool if there's space
             pool.put_nowait(conn)
         except (sqlite3.Error, Exception):
-            # Connection invalid or pool full, close it
+            # Connection invalid and pool full, close it
             try:
                 conn.close()
             except sqlite3.Error as e:

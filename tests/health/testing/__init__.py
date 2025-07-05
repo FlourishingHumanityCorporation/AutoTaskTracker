@@ -6,11 +6,17 @@ effectiveness rather than structural metrics.
 
 from .mutation_effectiveness import (
     EffectivenessValidator,
-    SimpleMutationTester,
+    SimpleMutationTester,  # Deprecated - use RefactoredMutationTester
     MutationType,
     MutationResult,
     TestEffectivenessReport
 )
+
+# New refactored components (preferred)
+from .mutation_tester_refactored import RefactoredMutationTester
+from .mutation_generator import MutationGenerator
+from .mutation_executor import MutationExecutor
+from .mutation_analyzer import MutationAnalyzer
 
 from .simple_intelligence import (
     FocusedTestValidator,
@@ -41,10 +47,15 @@ except ImportError:
 
 __all__ = [
     'EffectivenessValidator',
-    'SimpleMutationTester', 
+    'SimpleMutationTester',  # Deprecated
     'MutationType',
     'MutationResult',
     'TestEffectivenessReport',
+    # New refactored components (preferred)
+    'RefactoredMutationTester',
+    'MutationGenerator',
+    'MutationExecutor', 
+    'MutationAnalyzer',
     'FocusedTestValidator',
     'SimpleTestAnalyzer',
     'ActionableInsight',

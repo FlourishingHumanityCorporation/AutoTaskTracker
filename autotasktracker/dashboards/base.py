@@ -95,7 +95,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
                 else:
                     logger.info("Dashboard using direct database access (degraded mode)")
                     
-            except Exception as e:
+            except (ImportError, ConnectionError, AttributeError, OSError) as e:
                 logger.error(f"Failed to initialize database manager: {e}")
                 # Final fallback to default
                 self._db_manager = DatabaseManager(use_pensieve_api=False)
@@ -354,7 +354,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
             else:
                 st.caption("💾 Cache: Ready")
                 
-        except Exception:
+        except (AttributeError, ImportError, ConnectionError):
             # Don't show cache status if there's an error
             logger.debug("Operation failed silently")
     
@@ -393,7 +393,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
             # Note: In a real implementation, we'd register this handler
             # For now, we'll rely on the time-based refresh mechanism
             
-        except Exception as e:
+        except (ImportError, AttributeError, ConnectionError) as e:
             logger.debug(f"Could not setup event listeners: {e}")
     
     def check_for_updates(self) -> bool:
