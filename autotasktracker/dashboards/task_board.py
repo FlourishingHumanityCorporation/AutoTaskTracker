@@ -13,12 +13,8 @@ import logging
 import time
 import threading
 
-# Real-time integration imports
-from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
-from autotasktracker.pensieve.cache_manager import get_cache_manager
-from autotasktracker.pensieve.api_client import PensieveAPIClient, PensieveAPIError
-from autotasktracker.pensieve.webhook_server import get_webhook_server, start_webhook_server
-from autotasktracker.pensieve.advanced_search import PensieveEnhancedSearch, SearchQuery
+# Real-time integration imports - lazy loaded for performance
+# These will be imported only when real-time features are enabled
 from autotasktracker.core import DatabaseManager
 
 # Removed sys.path hack - using proper package imports
@@ -49,45 +45,19 @@ class TaskBoardDashboard(BaseDashboard):
             port=get_config().TASK_BOARD_PORT
         )
         
-        # Real-time integration setup
-        self.event_processor = get_event_processor()
-        self.cache_manager = get_cache_manager()
+        # Real-time integration setup - lazy loaded for performance
+        self._event_processor = None
+        self._cache_manager = None
+        self._api_client = None
+        self._webhook_server = None
+        self._advanced_search = None
+        
         self.last_refresh = time.time()
         self.refresh_interval = 30  # seconds
+        self.use_api = False
         
-        # Initialize Pensieve API client for real-time features
-        try:
-            self.api_client = PensieveAPIClient()
-            self.use_api = True
-            logger.info("Pensieve API client initialized for real-time features")
-        except Exception as e:
-            logger.debug(f"Pensieve API client initialization failed: {e}")
-            self.api_client = None
-            self.use_api = False
-        
-        # Initialize webhook server for real-time updates
-        try:
-            self.webhook_server = get_webhook_server()
-            # Register dashboard-specific webhook handlers
-            self.webhook_server.register_handler('entity_processed', self._handle_webhook_update)
-            self.webhook_server.register_handler('entity_created', self._handle_webhook_update)
-            self.webhook_server.register_handler('metadata_updated', self._handle_webhook_update)
-            logger.info("Webhook handlers registered for task board dashboard")
-        except Exception as e:
-            logger.debug(f"Webhook server initialization failed: {e}")
-            self.webhook_server = None
-        
-        # Initialize advanced search
-        try:
-            self.advanced_search = PensieveEnhancedSearch()
-            logger.info("Advanced search initialized")
-        except Exception as e:
-            logger.debug(f"Advanced search initialization failed: {e}")
-            self.advanced_search = None
-        
-        # Register dashboard update handler
-        self.event_processor.register_event_handler('entity_added', self._handle_realtime_update)
-        self.event_processor.register_event_handler('entity_processed', self._handle_realtime_update)
+        # Real-time features are initialized only when needed
+        self._realtime_initialized = False
         
     def init_session_state(self):
         """Initialize dashboard-specific session state with smart defaults."""
@@ -113,6 +83,67 @@ class TaskBoardDashboard(BaseDashboard):
         # Initialize category filter to empty (all categories) if not set
         if 'category_filter' not in st.session_state:
             st.session_state.category_filter = []  # Empty = all categories
+    
+    @property
+    def event_processor(self):
+        """Lazy load event processor only when real-time features are needed."""
+        if self._event_processor is None:
+            from autotasktracker.pensieve.event_processor import get_event_processor
+            self._event_processor = get_event_processor()
+            # Register handlers when first loaded
+            self._event_processor.register_event_handler('entity_added', self._handle_realtime_update)
+            self._event_processor.register_event_handler('entity_processed', self._handle_realtime_update)
+        return self._event_processor
+    
+    @property
+    def cache_manager(self):
+        """Lazy load cache manager."""
+        if self._cache_manager is None:
+            from autotasktracker.pensieve.cache_manager import get_cache_manager
+            self._cache_manager = get_cache_manager()
+        return self._cache_manager
+    
+    @property
+    def api_client(self):
+        """Lazy load API client."""
+        if self._api_client is None:
+            try:
+                from autotasktracker.pensieve.api_client import PensieveAPIClient
+                self._api_client = PensieveAPIClient()
+                self.use_api = True
+                logger.info("Pensieve API client initialized for real-time features")
+            except Exception as e:
+                logger.debug(f"Pensieve API client initialization failed: {e}")
+                self.use_api = False
+        return self._api_client
+    
+    @property
+    def webhook_server(self):
+        """Lazy load webhook server."""
+        if self._webhook_server is None:
+            try:
+                from autotasktracker.pensieve.webhook_server import get_webhook_server
+                self._webhook_server = get_webhook_server()
+                # Register handlers when first loaded
+                self._webhook_server.register_handler('entity_processed', self._handle_webhook_update)
+                self._webhook_server.register_handler('entity_created', self._handle_webhook_update)
+                self._webhook_server.register_handler('metadata_updated', self._handle_webhook_update)
+                logger.info("Webhook handlers registered for task board dashboard")
+            except Exception as e:
+                logger.debug(f"Webhook server initialization failed: {e}")
+        return self._webhook_server
+    
+    @property
+    def advanced_search(self):
+        """Lazy load advanced search."""
+        if self._advanced_search is None:
+            try:
+                from autotasktracker.pensieve.advanced_search import PensieveEnhancedSearch
+                self._advanced_search = PensieveEnhancedSearch()
+                logger.info("Advanced search initialized")
+            except Exception as e:
+                logger.debug(f"Advanced search initialization failed: {e}")
+        return self._advanced_search
             
     def render_sidebar(self):
         """Render sidebar controls."""
@@ -212,7 +243,7 @@ class TaskBoardDashboard(BaseDashboard):
                             st.sidebar.success("🌐 API connected")
                         else:
                             st.sidebar.warning("🌐 API limited")
-                    except (PensieveAPIError, Exception) as e:
+                    except Exception as e:
                         logger.debug(f"API health check failed: {e}")
                         st.sidebar.warning("🌐 API fallback mode")
                 
@@ -389,8 +420,34 @@ class TaskBoardDashboard(BaseDashboard):
         # Sort by duration
         task_groups.sort(key=lambda x: x.duration_minutes, reverse=True)
         
-        # Display task groups
-        st.subheader(f"📋 Tasks ({len(task_groups)})")
+        # Display task groups with filtering info
+        total_count = len(task_groups)
+        display_count = min(total_count, 20)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader(f"📋 Tasks ({total_count} found)")
+        with col2:
+            if total_count > 20:
+                st.caption(f"Showing top {display_count} of {total_count}")
+            elif total_count > 0:
+                st.caption(f"Showing all {total_count} tasks")
+        
+        # Add filter summary if filters are active
+        active_filters = []
+        if categories:
+            active_filters.append(f"Categories: {', '.join(categories)}")
+        if min_duration > 1:
+            active_filters.append(f"Min duration: {min_duration} min")
+        
+        if active_filters:
+            with st.expander("🔍 Active Filters", expanded=False):
+                for filter_info in active_filters:
+                    st.info(filter_info)
+                if st.button("Clear All Filters"):
+                    st.session_state.category_filter = []
+                    st.session_state.min_duration = 1
+                    st.rerun()
         
         for i, group in enumerate(task_groups[:20]):  # Limit to top 20
             # Extract first task for screenshot
@@ -452,8 +509,11 @@ class TaskBoardDashboard(BaseDashboard):
             else:
                 st.info("📋 Static")
         
-        # Enhanced search section with Pensieve integration
-        with st.expander("🔍 Enhanced Search", expanded=False):
+        # Enhanced search section with Pensieve integration - more prominent
+        st.markdown("### 🔍 Search & Filter")
+        search_col1, search_col2 = st.columns([4, 1])
+        
+        with search_col1:
             search_result = EnhancedSearch.render(
                 key="main_search",
                 placeholder="Search tasks, activities, or content...",
@@ -482,21 +542,9 @@ class TaskBoardDashboard(BaseDashboard):
                             # Execute async search in sync context
                             import asyncio
                             
-                            # Run async search with proper event loop handling
+                            # Handle async search in Streamlit context
                             try:
-                                # Check if we're already in an async context
-                                try:
-                                    loop = asyncio.get_running_loop()
-                                    # If we get here, there's already a loop running
-                                    # For now, show that search is configured but cannot execute
-                                    st.info(f"🎯 Advanced search configured: '{search_result['query']}' ({search_result['type']})")
-                                    st.warning("⚠️  Async search requires environment setup - using fallback search")
-                                    search_results = []
-                                except RuntimeError:
-                                    # No loop running, safe to create one
-                                    search_results = asyncio.run(
-                                        self.advanced_search.search(search_query)
-                                    )
+                                search_results = self._handle_async_search(search_query, search_result)
                                 
                                 # Store search results in session state for use by data repositories
                                 st.session_state.advanced_search_results = search_results
@@ -534,11 +582,28 @@ class TaskBoardDashboard(BaseDashboard):
             else:
                 st.session_state.search_active = False
         
-        # Render sidebar and get filters
+        with search_col2:
+            # Add search help/info
+            if st.button("ℹ️ Search Help", help="Learn about search options"):
+                with st.expander("Search Help", expanded=True):
+                    st.markdown("""
+                    **Search Types:**
+                    - **Text**: Direct text matching
+                    - **Semantic**: AI-powered meaning search  
+                    - **Hybrid**: Combines both approaches
+                    
+                    **Tips:**
+                    - Use specific keywords for better results
+                    - Try different search types for different needs
+                    """)
+        
+        # Render sidebar and get filters first
         time_filter, categories, show_screenshots, min_duration = self.render_sidebar()
         
         # Get time range
         start_date, end_date = TimeFilterComponent.get_time_range(time_filter)
+        
+        st.divider()
         
         # Initialize repositories
         task_repo = TaskRepository(self.db_manager)
@@ -596,20 +661,20 @@ class TaskBoardDashboard(BaseDashboard):
             min_duration
         )
     
-    def _handle_realtime_update(self, event: PensieveEvent):
+    def _handle_realtime_update(self, event):
         """Handle real-time updates from EventProcessor with API integration."""
         if st.session_state.get('realtime_enabled', False):
             # Try API-first real-time update if available
             if self.use_api and self.api_client:
                 try:
                     self._handle_api_realtime_update(event)
-                except PensieveAPIError as e:
+                except Exception as e:
                     logger.debug(f"API real-time update failed, using fallback: {e}")
                     self._handle_fallback_realtime_update(event)
             else:
                 self._handle_fallback_realtime_update(event)
     
-    def _handle_api_realtime_update(self, event: PensieveEvent):
+    def _handle_api_realtime_update(self, event):
         """Handle real-time updates using Pensieve API."""
         # Check if new data is available via API
         try:
@@ -634,9 +699,9 @@ class TaskBoardDashboard(BaseDashboard):
                     
         except Exception as e:
             logger.warning(f"API real-time update error: {e}")
-            raise PensieveAPIError(f"API update failed: {e}")
+            raise Exception(f"API update failed: {e}")
     
-    def _handle_fallback_realtime_update(self, event: PensieveEvent):
+    def _handle_fallback_realtime_update(self, event):
         """Fallback real-time update using event processor."""
         # Invalidate relevant caches
         self._invalidate_caches()
@@ -657,7 +722,7 @@ class TaskBoardDashboard(BaseDashboard):
         self.cache_manager.invalidate_pattern('task_groups_*')
         self.cache_manager.invalidate_pattern('query_*')  # Also invalidate repository query cache
     
-    def _handle_webhook_update(self, event: PensieveEvent):
+    def _handle_webhook_update(self, event):
         """Handle webhook updates from Pensieve for enhanced real-time features."""
         if not st.session_state.get('realtime_enabled', False):
             return
@@ -685,7 +750,7 @@ class TaskBoardDashboard(BaseDashboard):
         except Exception:
             logger.debug("Could not trigger Streamlit rerun from webhook handler")
     
-    def _handle_entity_processed_webhook(self, event: PensieveEvent):
+    def _handle_entity_processed_webhook(self, event):
         """Handle entity processed webhook with enhanced notifications."""
         # Show detailed notification for processed entities
         entity_id = event.entity_id
@@ -705,12 +770,12 @@ class TaskBoardDashboard(BaseDashboard):
         if hasattr(st, 'toast'):
             st.toast(f"📸 New screenshot processed (ID: {entity_id})", icon="✅")
     
-    def _handle_entity_created_webhook(self, event: PensieveEvent):
+    def _handle_entity_created_webhook(self, event):
         """Handle entity created webhook."""
         if hasattr(st, 'toast'):
             st.toast(f"📷 New screenshot captured", icon="📸")
     
-    def _handle_metadata_updated_webhook(self, event: PensieveEvent):
+    def _handle_metadata_updated_webhook(self, event):
         """Handle metadata updated webhook."""
         # Check if this was task extraction
         if 'tasks' in event.data or 'extracted_tasks' in event.data:
@@ -733,6 +798,56 @@ class TaskBoardDashboard(BaseDashboard):
             return True
         return False
     
+    def _handle_async_search(self, search_query, search_result):
+        """Handle async search in Streamlit context with proper error handling."""
+        import asyncio
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        
+        search_results = []
+        
+        try:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # If we get here, there's already a loop running
+                st.info(f"🎯 Advanced search configured: '{search_result['query']}' ({search_result['type']})")
+                st.warning("⚠️ Async search requires environment setup - using fallback search")
+                return []
+            except RuntimeError:
+                # No loop running, safe to create one
+                try:
+                    # Use thread pool to run async code
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(self._run_async_search, search_query)
+                        search_results = future.result(timeout=10)  # 10 second timeout
+                    
+                    return search_results
+                except Exception as e:
+                    logger.warning(f"Threaded async search failed: {e}")
+                    st.info(f"🔍 Search configured for '{search_result['query']}' - using standard search")
+                    return []
+                    
+        except Exception as e:
+            logger.warning(f"Async search handling failed: {e}")
+            st.info(f"🔍 Search fallback for '{search_result['query']}'")
+            return []
+    
+    def _run_async_search(self, search_query):
+        """Run async search in a new event loop."""
+        import asyncio
+        
+        async def _execute_search():
+            return await self.advanced_search.search(search_query)
+        
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_execute_search())
+        finally:
+            loop.close()
+
     def _convert_search_results_to_task_groups(self, search_results, task_repo, start_date, end_date, min_duration):
         """Convert advanced search results to task groups format."""
         from autotasktracker.dashboards.data.repositories import TaskGroup
@@ -788,30 +903,7 @@ class TaskBoardDashboard(BaseDashboard):
                 continue
         
         return task_groups
-        
-        capture_event("after_task_groups_render")
-        
-        # Final dashboard loaded capture
-        capture_event("dashboard_loaded")
-        
-        # Raw data view (debug)
-        if st.session_state.show_raw_data:
-            with st.expander("🔍 Raw Data"):
-                tasks = task_repo.get_tasks_for_period(start_date, end_date)
-                if tasks:
-                    import pandas as pd
-                    df = pd.DataFrame([
-                        {
-                            'ID': t.id,
-                            'Window': t.window_title,
-                            'Category': t.category,
-                            'Timestamp': t.timestamp,
-                            'Duration': f"{t.duration_minutes:.1f} min"
-                        }
-                        for t in tasks[:100]
-                    ])
-                    st.dataframe(df, use_container_width=True)
-                    
+
 
 def main():
     """Run the refactored task board."""

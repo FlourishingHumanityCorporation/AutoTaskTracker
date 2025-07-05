@@ -11,6 +11,7 @@ from typing import List, Dict, Optional
 from enum import Enum
 
 from .shared_utilities import CompiledPatterns
+from .constants import CONSTANTS
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ class MutationType(Enum):
 class MutationGenerator:
     """Generates mutations for source files to test effectiveness."""
     
-    def __init__(self, max_mutations_per_file: int = 10):
-        self.max_mutations_per_file = max_mutations_per_file
+    def __init__(self, max_mutations_per_file: Optional[int] = None):
+        self.max_mutations_per_file = max_mutations_per_file or CONSTANTS.MUTATION_TESTING.MAX_MUTATIONS_PER_FILE
         
     def generate_mutations(self, source_file: Path) -> List[Dict]:
         """Generate smart mutations based on code patterns in source file.

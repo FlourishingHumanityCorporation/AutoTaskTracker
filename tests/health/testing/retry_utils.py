@@ -12,6 +12,8 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Optional, List, Type, Any, Union
 
+from .constants import CONSTANTS
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,15 +21,15 @@ class RetryConfig:
     """Configuration for retry behavior."""
     
     def __init__(self,
-                 max_attempts: int = 3,
-                 base_delay: float = 1.0,
-                 max_delay: float = 60.0,
-                 backoff_factor: float = 2.0,
+                 max_attempts: Optional[int] = None,
+                 base_delay: Optional[float] = None,
+                 max_delay: Optional[float] = None,
+                 backoff_factor: Optional[float] = None,
                  jitter: bool = True):
-        self.max_attempts = max_attempts
-        self.base_delay = base_delay
-        self.max_delay = max_delay
-        self.backoff_factor = backoff_factor
+        self.max_attempts = max_attempts or CONSTANTS.RETRY.DEFAULT_MAX_ATTEMPTS
+        self.base_delay = base_delay or CONSTANTS.RETRY.DEFAULT_BASE_DELAY
+        self.max_delay = max_delay or CONSTANTS.RETRY.DEFAULT_MAX_DELAY
+        self.backoff_factor = backoff_factor or CONSTANTS.RETRY.DEFAULT_BACKOFF_FACTOR
         self.jitter = jitter
 
 

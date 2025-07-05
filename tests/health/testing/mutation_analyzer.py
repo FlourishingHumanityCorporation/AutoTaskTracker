@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 
 from .mutation_executor import MutationResult
+from .constants import CONSTANTS
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,8 @@ class TestEffectivenessReport:
     
     @property
     def is_effective(self) -> bool:
-        """Check if tests are considered effective (>70% mutations caught)."""
-        return self.effectiveness_percentage >= 70.0
+        """Check if tests are considered effective."""
+        return self.effectiveness_percentage >= CONSTANTS.EFFECTIVENESS.GOOD
 
 
 class MutationAnalyzer:
@@ -37,10 +38,10 @@ class MutationAnalyzer:
     
     def __init__(self):
         self.effectiveness_thresholds = {
-            'excellent': 90.0,
-            'good': 70.0,
-            'moderate': 50.0,
-            'poor': 30.0
+            'excellent': CONSTANTS.EFFECTIVENESS.EXCELLENT,
+            'good': CONSTANTS.EFFECTIVENESS.GOOD,
+            'moderate': CONSTANTS.EFFECTIVENESS.MODERATE,
+            'poor': CONSTANTS.EFFECTIVENESS.POOR
         }
     
     def analyze_results(self, test_file: Path, source_file: Optional[Path], 

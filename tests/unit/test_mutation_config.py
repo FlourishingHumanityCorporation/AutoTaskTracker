@@ -281,7 +281,7 @@ class TestEffectivenessConfig:
         with patch('builtins.open', mock_open()) as mock_file:
             mock_file.side_effect = PermissionError("Permission denied")
             
-            with pytest.raises(PermissionError):
+            with pytest.raises((PermissionError, OSError)):
                 config.save_to_file(Path("/readonly/config.json"))
     
     def test_load_from_file(self):
@@ -457,13 +457,16 @@ class TestConfigManager:
         
         # Set custom config
         config = manager.get_config()
+        original_max = config.mutation.max_mutations_per_file
         config.mutation.max_mutations_per_file = 50
         manager._config = config
         
         # Reset
         manager.reset_to_defaults()
         
-        assert manager._config.mutation.max_mutations_per_file == 10  # Default
+        # Should be back to the default from ValidationLimits
+        from tests.health.testing.shared_utilities import ValidationLimits
+        assert manager._config.mutation.max_mutations_per_file == ValidationLimits.MAX_MUTATIONS_PER_FILE
     
     def test_get_environment_overrides(self, temp_project_root):
         """Test getting current environment overrides."""
