@@ -11,7 +11,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
-from autotasktracker.core import TaskExtractor
+from autotasktracker.core import TaskExtractor, DatabaseManager
 from autotasktracker.ai import VLMTaskExtractor, extract_vlm_enhanced_task
 from autotasktracker.ai import OCREnhancer
 from autotasktracker.ai import EmbeddingsSearchEngine

@@ -24,6 +24,7 @@ from autotasktracker.core.error_handler import (
     get_health_monitor
 )
 from autotasktracker.ai.sensitive_filter import get_sensitive_filter
+from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,10 @@ class SmartVLMProcessor:
         # LRU cache for images with memory limits
         self.image_cache = OrderedDict()  # path -> base64 encoded image
         self.max_cache_size_mb = 100  # Maximum cache size in MB
+        
+        # Initialize Pensieve API client for metadata storage
+        self._pensieve_client = None
+        self._use_api = True
         self.max_cache_items = 50  # Maximum number of cached items
         self.current_cache_size = 0  # Current cache size in bytes
         self.cache_lock = threading.Lock()  # Thread safety for cache operations
@@ -75,7 +80,7 @@ class SmartVLMProcessor:
         # Task-specific prompts
         self.task_prompts = {
             'IDE': "Analyze this IDE screenshot. Describe: 1) What file is being edited 2) Programming language 3) Any visible errors or debugging 4) Code structure visible 5) Project context from file tree",
-            'Terminal': "Analyze this terminal screenshot. Describe: 1) Commands being run 2) Output or errors visible 3) Current directory 4) Task being performed",
+            'Terminal': "Analyze this terminal screenshot. Describe: 1) Commands being run 2) Output and errors visible 3) Current directory 4) Task being performed",
             'Browser': "Analyze this browser screenshot. Describe: 1) Website/application 2) Content being viewed 3) User task (reading/searching/etc) 4) Any forms or interactions",
             'Meeting': "Analyze this video meeting screenshot. Describe: 1) Meeting platform 2) Number of participants 3) Shared screen content 4) Meeting context",
             'Document': "Analyze this document screenshot. Describe: 1) Document type 2) Content/topic 3) Editing or reading mode 4) Progress indicators",
@@ -127,7 +132,7 @@ class SmartVLMProcessor:
         except Exception as e:
             logger.error(f"Failed to hash image {image_path}: {e}")
             # Fallback to file hash
-            return hashlib.md5(Path(image_path).read_bytes()).hexdigest()
+            return hashlib.md5(Path(image_path).read_bytes(), usedforsecurity=False).hexdigest()
     
     def is_similar_to_recent(self, image_path: str, threshold: float = 0.95) -> bool:
         """Check if image is similar to recently processed images."""
@@ -336,10 +341,33 @@ class SmartVLMProcessor:
             logger.error(f"Error marking processing complete: {e}")
     
     def _save_vlm_result_to_db(self, entity_id: str, structured_result: Dict):
-        """Save VLM result to database."""
+        """Save VLM result to database via API first, fallback to direct DB."""
         from autotasktracker.core import DatabaseManager
         import json
         
+        # Try API first if enabled
+        if self._use_api:
+            try:
+                if self._pensieve_client is None:
+                    self._pensieve_client = get_pensieve_client()
+                
+                # Store VLM result via API
+                success = self._pensieve_client.store_entity_metadata(
+                    entity_id=int(entity_id),
+                    key='vlm_description',
+                    value=json.dumps(structured_result)
+                )
+                
+                if success:
+                    logger.debug(f"Saved VLM result via API for entity {entity_id}")
+                    return
+                else:
+                    logger.warning(f"API storage failed for entity {entity_id}, falling back to direct DB")
+                    
+            except (PensieveAPIError, Exception) as e:
+                logger.debug(f"API not available for VLM storage: {e}, using direct DB")
+        
+        # Fallback to direct database access
         try:
             db = DatabaseManager()
             with db.get_connection(readonly=False) as conn:

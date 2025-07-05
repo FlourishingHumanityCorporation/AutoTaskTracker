@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
+# DatabaseManager import removed - not used in this module
+
 logger = logging.getLogger(__name__)
 
 

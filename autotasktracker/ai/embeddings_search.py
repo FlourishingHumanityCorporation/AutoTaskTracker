@@ -10,6 +10,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import pandas as pd
 from autotasktracker.core import DatabaseManager
+from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ class EmbeddingsSearchEngine:
             # Default to standard database location
             self.db_manager = DatabaseManager()
         self.embedding_dim = 768  # Jina embeddings dimension
+        
+        # Initialize API client for search operations
+        self._pensieve_client = None
+        self._use_api = True
     
     def _get_connection(self):
         """Get database connection context manager from DatabaseManager."""
@@ -68,6 +73,28 @@ class EmbeddingsSearchEngine:
     
     def get_embedding_for_entity(self, entity_id: int) -> Optional[np.ndarray]:
         """Get embedding for a specific entity."""
+        # Try API first if enabled
+        if self._use_api:
+            try:
+                if self._pensieve_client is None:
+                    self._pensieve_client = get_pensieve_client()
+                
+                # Get embedding via API
+                metadata_entries = self._pensieve_client.get_metadata_entries(
+                    entity_id=entity_id,
+                    key='embedding',
+                    limit=1
+                )
+                
+                if metadata_entries:
+                    embedding_str = metadata_entries[0].get('value')
+                    if embedding_str:
+                        logger.debug(f"Retrieved embedding via API for entity {entity_id}")
+                        return self._parse_embedding(embedding_str)
+            except (PensieveAPIError, Exception) as e:
+                logger.debug(f"API not available for embedding retrieval: {e}")
+        
+        # Fallback to direct database query
         query = """
         SELECT value 
         FROM metadata_entries 

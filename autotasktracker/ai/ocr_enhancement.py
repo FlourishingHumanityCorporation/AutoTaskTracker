@@ -9,6 +9,8 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import statistics
 
+# DatabaseManager import removed - not used in this module
+
 logger = logging.getLogger(__name__)
 
 
