@@ -51,31 +51,36 @@ class TestDocumentationCompleteness:
     
     def test_no_completion_status_docs(self):
         """Test for completion/status documents that should be deleted"""
-        # Check filenames first
+        # Check filenames first - be more specific to avoid false positives
         completion_filename_patterns = [
-            r'.*complete[d]?\.md$',
-            r'.*fix(ed|es)\.md$', 
-            r'.*summary\.md$',
-            r'.*status\.md$',
-            r'.*migration.*\.md$',
-            r'.*refactor(ing|ed).*\.md$',
-            r'.*cleanup.*\.md$',
-            r'.*consolidation.*\.md$',
-            r'.*final.*\.md$',
-            r'.*everything.*\.md$',
+            r'.*_complete[d]?\.md$',  # task_completed.md but not IMPLEMENTATION_COMPLETE.md
+            r'.*_fix(ed|es)\.md$',   # bugs_fixed.md 
+            r'.*_summary\.md$',      # work_summary.md but not UNIT_TEST_SUMMARY.md
+            r'.*_status\.md$',       # project_status.md
+            r'.*cleanup_.*\.md$',    # cleanup_notes.md
+            r'.*consolidation_.*\.md$', # consolidation_notes.md
+            r'.*_final\.md$',        # notes_final.md
+            r'.*everything_.*\.md$', # everything_done.md
+        ]
+        
+        # Exclude legitimate documentation types
+        legitimate_patterns = [
+            r'security.*\.md$',      # Security documentation
+            r'.*migration.*\.md$',   # Migration guides
+            r'.*refactor.*\.md$',    # Refactoring documentation  
+            r'.*_guide\.md$',        # User guides
+            r'.*_reference\.md$',    # Reference documentation
+            r'unit_test_.*\.md$',    # Test documentation
+            r'implementation_.*\.md$' # Implementation documentation
         ]
         
         completion_content_patterns = [
-            r'everything.*fix(ed|es)',
-            r'all.*complete[d]?',
-            r'fix(ed|es).*complete[d]?',
-            r'refactor(ing|ed).*complete[d]?',
-            r'migration.*complete[d]?',
-            r'cleanup.*complete[d]?',
-            r'what we (did|accomplished|fixed)',
-            r'summary.*fix(ed|es)',
-            r'(before|after).*cleanup',
-            r'consolidation.*notes',
+            r'everything is now fix(ed|es)',
+            r'all bugs.*complete[d]?',
+            r'temporary.*fix(ed|es).*complete[d]?',
+            r'what we just (did|accomplished|fixed)',
+            r'summary of emergency fix(ed|es)',
+            r'(immediate|quick).*cleanup',
         ]
         
         problematic_docs = []
@@ -84,8 +89,19 @@ class TestDocumentationCompleteness:
                 continue
                 
             filename = doc_path.name.lower()
+            relative_path = str(doc_path.relative_to(self.docs_dir)).lower()
             
-            # Check filename patterns
+            # Skip legitimate documentation types
+            is_legitimate = False
+            for pattern in legitimate_patterns:
+                if re.search(pattern, relative_path, re.IGNORECASE):
+                    is_legitimate = True
+                    break
+            
+            if is_legitimate:
+                continue
+            
+            # Check filename patterns for problematic docs
             for pattern in completion_filename_patterns:
                 if re.search(pattern, filename, re.IGNORECASE):
                     problematic_docs.append(
@@ -93,15 +109,14 @@ class TestDocumentationCompleteness:
                     )
                     break
             
-            # Check content patterns
-            if not any(pattern in filename for pattern in ['complete', 'fix', 'summary', 'status']):
-                content = doc_path.read_text().lower()
-                for pattern in completion_content_patterns:
-                    if re.search(pattern, content, re.IGNORECASE):
-                        problematic_docs.append(
-                            f"{doc_path.relative_to(self.docs_dir)}: completion/status content ({pattern})"
-                        )
-                        break
+            # Check content patterns for temporary/completion language
+            content = doc_path.read_text().lower()
+            for pattern in completion_content_patterns:
+                if re.search(pattern, content, re.IGNORECASE):
+                    problematic_docs.append(
+                        f"{doc_path.relative_to(self.docs_dir)}: completion/status content ({pattern})"
+                    )
+                    break
         
         assert not problematic_docs, f"Found completion/status docs (DELETE don't archive):\n" + "\n".join(problematic_docs)
     

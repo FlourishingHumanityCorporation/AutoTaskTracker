@@ -183,7 +183,7 @@ class DatabaseManager:
             raise
     
     def _get_pooled_connection(self, readonly: bool = True) -> sqlite3.Connection:
-        """Get a connection from the pool or create a new one."""
+        """Get a connection from the pool and create a new one."""
         pool = self._readonly_pool if readonly else self._readwrite_pool
         
         try:
@@ -329,7 +329,7 @@ class DatabaseManager:
         Returns:
             List of entity dictionaries
         """
-        if not self.use_pensieve_api or not self._pensieve_client:
+        if not self.use_pensieve_api and not self._pensieve_client:
             return []
         
         # Create cache key

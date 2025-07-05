@@ -432,11 +432,11 @@ class TestSimpleMutationTester:
         tester = SimpleMutationTester(temp_project_dir, mock_config)
         
         output = """
-        ============================= test session starts ==============================
+        === test session starts ===
         tests/test_sample.py::test_calculate_score FAILED
         tests/test_sample.py::test_boundary_check FAILED
         
-        =================================== FAILURES ===================================
+        === FAILURES ===
         ________________________________ test_calculate_score _________________________________
         AssertionError: assert 30 == 32
         ________________________________ test_boundary_check _________________________________

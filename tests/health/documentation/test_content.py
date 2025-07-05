@@ -5,6 +5,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pytest
 
+from . import safe_read_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +61,7 @@ class TestDocumentationContent:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text().lower()
+            content = safe_read_text(doc_path).lower()
             for pattern in outdated_patterns:
                 if re.search(pattern, content, re.IGNORECASE):
                     outdated_docs.append(f"{doc_path.relative_to(self.docs_dir)}: contains '{pattern}'")
@@ -84,7 +86,7 @@ class TestDocumentationContent:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             first_lines = '\n'.join(content.split('\n')[:10])  # Check first 10 lines
             
             for pattern in announcement_patterns:
@@ -116,7 +118,7 @@ class TestDocumentationContent:
             if 'planning' in str(doc_path) or 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             found_patterns = []
             
             for pattern in informal_patterns:
@@ -143,7 +145,7 @@ class TestDocumentationContent:
         
         docs_with_code = []
         for doc_path in self.get_all_docs():
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             code_blocks = re.findall(code_block_pattern, content)
             
             # Check for large code blocks (>20 lines)
@@ -183,7 +185,7 @@ class TestDocumentationContent:
             if 'archive' in str(doc_path):
                 continue
                 
-            content = doc_path.read_text()
+            content = safe_read_text(doc_path)
             found_superlatives = []
             
             for pattern in superlative_patterns:

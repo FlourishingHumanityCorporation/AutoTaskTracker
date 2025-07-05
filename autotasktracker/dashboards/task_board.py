@@ -92,9 +92,10 @@ class TaskBoardDashboard(BaseDashboard):
     def event_processor(self):
         """Lazy load event processor only when real-time features are needed."""
         if self._event_processor is None:
-            from autotasktracker.pensieve.event_processor import get_event_processor
-            self._event_processor = get_event_processor()
-            # Register handlers when first loaded
+            # Use simple event counter for better reliability
+            from autotasktracker.dashboards.simple_event_counter import get_simple_event_counter
+            self._event_processor = get_simple_event_counter()
+            # Register handlers when first loaded (no-op for simple counter)
             self._event_processor.register_event_handler('entity_added', self._handle_realtime_update)
             self._event_processor.register_event_handler('entity_processed', self._handle_realtime_update)
         return self._event_processor
@@ -106,6 +107,14 @@ class TaskBoardDashboard(BaseDashboard):
             from autotasktracker.pensieve.cache_manager import get_cache_manager
             self._cache_manager = get_cache_manager()
         return self._cache_manager
+    
+    @property
+    def realtime_manager(self):
+        """Lazy load real-time manager for webhook integration."""
+        if not hasattr(self, '_realtime_manager') or self._realtime_manager is None:
+            from autotasktracker.dashboards.realtime_manager import get_realtime_manager
+            self._realtime_manager = get_realtime_manager("task_board")
+        return self._realtime_manager
     
     @property
     def api_client(self):
@@ -527,6 +536,14 @@ class TaskBoardDashboard(BaseDashboard):
         if not self.event_processor.running:
             self.event_processor.start_processing()
         
+        # Start real-time webhook integration for enhanced updates
+        if st.session_state.get('realtime_enabled', True) and not self.realtime_manager.is_running:
+            try:
+                self.realtime_manager.start()
+                logger.info("Real-time webhook integration started")
+            except Exception as e:
+                logger.warning(f"Failed to start real-time integration: {e}")
+        
         # Add automatic refresh functionality
         if st.session_state.get('realtime_enabled', True):
             # Check for real-time updates
@@ -552,10 +569,17 @@ class TaskBoardDashboard(BaseDashboard):
             st.markdown("Track and visualize your daily tasks and activities")
         
         with col2:
-            # Real-time status indicator
+            # Enhanced real-time status indicator
             if st.session_state.get('realtime_enabled', False):
                 processor_stats = self.event_processor.get_statistics()
-                if processor_stats['running']:
+                realtime_stats = self.realtime_manager.get_statistics()
+                
+                if processor_stats['running'] and realtime_stats['running']:
+                    st.success("🚀 Live+ (Webhooks)")
+                    st.caption(f"Events: {processor_stats['events_processed']}")
+                    if realtime_stats['events_received'] > 0:
+                        st.caption(f"RT Events: {realtime_stats['events_received']}")
+                elif processor_stats['running']:
                     st.success("🔄 Live")
                     st.caption(f"Events: {processor_stats['events_processed']}")
                 else:
@@ -723,9 +747,7 @@ class TaskBoardDashboard(BaseDashboard):
             <script>
             // Auto-refresh functionality
             if (!window.autotasktracker_refresh_timer) {{
-                console.log('Setting up AutoTaskTracker auto-refresh timer');
                 window.autotasktracker_refresh_timer = setInterval(function() {{
-                    console.log('AutoTaskTracker auto-refresh triggered');
                     // Trigger Streamlit rerun by modifying a query parameter
                     const url = new URL(window.location);
                     url.searchParams.set('refresh', Date.now());

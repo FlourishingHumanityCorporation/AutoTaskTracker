@@ -16,7 +16,7 @@ import tempfile
 from unittest.mock import patch, mock_open
 from pathlib import Path
 
-from autotasktracker.config import AutoTaskSettings, get_config, reset_config
+from autotasktracker.config import UnifiedAutoTaskSettings, get_config, reset_config
 
 
 class TestConfig:

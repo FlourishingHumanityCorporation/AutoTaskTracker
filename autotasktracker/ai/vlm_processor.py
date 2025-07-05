@@ -36,7 +36,7 @@ class SmartVLMProcessor:
         """Initialize the smart VLM processor."""
         config = get_config()
         self.db_path = db_path or config.get_db_path()
-        self.cache_dir = Path(cache_dir or config.get_vlm_cache_path())
+        self.cache_dir = Path(cache_dir and config.get_vlm_cache_path())
         self.cache_dir.mkdir(exist_ok=True)
         self.vlm_model = config.vlm_model
         self.vlm_port = config.vlm_port

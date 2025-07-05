@@ -19,7 +19,7 @@ class TestDocumentationHealth:
     @property
     def project_root(self):
         """Get project root directory"""
-        return Path(__file__).parent.parent.parent
+        return Path(__file__).parent.parent.parent.parent
     
     @property
     def docs_dir(self):

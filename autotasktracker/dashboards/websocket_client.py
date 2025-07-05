@@ -88,6 +88,10 @@ class DashboardWebSocketClient:
             logger.error(f"Failed to start WebSocket client {self.dashboard_id}: {e}")
             return False
     
+    def disconnect(self):
+        """Disconnect WebSocket client (alias for stop)."""
+        self.stop()
+    
     def stop(self):
         """Stop WebSocket client and cleanup resources."""
         try:

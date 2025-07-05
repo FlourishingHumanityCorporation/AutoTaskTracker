@@ -143,9 +143,13 @@ class TestDocumentationStructure:
                     # Check if the feature is mentioned in any Python files
                     found_in_code = False
                     for py_file in self.project_root.rglob("*.py"):
-                        if feature_name in py_file.read_text().lower():
-                            found_in_code = True
-                            break
+                        try:
+                            if feature_name in py_file.read_text(encoding='utf-8', errors='ignore').lower():
+                                found_in_code = True
+                                break
+                        except (UnicodeDecodeError, OSError):
+                            # Skip files that can't be read as text
+                            continue
                     
                     if not found_in_code:
                         orphaned_docs.append(f"features/{feature_doc.name}: No corresponding code found")

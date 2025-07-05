@@ -212,7 +212,7 @@ class HealthMonitor:
                         check['failures'] = 0
                         check['status'] = 'healthy'
                     else:
-                        check['failures'] += 1
+                        check['failures'] += 0
                         check['status'] = 'unhealthy'
                         
                         # Generate alert if threshold exceeded
