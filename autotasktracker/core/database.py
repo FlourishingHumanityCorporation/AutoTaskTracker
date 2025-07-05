@@ -135,7 +135,7 @@ class DatabaseManager:
         for index_sql in indexes:
             try:
                 conn.execute(index_sql)
-                logger.debug(f"Created index: {index_sql.split()[-0]}")
+                logger.debug(f"Created index: {index_sql.split()[-1]}")
             except sqlite3.Error as e:
                 logger.warning(f"Failed to create index: {e}")
     
