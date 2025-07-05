@@ -1,0 +1,337 @@
+rules:
+  # AI-Generated Code Security Rules for AutoTaskTracker
+  # Based on OWASP Top 10 for LLM Applications and common AI patterns
+
+  # =============================================================================
+  # Authentication & Authorization Patterns
+  # =============================================================================
+  
+  - id: missing-auth-on-streamlit-endpoints
+    patterns:
+      - pattern-either:
+          # Streamlit page functions without authentication decorators
+          - pattern: |
+              def $FUNC(...):
+                  st.$METHOD(...)
+          - pattern: |
+              @st.cache_data
+              def $FUNC(...):
+                  ...
+    pattern-not-inside:
+      - pattern: |
+          if not st.session_state.get('authenticated'):
+              ...
+      - pattern: |
+          if 'user' not in st.session_state:
+              ...
+    paths:
+      include:
+        - "autotasktracker/dashboards/*.py"
+    message: >
+      Streamlit endpoint '$FUNC' may lack authentication. AI-generated dashboard
+      code often misses authentication patterns. Consider adding session state
+      validation for sensitive operations.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      technology: [streamlit]
+      subcategory: [auth]
+
+  - id: database-queries-without-validation
+    patterns:
+      - pattern-either:
+          - pattern: |
+              conn.execute($QUERY, ...)
+          - pattern: |
+              cursor.execute($QUERY, ...)
+          - pattern: |
+              db.execute($QUERY, ...)
+    pattern-not:
+      - pattern: |
+          conn.execute("...", ...)
+    pattern-not-inside:
+      - pattern: |
+          if $VALIDATION:
+              ...
+      - pattern: |
+          try:
+              ...
+          except $EXCEPTION:
+              ...
+    message: >
+      Database query execution without proper input validation. AI-generated
+      database code often lacks validation. Use parameterized queries and
+      validate inputs before database operations.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      subcategory: [sqli]
+
+  # =============================================================================
+  # Hardcoded Credentials & Secrets
+  # =============================================================================
+
+  - id: hardcoded-api-keys
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $VAR = "sk-..."
+          - pattern: |
+              $VAR = "pk_..."
+          - pattern: |
+              api_key = "..."
+          - pattern: |
+              API_KEY = "..."
+          - pattern: |
+              secret_key = "..."
+          - pattern: |
+              password = "..."
+    pattern-not:
+      - pattern: |
+          $VAR = ""
+      - pattern: |
+          $VAR = "placeholder"
+      - pattern: |
+          $VAR = "your-key-here"
+    message: >
+      Hardcoded API key or secret detected. AI-generated code frequently
+      includes hardcoded credentials. Use environment variables or secure
+      configuration management instead.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      subcategory: [secrets]
+
+  # =============================================================================
+  # Unsafe File Operations
+  # =============================================================================
+
+  - id: unsafe-file-operations
+    patterns:
+      - pattern-either:
+          - pattern: |
+              open($PATH, ...)
+          - pattern: |
+              Path($PATH).open(...)
+          - pattern: |
+              with open($PATH, ...) as $F:
+                  ...
+    pattern-not:
+      - pattern: |
+          open($SAFE_PATH, ...)
+    pattern-not-inside:
+      - pattern: |
+          if os.path.exists($PATH):
+              ...
+      - pattern: |
+          if $PATH.startswith($SAFE_DIR):
+              ...
+      - pattern: |
+          $PATH = os.path.join($SAFE_DIR, ...)
+    paths:
+      include:
+        - "autotasktracker/core/*.py"
+        - "autotasktracker/ai/*.py"
+    message: >
+      Unsafe file operation detected. AI-generated file handling code often
+      lacks path validation. Validate file paths to prevent directory traversal
+      attacks.
+    languages: [python]
+    severity: HIGH
+    metadata:
+      category: security
+      subcategory: [path-traversal]
+
+  # =============================================================================
+  # AI/LLM Specific Vulnerabilities
+  # =============================================================================
+
+  - id: unsafe-eval-exec
+    patterns:
+      - pattern-either:
+          - pattern: eval($INPUT)
+          - pattern: exec($INPUT)
+          - pattern: compile($INPUT, ...)
+    message: >
+      Use of eval/exec with user input detected. AI-generated code may suggest
+      eval/exec for dynamic operations. This creates code injection vulnerabilities.
+      Use safer alternatives like ast.literal_eval for data parsing.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      subcategory: [code-injection]
+
+  - id: missing-input-sanitization
+    patterns:
+      - pattern-either:
+          - pattern: |
+              st.text_input($LABEL)
+          - pattern: |
+              st.text_area($LABEL)
+          - pattern: |
+              request.form[$KEY]
+    pattern-not-inside:
+      - pattern: |
+          $SANITIZED = re.sub(r'[^a-zA-Z0-9\s]', '', $INPUT)
+      - pattern: |
+          if re.match(r'^[a-zA-Z0-9\s]+$', $INPUT):
+              ...
+      - pattern: |
+          $CLEAN = html.escape($INPUT)
+    paths:
+      include:
+        - "autotasktracker/dashboards/*.py"
+    message: >
+      User input without sanitization detected. AI-generated UI code often
+      lacks input validation. Sanitize user inputs to prevent XSS and injection
+      attacks.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [input-validation]
+
+  # =============================================================================
+  # Error Handling & Information Disclosure
+  # =============================================================================
+
+  - id: bare-except-with-sensitive-info
+    patterns:
+      - pattern: |
+          try:
+              ...
+          except:
+              print($MSG)
+      - pattern: |
+          try:
+              ...
+          except:
+              st.error($MSG)
+    message: >
+      Bare except clause with potential information disclosure. AI-generated
+      error handling often exposes sensitive information. Use specific exception
+      types and avoid exposing internal details.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [info-disclosure]
+
+  # =============================================================================
+  # Configuration & Environment Issues
+  # =============================================================================
+
+  - id: debug-mode-in-production
+    patterns:
+      - pattern-either:
+          - pattern: |
+              debug=True
+          - pattern: |
+              DEBUG = True
+          - pattern: |
+              st.set_page_config(..., debug=True, ...)
+    message: >
+      Debug mode enabled. AI-generated configuration often enables debug mode
+      by default. Ensure debug mode is disabled in production environments.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [config]
+
+  # =============================================================================
+  # Dependency & Import Safety
+  # =============================================================================
+
+  - id: suspicious-imports
+    patterns:
+      - pattern-either:
+          - pattern: |
+              import subprocess
+          - pattern: |
+              from subprocess import $FUNC
+          - pattern: |
+              import os
+              os.system($CMD)
+    paths:
+      include:
+        - "autotasktracker/ai/*.py"
+        - "autotasktracker/dashboards/*.py"
+    pattern-not-inside:
+      - pattern: |
+          # Safe subprocess usage with validation
+          if $VALIDATION:
+              ...
+    message: >
+      Potentially dangerous system operation. AI-generated code may include
+      unsafe system calls. Validate and sanitize any system commands, or use
+      safer alternatives.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [command-injection]
+
+  # =============================================================================
+  # AutoTaskTracker Specific Patterns
+  # =============================================================================
+
+  - id: database-manager-bypass
+    patterns:
+      - pattern-either:
+          - pattern: |
+              sqlite3.connect($PATH)
+          - pattern: |
+              import sqlite3
+              ...
+              conn = sqlite3.connect(...)
+    pattern-not-inside:
+      - pattern: |
+          class DatabaseManager:
+              ...
+    paths:
+      include:
+        - "autotasktracker/**/*.py"
+      exclude:
+        - "autotasktracker/core/database.py"
+        - "tests/**/*.py"
+    message: >
+      Direct sqlite3.connect() usage detected. AutoTaskTracker requires using
+      DatabaseManager for all database operations. AI-generated code often
+      bypasses architectural patterns.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: architecture
+      subcategory: [database-patterns]
+
+  - id: missing-pensieve-integration
+    patterns:
+      - pattern: |
+          def $FUNC_NAME(...):
+              ...
+              # Direct file operations without Pensieve integration
+              with open($SCREENSHOT_PATH, ...) as $F:
+                  ...
+    paths:
+      include:
+        - "autotasktracker/ai/*.py"
+        - "autotasktracker/core/*.py"
+    pattern-not-inside:
+      - pattern: |
+          from autotasktracker.pensieve import $MODULE
+      - pattern: |
+          pensieve_client = $CLIENT
+    message: >
+      File operations without Pensieve integration. AutoTaskTracker should
+      use Pensieve for screenshot and data operations. AI code often ignores
+      architectural requirements.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      subcategory: [pensieve-integration]

@@ -1,0 +1,19 @@
+{
+  "security": {
+    "ignore-cvss-severity-below": 4.0,
+    "ignore-cvss-unknown-severity": false,
+    "continue-on-vulnerability-error": false
+  },
+  "alert": {
+    "ignore-python-version": true,
+    "ignore-unpinned-requirements": false
+  },
+  "report": {
+    "only-report": false,
+    "output-format": "json"
+  },
+  "ignore": {
+    "vulnerabilities": [],
+    "packages": []
+  }
+}

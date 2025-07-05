@@ -47,9 +47,11 @@ htmlcov/
 .coverage
 .pytest_cache/
 
-# Environment variables
+# Environment variables (keep templates, ignore actual configs)
 .env
 .env.local
+.env.prod
+.env.production
 
 # Screenshots (if stored locally)
 screenshots/
@@ -59,5 +61,8 @@ screenshots/
 
 # Config overrides
 config.local.json
-settings.local.json.pensieve_health_cache/
+settings.local.json
 .pensieve_health_cache/
+
+# Claude Code personal overrides
+CLAUDE.local.md
