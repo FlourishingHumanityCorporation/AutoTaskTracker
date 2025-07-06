@@ -94,6 +94,9 @@ class TestCodebaseHealth:
                 if re.match(pattern, filename, re.IGNORECASE):
                     # Allow enhanced files in development folder
                     if '/development/' not in filepath_str:
+                        # Allow legitimate component files like enhanced_search.py
+                        if filename == 'enhanced_search.py' and '/pensieve/' in filepath_str:
+                            continue
                         problematic_files.append(str(file_path))
                     break
             

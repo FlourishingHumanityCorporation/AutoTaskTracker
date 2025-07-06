@@ -11,7 +11,17 @@ from .visualizations import (
 from .base_component import BaseComponent, StatelessComponent
 from .export import ExportComponent
 from .realtime_status import RealtimeStatusComponent
+from .task_summary_table import TaskSummaryTable
+from .ai_insights import AIInsightsComponent, InsightType, InsightPriority
 from .timetracker_components import TimeTrackerTimeline, TimeTrackerMetrics, TimeTrackerTaskList
+from .vlm_components import (
+    VLMCoverageGauge, VLMSystemStatus, VLMProcessingTimeline,
+    VLMRecentResults, VLMHourlyChart, VLMConfigDisplay
+)
+from .realtime_components import (
+    RealtimeMetricsRow, LiveActivityFeed, SmartSearchInterface,
+    SystemStatusDisplay, PerformanceMetricsDisplay, EventProcessorControl
+)
 
 __all__ = [
     'TimeFilterComponent',
@@ -35,7 +45,23 @@ __all__ = [
     'StatelessComponent',
     'ExportComponent',
     'RealtimeStatusComponent',
+    'TaskSummaryTable',
+    'AIInsightsComponent',
+    'InsightType',
+    'InsightPriority',
     'TimeTrackerTimeline',
     'TimeTrackerMetrics',
-    'TimeTrackerTaskList'
+    'TimeTrackerTaskList',
+    'VLMCoverageGauge',
+    'VLMSystemStatus',
+    'VLMProcessingTimeline',
+    'VLMRecentResults',
+    'VLMHourlyChart',
+    'VLMConfigDisplay',
+    'RealtimeMetricsRow',
+    'LiveActivityFeed',
+    'SmartSearchInterface',
+    'SystemStatusDisplay',
+    'PerformanceMetricsDisplay',
+    'EventProcessorControl'
 ]
