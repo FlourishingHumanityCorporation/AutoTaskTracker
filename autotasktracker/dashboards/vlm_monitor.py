@@ -20,6 +20,7 @@ from autotasktracker.dashboards.components import (
     VLMConfigDisplay,
     MetricsRow
 )
+from autotasktracker.dashboards.components.common_sidebar import CommonSidebar, SidebarSection
 from autotasktracker.dashboards.data.repositories import BaseRepository
 from autotasktracker.config import get_config
 
@@ -141,18 +142,13 @@ class VLMMonitorDashboard(BaseDashboard):
         return (recent_vlm / recent_total * 100) if recent_total > 0 else 0
     
     def render_sidebar(self):
-        """Render sidebar controls."""
-        with st.sidebar:
-            st.header("⚙️ Configuration")
-            
-            # Display configuration
+        """Render sidebar controls using common sidebar component."""
+        # Define custom sections for VLM monitor
+        def render_configuration():
             VLMConfigDisplay.render(str(get_config().MEMOS_CONFIG_PATH))
+            return None
             
-            st.divider()
-            
-            # Quick actions
-            st.header("🚀 Quick Actions")
-            
+        def render_quick_actions():
             if st.button("🔧 Run VLM Optimizer"):
                 st.info("Run in terminal: `python scripts/vlm_optimizer.py`")
             
@@ -162,10 +158,24 @@ class VLMMonitorDashboard(BaseDashboard):
             
             if st.button("🔄 Restart Watch Service"):
                 st.info("Run in terminal: `python scripts/vlm_optimizer.py --restart`")
-                
-            # Session controls
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
+            return None
+            
+        # Custom sections for VLM monitor
+        custom_sections = [
+            SidebarSection("⚙️ Configuration", render_configuration),
+            SidebarSection("🚀 Quick Actions", render_quick_actions)
+        ]
+        
+        # Render common sidebar with custom sections
+        CommonSidebar.render(
+            header_title="VLM Monitor",
+            header_icon="🔬",
+            db_manager=self.db_manager,
+            enable_time_filter=False,
+            enable_category_filter=False,
+            enable_smart_defaults=False,
+            custom_sections=custom_sections
+        )
     
     def run(self):
         """Main dashboard execution."""

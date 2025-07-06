@@ -86,19 +86,27 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
         """Get database manager instance (lazy loading)."""
         if self._db_manager is None:
             try:
-                # Use Pensieve API when available, fallback to direct DB
-                use_api = self.is_pensieve_available()
-                self._db_manager = DatabaseManager(use_pensieve_api=use_api)
+                # For dashboards, use a simplified connection approach to avoid timeouts
+                from autotasktracker.dashboards.simple_db import SimpleDatabaseManager
                 
-                if use_api:
-                    logger.info("Dashboard using Pensieve API for data access")
-                else:
-                    logger.info("Dashboard using direct database access (degraded mode)")
+                logger.info(f"Dashboard using simplified PostgreSQL connection: {self.config.DB_PATH}")
+                self._db_manager = SimpleDatabaseManager(self.config.DB_PATH)
+                logger.info(f"Database type: {self._db_manager.get_database_type()}")
                     
             except Exception as e:
-                logger.error(f"Failed to initialize database manager: {e}")
-                # Final fallback to default
-                self._db_manager = DatabaseManager(use_pensieve_api=False)
+                logger.error(f"Failed to initialize simplified database manager: {e}")
+                # Fallback to regular DatabaseManager
+                try:
+                    self._db_manager = DatabaseManager(
+                        db_path=self.config.DB_PATH, 
+                        use_pensieve_api=False
+                    )
+                    logger.info("Fallback to regular DatabaseManager succeeded")
+                except Exception as e2:
+                    logger.error(f"All database managers failed: {e2}")
+                    # Create emergency simple connection
+                    from autotasktracker.dashboards.simple_db import SimpleDatabaseManager
+                    self._db_manager = SimpleDatabaseManager("sqlite://~/.memos/database.db")
         return self._db_manager
     
     def show_health_status(self):
@@ -354,8 +362,9 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
             else:
                 st.caption("💾 Cache: Ready")
                 
-        except Exception:
+        except (AttributeError, TypeError, ImportError) as e:
             # Don't show cache status if there's an error
+            logger.debug(f"Error showing cache status: {e}")
             pass
     
     def setup_realtime_updates(self):

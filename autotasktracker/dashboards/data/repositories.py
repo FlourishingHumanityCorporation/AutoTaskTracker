@@ -7,10 +7,11 @@ import pandas as pd
 from collections import defaultdict
 import re
 
-from ...core.database import DatabaseManager
-from ...core.categorizer import extract_window_title
-from ...pensieve.postgresql_adapter import get_postgresql_adapter, PostgreSQLAdapter
-from ...pensieve.cache_manager import get_cache_manager
+from autotasktracker.core import DatabaseManager
+from autotasktracker.core.categorizer import extract_window_title
+from autotasktracker.pensieve.postgresql_adapter import get_postgresql_adapter, PostgreSQLAdapter
+from autotasktracker.pensieve.cache_manager import get_cache_manager
+from autotasktracker.core.exceptions import DatabaseError, CacheError
 from .models import Task, Activity, TaskGroup, DailyMetrics
 from .core.window_normalizer import get_window_normalizer
 
@@ -63,8 +64,23 @@ class BaseRepository:
                 logger.debug(f"Cached query result: {result.shape} rows")
                 
                 return result
+        except pd.errors.DatabaseError as e:
+            logger.error(f"Database error executing query: {e}")
+            return pd.DataFrame()
+        except DatabaseError as e:
+            logger.error(f"AutoTaskTracker database error: {e}")
+            return pd.DataFrame()
+        except CacheError as e:
+            logger.warning(f"Cache error (continuing without cache): {e}")
+            # Retry without cache
+            try:
+                with self.db.get_connection() as conn:
+                    return pd.read_sql_query(query, conn, params=params)
+            except Exception as retry_e:
+                logger.error(f"Retry failed: {retry_e}")
+                return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Query execution failed: {e}")
+            logger.exception(f"Unexpected error executing query: {e}")
             return pd.DataFrame()
     
     def invalidate_cache(self, pattern: str = None):
@@ -83,6 +99,60 @@ class BaseRepository:
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics for monitoring."""
         return self.cache.get_stats()
+    
+    def _parse_tasks_safely(self, tasks_data: Any) -> Optional[List[str]]:
+        """Safely parse task data from various formats.
+        
+        Args:
+            tasks_data: Task data in various formats (string, JSON string, list, dict)
+            
+        Returns:
+            List of task strings or None if parsing fails
+        """
+        if not tasks_data:
+            return None
+            
+        try:
+            # Already a list
+            if isinstance(tasks_data, list):
+                return [str(task) for task in tasks_data]
+            
+            # Try to parse as JSON string
+            if isinstance(tasks_data, str):
+                # Check if it's a JSON string
+                if tasks_data.strip().startswith(('[', '{')):
+                    parsed = json.loads(tasks_data)
+                    
+                    # Handle different JSON structures
+                    if isinstance(parsed, list):
+                        return [str(task) for task in parsed]
+                    elif isinstance(parsed, dict):
+                        # Check common task field names
+                        if 'tasks' in parsed:
+                            tasks = parsed['tasks']
+                            if isinstance(tasks, list):
+                                return tasks
+                            elif isinstance(tasks, str):
+                                return [tasks]
+                        elif 'task' in parsed:
+                            return [str(parsed['task'])]
+                        elif 'subtasks' in parsed:
+                            return parsed['subtasks']
+                        # If dict but no recognized fields, convert to string
+                        return [str(parsed)]
+                else:
+                    # Plain string task
+                    return [tasks_data]
+            
+            # Other types - convert to string
+            return [str(tasks_data)]
+            
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.debug(f"Failed to parse tasks data: {e}")
+            # Fallback - treat as single task string
+            if tasks_data:
+                return [str(tasks_data)]
+            return None
 
 class TaskRepository(BaseRepository):
     """Repository for task-related data access."""
@@ -108,8 +178,12 @@ class TaskRepository(BaseRepository):
                     limit=10000  # High limit to ensure we get all of today's tasks
                 )
                 return len(task_dicts)
+            except (ConnectionError, TimeoutError) as e:
+                logger.warning(f"PostgreSQL connection failed, falling back to SQLite: {e}")
+            except ValueError as e:
+                logger.warning(f"Invalid parameters for PostgreSQL adapter: {e}")
             except Exception as e:
-                logger.warning(f"PostgreSQL adapter failed, falling back to SQLite: {e}")
+                logger.warning(f"Unexpected PostgreSQL adapter error, falling back to SQLite: {e}")
         
         # Fallback to direct SQLite query
         query = """
@@ -193,7 +267,7 @@ class TaskRepository(BaseRepository):
         """
         
         # Convert local time range to UTC for database query (Pensieve stores UTC)
-        from ...core.timezone_manager import get_timezone_manager
+        from autotasktracker.core.timezone_manager import get_timezone_manager
         
         tz_manager = get_timezone_manager()
         utc_start, utc_end = tz_manager.convert_query_range(start_date, end_date)
@@ -270,7 +344,7 @@ class TaskRepository(BaseRepository):
     
     def _convert_task_dicts_to_objects(self, task_dicts: List[Dict[str, Any]]) -> List[Task]:
         """Convert PostgreSQL adapter results to Task objects with AI metadata."""
-        from ...core.timezone_manager import get_timezone_manager
+        from autotasktracker.core.timezone_manager import get_timezone_manager
         tz_manager = get_timezone_manager()
         
         tasks = []
@@ -519,7 +593,7 @@ class ActivityRepository(BaseRepository):
                 window_title=extract_window_title(row.get("active_window", '')) or row.get("active_window", 'Unknown'),
                 category=row.get("category", 'Other'),
                 ocr_text=row.get("ocr_result"),
-                tasks=None,  # TODO: Parse tasks safely from JSON/string
+                tasks=self._parse_tasks_safely(row.get('tasks')),
                 screenshot_path=row.get('filepath'),
                 active_window=row.get("active_window")
             )
@@ -529,7 +603,7 @@ class ActivityRepository(BaseRepository):
     
     def _convert_task_dicts_to_activities(self, task_dicts: List[Dict[str, Any]]) -> List[Activity]:
         """Convert PostgreSQL adapter results to Activity objects."""
-        from ...core.timezone_manager import get_timezone_manager
+        from autotasktracker.core.timezone_manager import get_timezone_manager
         tz_manager = get_timezone_manager()
         
         activities = []

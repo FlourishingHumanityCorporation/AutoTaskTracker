@@ -9,7 +9,9 @@ from pathlib import Path
 import time
 import logging
 
-from autotasktracker import ActivityCategorizer, extract_window_title, DatabaseManager, get_config
+from autotasktracker.core import DatabaseManager, get_config
+from autotasktracker.ai import ActivityCategorizer
+from autotasktracker.utils import extract_window_title
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +21,7 @@ try:
 except ImportError:
     NOTIFICATIONS_AVAILABLE = False
     notification = None  # Make notification available as None when not installed
-    import logging
-    logging.warning("Desktop notifications not available. Install with: pip install plyer")
+    logger.warning("Desktop notifications not available. Install with: pip install plyer")
 
 class TaskNotifier:
     def __init__(self):
@@ -104,7 +105,7 @@ class TaskNotifier:
                 stats['focus_time'] = round(sum(focus_sessions), 1)
             
         except Exception as e:
-            logging.error(f"Error getting stats: {e}")
+            logger.error(f"Error getting stats: {e}")
             
         return stats
         
@@ -176,9 +177,9 @@ class TaskNotifier:
                 time.sleep(300)
 
 if __name__ == "__main__":
-    print("Starting task notification service...")
-    print("You'll receive hourly productivity insights.")
-    print("Press Ctrl+C to stop.\n")
+    logger.info("Starting task notification service...")
+    logger.info("You'll receive hourly productivity insights.")
+    logger.info("Press Ctrl+C to stop.\n")
     
     notifier = TaskNotifier()
     

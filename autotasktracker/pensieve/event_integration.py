@@ -15,8 +15,11 @@ import requests
 import websockets
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
-from autotasktracker.pensieve.api_client import get_pensieve_client
+from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 from autotasktracker.pensieve.config_sync import get_synced_config
+from autotasktracker.core.exceptions import (
+    PensieveIntegrationError, ConfigurationError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +48,14 @@ class EventHandler:
         
         try:
             await self._process_event(event)
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error handling event {event.event_type}: {e}")
+        except PensieveIntegrationError as e:
+            logger.error(f"Integration error handling event {event.event_type}: {e}")
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Connection error handling event {event.event_type}: {e}")
         except Exception as e:
-            logger.error(f"Error handling event {event.event_type}: {e}")
+            logger.error(f"Unexpected error handling event {event.event_type}: {e}")
     
     async def _process_event(self, event: PensieveEvent) -> None:
         """Override this method to process specific events."""

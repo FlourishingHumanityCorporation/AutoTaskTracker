@@ -34,8 +34,8 @@ class TestPensieveAPIClient:
         
         # If healthy, should be able to make requests
         if healthy:
-            frames = client.get_frames(limit=1)
-            assert isinstance(frames, list)
+            entities = client.get_entities(limit=1)
+            assert isinstance(entities, list)
     
     def test_api_client_singleton_behavior(self):
         """Test API client singleton pattern."""
@@ -52,16 +52,16 @@ class TestPensieveAPIClient:
         """Test API client handles errors gracefully."""
         client = get_pensieve_client()
         
-        # Test with invalid frame ID
-        frame = client.get_frame(999999)
-        assert frame is None
+        # Test with invalid entity ID
+        entity = client.get_entity(999999)
+        assert entity is None
         
-        # Test OCR for non-existent frame
-        ocr_text = client.get_ocr_result(999999)
-        assert ocr_text is None
+        # Test OCR for non-existent entity
+        ocr_result = client.get_entity_metadata(999999, 'ocr_result')
+        assert ocr_result is None or ocr_result == {}
         
-        # Test metadata for non-existent frame
-        metadata = client.get_metadata(999999)
+        # Test metadata for non-existent entity
+        metadata = client.get_entity_metadata(999999)
         assert isinstance(metadata, dict)
         assert len(metadata) == 0
 
@@ -681,20 +681,20 @@ class TestDatabaseManagerIntegration:
         # 2. REALISTIC DATA: Test with AutoTaskTracker API scenarios
         api_test_scenarios = [
             {
-                'operation': 'get_frames_via_api',
+                'operation': 'get_entities_via_api',
                 'params': {'limit': 5},
                 'expected_type': list,
-                'description': 'Retrieve OCR-processed screenshot frames'
+                'description': 'Retrieve OCR-processed screenshot entities'
             },
             {
-                'operation': 'get_frame_metadata_via_api', 
-                'params': {'frame_id': 1},
+                'operation': 'get_entity_metadata_via_api', 
+                'params': {'entity_id': 1},
                 'expected_type': dict,
                 'description': 'Get VLM analysis metadata for screenshot'
             },
             {
-                'operation': 'store_frame_metadata_via_api',
-                'params': {'frame_id': 1, 'key': 'test_ocr_result', 'value': 'extracted_task_data'},
+                'operation': 'store_entity_metadata_via_api',
+                'params': {'entity_id': 1, 'key': 'test_ocr_result', 'value': 'extracted_task_data'},
                 'expected_type': bool,
                 'description': 'Store pensieve processing results'
             }
@@ -725,23 +725,23 @@ class TestDatabaseManagerIntegration:
                         f"{scenario['operation']} should return {scenario['expected_type'].__name__}, got {type(result).__name__}"
                     
                     # 4. INTEGRATION: Additional business rule validations
-                    if scenario['operation'] == 'get_frames_via_api':
-                        # Frames should be a list (could be empty)
-                        assert isinstance(result, list), "Frames should be returned as list"
+                    if scenario['operation'] == 'get_entities_via_api':
+                        # Entities should be a list (could be empty)
+                        assert isinstance(result, list), "Entities should be returned as list"
                         # Business rule: Limit should be respected
-                        assert len(result) <= scenario['params']['limit'], "Should respect frame limit"
+                        assert len(result) <= scenario['params']['limit'], "Should respect entity limit"
                         
-                        # Validate frame structure if any returned
-                        for frame in result:
-                            assert isinstance(frame, (dict, tuple)), f"Frame should be dict or tuple, got {type(frame)}"
+                        # Validate entity structure if any returned
+                        for entity in result:
+                            assert isinstance(entity, (dict, tuple)), f"Entity should be dict or tuple, got {type(entity)}"
                     
-                    elif scenario['operation'] == 'get_frame_metadata_via_api':
+                    elif scenario['operation'] == 'get_entity_metadata_via_api':
                         # Metadata should be a dict (could be empty)
                         assert isinstance(result, dict), "Metadata should be returned as dict"
-                        # Business rule: Should handle non-existent frames gracefully
+                        # Business rule: Should handle non-existent entities gracefully
                         # (empty dict is valid response)
                     
-                    elif scenario['operation'] == 'store_frame_metadata_via_api':
+                    elif scenario['operation'] == 'store_entity_metadata_via_api':
                         # Storage should return boolean success indicator
                         assert isinstance(result, bool), "Storage operation should return boolean"
                         # Note: result could be False if API unavailable, which is acceptable
@@ -998,16 +998,16 @@ class TestEndToEndIntegration:
             healthy = client.is_healthy()
             assert healthy is False
             
-            frames = client.get_frames(limit=1)
-            assert isinstance(frames, list)
-            assert len(frames) == 0
+            entities = client.get_entities(limit=1)
+            assert isinstance(entities, list)
+            assert len(entities) == 0
         
         # Test DatabaseManager fallback
         db = DatabaseManager(use_pensieve_api=True)
         # Should not raise exceptions even if API is unavailable
         try:
-            frames = db.get_frames_via_api(limit=1)
-            assert isinstance(frames, list)
+            entities = db.fetch_tasks(limit=1)
+            assert isinstance(entities, list)
         except Exception as e:
             pytest.fail(f"DatabaseManager should handle API errors gracefully: {e}")
 

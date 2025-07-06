@@ -12,6 +12,10 @@ import pandas as pd
 
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveEntity, PensieveAPIError
 from autotasktracker.pensieve.cache_manager import get_cache_manager
+from autotasktracker.pensieve.dependencies import get_dependencies
+from autotasktracker.core.exceptions import (
+    PensieveIntegrationError, AIProcessingError, EmbeddingError, CacheError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,7 @@ class PensieveEnhancedSearch:
     def __init__(self):
         self.api_client = get_pensieve_client()
         self.cache = get_cache_manager()
-        self.db_manager = None  # Lazy load to avoid circular imports
+        self.dependencies = get_dependencies()
         
         # Search statistics
         self.stats = {
@@ -109,8 +113,17 @@ class PensieveEnhancedSearch:
             logger.info(f"Search completed: {len(final_results)} results in {response_time:.2f}s")
             return final_results
             
-        except Exception as e:
-            logger.error(f"Search failed: {e}")
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error during search: {e}")
+            return []
+        except EmbeddingError as e:
+            logger.error(f"Embedding generation failed during search: {e}")
+            return []
+        except CacheError as e:
+            logger.warning(f"Cache error during search (continuing): {e}")
+            return []
+        except (OSError, RuntimeError, ValueError) as e:
+            logger.error(f"Unexpected error during search: {e}")
             return []
     
     async def _hybrid_search(self, query: SearchQuery) -> List[PensieveEntity]:
@@ -161,13 +174,11 @@ class PensieveEnhancedSearch:
         self.stats['fallback_searches'] += 1
         
         try:
-            # Lazy load database manager to avoid circular imports
-            if self.db_manager is None:
-                from autotasktracker.core import DatabaseManager
-                self.db_manager = DatabaseManager()
+            # Get database manager from dependency system
+            db_manager = self.dependencies.get_database_manager()
             
             # Use database manager for fallback search
-            df = self.db_manager.search_activities(query.query, limit=query.limit)
+            df = db_manager.search_activities(query.query, limit=query.limit)
             
             results = []
             for _, row in df.iterrows():
@@ -362,12 +373,10 @@ class PensieveEnhancedSearch:
         
         # Fallback to database
         try:
-            # Lazy load database manager to avoid circular imports
-            if self.db_manager is None:
-                from autotasktracker.core import DatabaseManager
-                self.db_manager = DatabaseManager()
+            # Get database manager from dependency system
+            db_manager = self.dependencies.get_database_manager()
                 
-            with self.db_manager.get_connection() as conn:
+            with db_manager.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT key, value FROM metadata_entries 
@@ -441,13 +450,11 @@ class PensieveEnhancedSearch:
     def get_search_suggestions(self, partial_query: str, limit: int = 10) -> List[str]:
         """Get search suggestions based on partial query."""
         try:
-            # Lazy load database manager to avoid circular imports
-            if self.db_manager is None:
-                from autotasktracker.core import DatabaseManager
-                self.db_manager = DatabaseManager()
+            # Get database manager from dependency system
+            db_manager = self.dependencies.get_database_manager()
                 
             # Simple suggestion based on common terms in OCR data
-            with self.db_manager.get_connection() as conn:
+            with db_manager.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT DISTINCT value FROM metadata_entries 

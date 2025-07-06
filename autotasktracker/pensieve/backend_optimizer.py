@@ -15,6 +15,10 @@ import json
 
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 from autotasktracker.pensieve.config_sync import get_synced_config
+from autotasktracker.pensieve.dependencies import get_dependencies
+from autotasktracker.core.exceptions import (
+    DatabaseError, ConfigurationError, PensieveIntegrationError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +61,7 @@ class PensieveBackendOptimizer:
     
     def __init__(self):
         self.api_client = get_pensieve_client()
-        self.db_manager = None  # Lazy load to avoid circular imports
+        self.dependencies = get_dependencies()
         self.config = get_synced_config()
         
         # Performance thresholds
@@ -83,8 +87,14 @@ class PensieveBackendOptimizer:
                     return BackendType.POSTGRESQL
                 else:
                     return BackendType.SQLITE
-        except Exception as e:
-            logger.debug(f"Failed to detect backend via API: {e}")
+        except PensieveAPIError as e:
+            logger.debug(f"Pensieve API unavailable for backend detection: {e}")
+        except (ConnectionError, TimeoutError) as e:
+            logger.debug(f"Failed to connect to Pensieve for backend detection: {e}")
+        except (KeyError, ValueError) as e:
+            logger.debug(f"Invalid configuration response from Pensieve: {e}")
+        except (OSError, RuntimeError) as e:
+            logger.warning(f"Unexpected error detecting backend via API: {e}")
         
         # Fallback: check database path
         if 'postgresql' in str(self.config.database_path).lower():
@@ -127,8 +137,16 @@ class PensieveBackendOptimizer:
                        f"{metrics.data_size_mb:.1f}MB, "
                        f"{metrics.avg_query_time_ms:.1f}ms avg query time")
             
+        except DatabaseError as e:
+            logger.error(f"Database error while collecting metrics: {e}")
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error while collecting metrics: {e}")
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Connection timeout while collecting metrics: {e}")
+        except (OSError, IOError) as e:
+            logger.error(f"File system error while collecting metrics: {e}")
         except Exception as e:
-            logger.error(f"Failed to collect complete metrics: {e}")
+            logger.error(f"Unexpected error collecting metrics: {e}")
         
         return metrics
     
@@ -236,8 +254,20 @@ class PensieveBackendOptimizer:
             logger.info("Migration completed successfully")
             return True
             
+        except DatabaseError as e:
+            logger.exception(f"Database migration failed: {e}")
+            return False
+        except PensieveIntegrationError as e:
+            logger.exception(f"Pensieve integration error during migration: {e}")
+            return False
+        except subprocess.CalledProcessError as e:
+            logger.exception(f"Command execution failed during migration: {e}")
+            return False
+        except (OSError, IOError) as e:
+            logger.exception(f"File system error during migration: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Migration failed: {e}")
+            logger.exception(f"Unexpected error during migration: {e}")
             return False
     
     def get_migration_recommendations(self) -> Dict[str, Any]:
@@ -286,12 +316,10 @@ class PensieveBackendOptimizer:
         
         # Fallback to database
         try:
-            # Lazy load database manager to avoid circular imports
-            if self.db_manager is None:
-                from autotasktracker.core import DatabaseManager
-                self.db_manager = DatabaseManager()
+            # Get database manager from dependency system
+            db_manager = self.dependencies.get_database_manager()
                 
-            with self.db_manager.get_connection() as conn:
+            with db_manager.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT COUNT(*) FROM entities")
                 return cursor.fetchone()[0]
@@ -342,12 +370,10 @@ class PensieveBackendOptimizer:
     def _has_vector_operations(self) -> bool:
         """Check if vector operations are being used."""
         try:
-            # Lazy load database manager to avoid circular imports
-            if self.db_manager is None:
-                from autotasktracker.core import DatabaseManager
-                self.db_manager = DatabaseManager()
+            # Get database manager from dependency system
+            db_manager = self.dependencies.get_database_manager()
                 
-            with self.db_manager.get_connection() as conn:
+            with db_manager.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT COUNT(*) FROM metadata_entries 
@@ -646,10 +672,14 @@ class PensieveBackendOptimizer:
                 logger.error(f"Database file not found: {db_path}")
                 return False
             
-            # Test if we can read the database file
-            import sqlite3
-            with sqlite3.connect(str(db_path)) as conn:
-                conn.execute("SELECT COUNT(*) FROM sqlite_master")
+            # Test if we can read the database file using DatabaseManager
+            # Get database manager from dependency system
+            db_manager = self.dependencies.get_database_manager()
+                
+            with db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM sqlite_master")
+                cursor.fetchone()
             
             return True
         except Exception as e:

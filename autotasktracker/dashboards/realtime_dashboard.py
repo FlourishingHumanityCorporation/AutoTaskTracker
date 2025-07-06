@@ -18,6 +18,7 @@ from autotasktracker.dashboards.components import (
     EventProcessorControl,
     NoDataMessage
 )
+from autotasktracker.dashboards.components.common_sidebar import CommonSidebar, SidebarSection
 from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
 from autotasktracker.pensieve.advanced_search import get_advanced_search, SearchQuery
 from autotasktracker.pensieve.vector_search import get_enhanced_vector_search, VectorSearchQuery
@@ -158,10 +159,9 @@ class RealTimeDashboard(BaseDashboard):
                 st.error(f"Search failed: {str(e)}")
     
     def render_sidebar(self):
-        """Render sidebar controls."""
-        with st.sidebar:
-            st.header("⚡ Real-Time Controls")
-            
+        """Render sidebar controls using common sidebar component."""
+        # Define custom sections for real-time dashboard
+        def render_refresh_controls():
             # Auto-refresh toggle
             auto_refresh = st.toggle("Auto Refresh", value=st.session_state.auto_refresh)
             st.session_state.auto_refresh = auto_refresh
@@ -169,9 +169,9 @@ class RealTimeDashboard(BaseDashboard):
             # Manual refresh button
             if st.button("🔄 Refresh Now"):
                 st.rerun()
+            return {'auto_refresh': auto_refresh}
             
-            # Event processor controls
-            st.subheader("Event Processor")
+        def render_event_processor():
             EventProcessorControl.render(
                 processor_running=self.event_processor.running,
                 start_callback=self.event_processor.start_processing,
@@ -182,10 +182,24 @@ class RealTimeDashboard(BaseDashboard):
                     self.event_processor.start_processing()
                 )
             )
+            return None
             
-            # Session controls
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
+        # Custom sections for real-time dashboard
+        custom_sections = [
+            SidebarSection("Refresh Controls", render_refresh_controls),
+            SidebarSection("Event Processor", render_event_processor)
+        ]
+        
+        # Render common sidebar with custom sections
+        CommonSidebar.render(
+            header_title="Real-Time Controls",
+            header_icon="⚡",
+            db_manager=self.db_manager,
+            enable_time_filter=False,
+            enable_category_filter=False,
+            enable_smart_defaults=False,
+            custom_sections=custom_sections
+        )
     
     def run(self):
         """Main dashboard execution."""

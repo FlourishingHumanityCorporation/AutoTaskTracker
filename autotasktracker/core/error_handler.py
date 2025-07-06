@@ -23,7 +23,7 @@ class VLMErrorHandler:
         self.error_lock = threading.Lock()
         
         # Setup dedicated logger
-        self.logger = logging.getLogger('vlm_errors')
+        self.logger = logging.getLogger(__name__ + '.vlm_errors')
         self._setup_logging()
     
     def _setup_logging(self):

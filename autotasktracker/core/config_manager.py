@@ -16,6 +16,7 @@ import hashlib
 from dataclasses import asdict
 
 from autotasktracker.config import get_config, reset_config, Config
+from autotasktracker.core.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,12 @@ class ConfigManager:
             for listener in self.change_listeners:
                 try:
                     listener(event)
+                except TypeError as e:
+                    logger.error(f"Type error in config change listener: {e}")
+                except AttributeError as e:
+                    logger.error(f"Invalid listener method: {e}")
                 except Exception as e:
-                    logger.error(f"Error in config change listener: {e}")
+                    logger.error(f"Unexpected error in config change listener: {e}")
     
     def check_environment_changes(self) -> List[ConfigChangeEvent]:
         """Check for environment variable changes."""

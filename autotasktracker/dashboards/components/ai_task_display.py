@@ -153,7 +153,7 @@ class AITaskDisplay:
         AI-extracted task information.
         """
         # Format time period display
-        from ...core.timezone_manager import get_timezone_manager
+        from autotasktracker.core.timezone_manager import get_timezone_manager
         tz_manager = get_timezone_manager()
         
         if end_time:

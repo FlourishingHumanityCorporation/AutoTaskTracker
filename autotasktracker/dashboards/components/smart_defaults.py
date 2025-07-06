@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import logging
 
 from .base_component import StatelessComponent
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

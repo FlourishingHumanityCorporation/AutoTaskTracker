@@ -13,7 +13,8 @@ from pathlib import Path
 
 from autotasktracker.dashboards.base import BaseDashboard
 from autotasktracker.dashboards.components.ai_task_display import AITaskDisplay
-from autotasktracker.core.database import DatabaseManager
+from autotasktracker.dashboards.components.common_sidebar import CommonSidebar, SidebarSection
+from autotasktracker.core import DatabaseManager
 from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -44,12 +45,17 @@ class AITaskDashboard(BaseDashboard):
         """Get the database manager instance."""
         return self._db_manager
         
-    def _get_tasks(self) -> List[Dict[str, Any]]:
+    def _get_tasks(self, time_filter: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Fetch tasks from the database with current filters."""
         try:
-            # Calculate date range
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=st.session_state.task_filters['date_range'])
+            # Use time filter from CommonSidebar if provided, otherwise use session state
+            if time_filter:
+                start_date = time_filter.get('start_date')
+                end_date = time_filter.get('end_date')
+            else:
+                # Fallback to session state date range
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=st.session_state.task_filters['date_range'])
             
             # Get tasks using the fetch_tasks method
             df = self.db_manager.fetch_tasks(
@@ -123,35 +129,43 @@ class AITaskDashboard(BaseDashboard):
             st.error(f"Error loading tasks: {e}")
             return []
     
-    def _render_filters(self) -> None:
-        """Render the filter controls."""
-        with st.sidebar:
-            st.header("🔍 Filters")
-            
-            # Status filter
-            status = st.selectbox(
-                "Status",
-                ['all', 'pending', 'in_progress', 'completed'],
-                format_func=lambda x: x.replace('_', ' ').title()
-            )
-            
-            # Date range filter
-            date_range = st.selectbox(
-                "Date Range",
-                [1, 7, 14, 30, 90],
-                format_func=lambda x: f"Last {x} Days"
-            )
-            
-            # Search box
-            search_query = st.text_input("Search tasks", "")
-            
-            # Update filters in session state
-            if status != st.session_state.task_filters['status']:
-                st.session_state.task_filters['status'] = status
-            if date_range != st.session_state.task_filters['date_range']:
-                st.session_state.task_filters['date_range'] = date_range
-            if search_query != st.session_state.task_filters['search_query']:
-                st.session_state.task_filters['search_query'] = search_query
+    def _render_filters(self) -> Dict[str, Any]:
+        """Render the filter controls using CommonSidebar."""
+        # Create custom sections for AI task specific filters
+        ai_filters_section = SidebarSection(
+            title="🔍 AI Task Filters",
+            content=lambda: self._render_ai_filters()
+        )
+        
+        # Render CommonSidebar with custom sections
+        sidebar_data = CommonSidebar.render(
+            title="AI Task Explorer",
+            icon="🤖",
+            db_manager=self.db_manager,
+            custom_sections=[ai_filters_section],
+            session_controls_position="bottom"
+        )
+        
+        return sidebar_data
+    
+    def _render_ai_filters(self) -> None:
+        """Render AI-specific filter controls."""
+        # Status filter
+        status = st.selectbox(
+            "Status",
+            ['all', 'pending', 'in_progress', 'completed'],
+            format_func=lambda x: x.replace('_', ' ').title(),
+            key="ai_status_filter"
+        )
+        
+        # Search box
+        search_query = st.text_input("Search tasks", key="ai_search_filter")
+        
+        # Update filters in session state
+        if status != st.session_state.task_filters['status']:
+            st.session_state.task_filters['status'] = status
+        if search_query != st.session_state.task_filters['search_query']:
+            st.session_state.task_filters['search_query'] = search_query
     
     def _render_task_list(self, tasks: List[Dict[str, Any]]) -> None:
         """Render the list of tasks."""
@@ -260,15 +274,11 @@ class AITaskDashboard(BaseDashboard):
             # Add auto-refresh
             self.add_auto_refresh(interval_seconds=60)  # Refresh every 60 seconds
             
-            # Add session controls to sidebar
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
+            # Render sidebar with filters and get filter data
+            sidebar_data = self._render_filters()
             
-            # Render filters in the sidebar
-            self._render_filters()
-            
-            # Get and render tasks
-            tasks = self._get_tasks()
+            # Get and render tasks using time filter from sidebar
+            tasks = self._get_tasks(time_filter=sidebar_data.get('time_filter'))
             
             # Show task metrics
             self._render_task_metrics(tasks)

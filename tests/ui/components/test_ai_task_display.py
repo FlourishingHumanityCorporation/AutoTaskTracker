@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw
 
 # Add the project root to the Python path
 import sys
-sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 # Import test utilities
 try:

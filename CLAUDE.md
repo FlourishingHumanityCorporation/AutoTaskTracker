@@ -19,27 +19,57 @@ Read this ENTIRE file before making ANY changes to the codebase.
 
 ## 🛑 CRITICAL RULES
 
+### 🚨 MANDATORY FIRST STEP: PROMPT IMPROVEMENT
+**Before starting ANY task, Claude MUST improve the user prompt using CRAFT framework:**
+
+#### CRAFT Framework (Apply to EVERY user request):
+- **C**ontext & Constraints: Add missing technical context, deadlines, audience
+- **R**ole & Audience: Define perspective ("You are a Python developer working on AutoTaskTracker...")  
+- **A**sk: Break compound tasks into numbered steps, request step-by-step reasoning
+- **F**ormat: Specify output format (Markdown, JSON, code blocks, bullet lists)
+- **T**one & Temperature: Set voice (technical, concise) and length constraints
+
+#### Prompt Enhancement Rules (MANDATORY):
+1. **Anchor in clarity**: Transform vague requests ("fix this") into specific goals
+2. **Structure for reasoning**: Break multi-step tasks into numbered steps
+3. **Add AutoTaskTracker context**: Include file paths, dependencies, coding standards
+4. **Define success criteria**: What constitutes completion of the task
+5. **Start responses with**: "**Improved Task**: [enhanced prompt]" then proceed
+
+#### Example Transformation:
+```
+❌ User: "Fix the database connection"
+✅ Improved: "You are a Python developer working on AutoTaskTracker. Fix DatabaseManager connection errors in autotasktracker/core/database.py by:
+1. Analyzing current connection code and error logs
+2. Checking SQLite path configuration (~/.memos/database.db)
+3. Testing connection with proper error handling
+4. Ensuring compatibility with Pensieve integration
+Output: Code changes in diff format + explanation of fixes"
+```
+
 ### NEVER DO THESE (WILL BREAK THE PROJECT):
 0. **NEVER report 100% on something if it is not true // you haven't verify with 100% acurracy**!!!!!
-1. **NEVER create `*_improved.py`, `*_enhanced.py`, `*_v2.py`** - ALWAYS edit the original file
-2. **NEVER create files in root directory** - Use proper subdirectories
-3. **NEVER use bare except clauses** - Always specify exception types
-4. **NEVER use `sys.path.append()`** - Use proper package imports
-5. **NEVER use `sqlite3.connect()` directly** - Use `DatabaseManager`
-6. **NEVER use `print()` in production** - Use `logging.getLogger(__name__)`
-7. **NEVER create announcement-style docs** - No "We're excited to announce!"
-8. **NEVER implement poor workarounds** - Fix the root causes of issues. Ask at least Why Something Happened three times. 
-9. **NEVER bypass Pensieve capabilities** - Check Pensieve features before implementing custom solutions
+1. **NEVER skip prompt improvement** - ALWAYS apply CRAFT framework first
+2. **NEVER create `*_improved.py`, `*_enhanced.py`, `*_v2.py`** - ALWAYS edit the original file
+3. **NEVER create files in root directory** - Use proper subdirectories
+4. **NEVER use bare except clauses** - Always specify exception types
+5. **NEVER use `sys.path.append()`** - Use proper package imports
+6. **NEVER use `sqlite3.connect()` directly** - Use `DatabaseManager`
+7. **NEVER use `print()` in production** - Use `logging.getLogger(__name__)`
+8. **NEVER create announcement-style docs** - No "We're excited to announce!"
+9. **NEVER implement poor workarounds** - Fix the root causes of issues. Ask at least Why Something Happened three times. 
+10. **NEVER bypass Pensieve capabilities** - Check Pensieve features before implementing custom solutions
 
 ### ALWAYS DO THESE:
-1. **ALWAYS run ALL health tests before committing**
-2. **ALWAYS check existing code first**: Don't create duplicate functionality
-3. **ALWAYS use specific imports**: `from module import SpecificClass`
-4. **ALWAYS update CLAUDE.md**: Document significant changes here
-5. **ALWAYS follow file organization**: See [File Organization](#file-organization)
-6. **ALWAYS delete completion docs immediately**: Never create status/summary/complete files
-7. **ALWAYS use measured, technical language**: Avoid superlatives like "perfect", "flawless", "best","amazing", "excellent" in technical contexts
-8. **ALWAYS leverage Pensieve first**: Check Pensieve capabilities before implementing custom solutions
+1. **ALWAYS improve user prompts first** - Apply CRAFT framework to every request
+2. **ALWAYS run ALL health tests before committing**
+3. **ALWAYS check existing code first**: Don't create duplicate functionality
+4. **ALWAYS use specific imports**: `from module import SpecificClass`
+5. **ALWAYS update CLAUDE.md**: Document significant changes here
+6. **ALWAYS follow file organization**: See [File Organization](#file-organization)
+7. **ALWAYS delete completion docs immediately**: Never create status/summary/complete files
+8. **ALWAYS use measured, technical language**: Avoid superlatives like "perfect", "flawless", "best","amazing", "excellent" in technical contexts
+9. **ALWAYS leverage Pensieve first**: Check Pensieve capabilities before implementing custom solutions
 
 ---
 
@@ -49,6 +79,13 @@ Read this ENTIRE file before making ANY changes to the codebase.
 - Captures screenshots → Extracts text (OCR) → Identifies tasks → Shows on dashboard
 - Privacy-first: All data stays local, no cloud services required
 - Built on Pensieve/memos for backend, Streamlit for frontend
+
+### 🚨 CRITICAL PROJECT DISTINCTION
+**AutoTaskTracker ≠ AITaskTracker**
+- **AutoTaskTracker** (THIS PROJECT): Uses Pensieve/memos backend, Python/Streamlit frontend
+- **AITaskTracker** (OTHER PROJECT): Different architecture, may also use Pensieve
+- **DO NOT CONFUSE**: These are separate codebases with different patterns and requirements
+- **WHEN IN DOUBT**: Check project root directory name and package structure
 
 ### Core Features:
 - ✅ Automatic screenshot capture
@@ -353,10 +390,19 @@ from ..core.database import DatabaseManager
 ## ⚠️ COMMON ISSUES
 
 ### Port Conflicts
-- Memos: 8839
-- Task Board: 8502
-- Analytics: 8503
-- Time Tracker: 8505
+**AutoTaskTracker Ports (8600-8699 range - MIGRATED to avoid AITaskTracker conflicts):**
+- Memos: 8839 (Pensieve default)
+- Memos Web: 8840 
+- Task Board: 8602 ✅
+- Analytics: 8603 ✅
+- Time Tracker: 8605 ✅
+- Notifications: 8606 ✅
+- Advanced Analytics: 8607 ✅
+- Overview: 8608 ✅
+- Focus Tracker: 8609 ✅
+- Daily Summary: 8610 ✅
+
+**MIGRATION COMPLETE**: AutoTaskTracker now uses 8600s, AITaskTracker can use 8500s without conflicts
 
 ### Database Issues
 - Path: `~/.memos/database.db` (NOT `memos.db`)
@@ -434,6 +480,15 @@ from ..core.database import DatabaseManager
   - Fixed `_clear_cache()`, `render_minimal()`, `_calculate_diversity_factor()`, `_add_gap_visualization()`
 - **Dashboard Migration**: Updated 8 dashboards to use SessionControlsComponent instead of `render_cache_controls()`
 - **Code Quality**: All components pass import validation and follow consistent patterns
+
+**2025-07-06: Port Migration - COMPLETE**
+- **PostgreSQL Connection Architecture**: Fixed DatabaseManager to properly handle PostgreSQL URIs vs SQLite paths
+- **Exception Handling**: Applied specific exception types to remaining 5 core files
+- **Import Standardization**: Unified all DatabaseManager imports to use barrel exports
+- **Port Migration**: Moved AutoTaskTracker from 8500s to 8600s range to avoid AITaskTracker conflicts
+  - Updated configuration, CLI commands, tests, and documentation
+  - All 66 port references migrated successfully
+- **Project Distinction**: Added clear AutoTaskTracker ≠ AITaskTracker documentation
 
 ---
 

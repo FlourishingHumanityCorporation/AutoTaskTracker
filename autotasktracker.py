@@ -131,7 +131,7 @@ Examples:
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
             'autotasktracker/dashboards/vlm_monitor.py',
-            '--server.port', '8510'
+            '--server.port', '8610'
         ]
         if args.headless:
             cmd.extend(['--server.headless', 'true'])

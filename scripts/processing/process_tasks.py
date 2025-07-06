@@ -5,7 +5,7 @@ Updated to use Pensieve API integration with graceful fallback.
 """
 import sys
 import os
-import sqlite3
+# Note: Direct SQLite usage removed - using DatabaseManager and Pensieve APIs
 import logging
 from datetime import datetime
 
@@ -40,26 +40,26 @@ def _process_via_pensieve_api(limit=None):
     try:
         client = get_pensieve_client()
         
-        # Get unprocessed frames via API
-        frames = client.get_frames(limit=limit or 100, processed_only=False)
+        # Get unprocessed entities via API
+        entities = client.get_entities(limit=limit or 100, processed_only=False)
         
-        if not frames:
-            logger.info("No frames to process")
+        if not entities:
+            logger.info("No entities to process")
             return
         
         extractor = get_task_extractor()
         categorizer = ActivityCategorizer()
         processed_count = 0
         
-        for frame in frames:
+        for entity in entities:
             # Check if already has task extraction
-            metadata = client.get_metadata(frame.id, 'extracted_tasks')
+            metadata = client.get_entity_metadata(entity.id, 'extracted_tasks')
             if metadata.get('extracted_tasks'):
                 continue  # Already processed
             
             # Get window title and OCR text
-            window_title = client.get_metadata(frame.id, "active_window").get("active_window", '')
-            ocr_text = client.get_ocr_result(frame.id) or ''
+            window_title = client.get_entity_metadata(entity.id, "active_window").get("active_window", '')
+            ocr_text = client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
             
             if not window_title and not ocr_text:
                 continue  # No data to process
@@ -68,7 +68,7 @@ def _process_via_pensieve_api(limit=None):
             tasks = extractor.extract_tasks(window_title, ocr_text)
             if tasks:
                 # Store results via API
-                client.store_metadata(frame.id, 'extracted_tasks', {
+                client.store_entity_metadata(entity.id, 'extracted_tasks', {
                     "tasks": tasks,
                     'extracted_at': datetime.now().isoformat(),
                     'method': 'pensieve_api'
@@ -77,10 +77,10 @@ def _process_via_pensieve_api(limit=None):
                 # Categorize activity
                 category = categorizer.categorize_activity(window_title)
                 if category:
-                    client.store_metadata(frame.id, 'activity_category', category)
+                    client.store_entity_metadata(entity.id, 'activity_category', category)
                 
                 processed_count += 1
-                logger.info(f"Processed frame {frame.id}: {len(tasks)} tasks found")
+                logger.info(f"Processed entity {entity.id}: {len(tasks)} tasks found")
             
             if limit and processed_count >= limit:
                 break

@@ -71,7 +71,7 @@ class TestAdvancedAnalyticsDashboard:
         """Test dashboard initialization."""
         assert dashboard.title == "Advanced Analytics - AutoTaskTracker", "Should have correct title"
         assert dashboard.icon == "🧠", "Should have brain emoji icon"
-        assert dashboard.port == 8507, "Should use port 8507"
+        assert dashboard.port == 8607, "Should use port 8607"
         assert 1 <= dashboard.port <= 65535, "Port should be valid range"
         
         # Test essential method availability and functionality for analytics 

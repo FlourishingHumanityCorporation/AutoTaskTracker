@@ -24,6 +24,9 @@ from autotasktracker.core.error_handler import (
     get_health_monitor
 )
 from autotasktracker.ai.sensitive_filter import get_sensitive_filter
+from autotasktracker.core.exceptions import (
+    AIProcessingError, VLMProcessingError, ConfigurationError, CacheError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +95,14 @@ class SmartVLMProcessor:
                     data = json.load(f)
                     self.result_cache = data.get('results', {})
                     logger.info(f"Loaded {len(self.result_cache)} cached VLM results")
+            except FileNotFoundError:
+                logger.debug("Cache file not found, starting with empty cache")
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in cache file: {e}")
+            except (OSError, IOError) as e:
+                logger.error(f"File system error loading cache: {e}")
             except Exception as e:
-                logger.error(f"Failed to load cache: {e}")
+                logger.error(f"Unexpected error loading cache: {e}")
     
     def _save_cache(self):
         """Save cache to disk."""

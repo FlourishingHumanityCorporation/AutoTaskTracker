@@ -18,6 +18,7 @@ from autotasktracker.dashboards.components import (
     TimeTrackerTaskList,
     DashboardHeader
 )
+from autotasktracker.dashboards.components.common_sidebar import CommonSidebar, SidebarSection
 from autotasktracker.dashboards.data.repositories import TaskRepository
 from autotasktracker.core import TimeTracker
 from autotasktracker.config import get_config
@@ -36,19 +37,20 @@ class TimeTrackerDashboard(BaseDashboard):
         )
         
     def render_sidebar(self):
-        """Render sidebar controls."""
-        with st.sidebar:
-            st.header("⏱️ Time Tracker Settings")
-            
-            # Date selection
+        """Render sidebar controls using common sidebar component."""
+        # Define custom sections for time tracker specific options
+        def render_date_selection():
             selected_date = st.date_input("Select Date", value=date.today())
-            
             # Convert to datetime for queries
             start_datetime = datetime.combine(selected_date, datetime.min.time())
             end_datetime = datetime.combine(selected_date, datetime.max.time())
-            
-            # Display options
-            st.subheader("Display Options")
+            return {
+                'selected_date': selected_date,
+                'start_datetime': start_datetime,
+                'end_datetime': end_datetime
+            }
+        
+        def render_display_options():
             show_distribution = st.checkbox("Time Distribution", value=True)
             show_timeline = st.checkbox("Task Timeline", value=True)
             show_detailed_list = st.checkbox("Detailed Task List", value=True)
@@ -59,9 +61,14 @@ class TimeTrackerDashboard(BaseDashboard):
                 value=20,
                 help="Maximum number of tasks to show in timeline"
             )
-            
-            # Session analysis options
-            st.subheader("Session Analysis")
+            return {
+                'show_distribution': show_distribution,
+                'show_timeline': show_timeline,
+                'show_detailed_list': show_detailed_list,
+                'max_timeline_tasks': max_timeline_tasks
+            }
+        
+        def render_session_analysis():
             min_session_minutes = st.slider(
                 "Min Session Duration (min)",
                 min_value=0.5,
@@ -70,21 +77,32 @@ class TimeTrackerDashboard(BaseDashboard):
                 step=0.5,
                 help="Minimum duration to count as a session"
             )
-            
-            # Session controls  
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
-            
-            return {
-                'selected_date': selected_date,
-                'start_datetime': start_datetime,
-                'end_datetime': end_datetime,
-                'show_distribution': show_distribution,
-                'show_timeline': show_timeline,
-                'show_detailed_list': show_detailed_list,
-                'max_timeline_tasks': max_timeline_tasks,
-                'min_session_minutes': min_session_minutes
-            }
+            return {'min_session_minutes': min_session_minutes}
+        
+        # Custom sections for time tracker
+        custom_sections = [
+            SidebarSection("Date Selection", render_date_selection),
+            SidebarSection("Display Options", render_display_options),
+            SidebarSection("Session Analysis", render_session_analysis)
+        ]
+        
+        # Render common sidebar with custom sections
+        results = CommonSidebar.render(
+            header_title="Time Tracker Settings",
+            header_icon="⏱️",
+            db_manager=self.db_manager,
+            enable_time_filter=False,  # We use custom date selection
+            enable_category_filter=False,  # Not used in time tracker
+            custom_sections=custom_sections
+        )
+        
+        # Combine all results for backwards compatibility
+        final_results = {}
+        for section_key, section_data in results.items():
+            if isinstance(section_data, dict):
+                final_results.update(section_data)
+        
+        return final_results
             
     def prepare_timeline_data(self, sessions, max_tasks):
         """Prepare data for timeline visualization."""

@@ -46,13 +46,13 @@ class TestConfig:
         # Test server ports with business rule validation
         assert config.MEMOS_PORT == 8839, "Memos port should be 8839"
         assert 1024 <= config.MEMOS_PORT <= 65535, "Memos port should be in valid range"
-        assert config.TASK_BOARD_PORT == 8502, "Task board port should be 8502"
+        assert config.TASK_BOARD_PORT == 8602, "Task board port should be 8602"
         assert 1024 <= config.TASK_BOARD_PORT <= 65535, "Task board port should be in valid range"
-        assert config.ANALYTICS_PORT == 8503, "Analytics port should be 8503"
+        assert config.ANALYTICS_PORT == 8603, "Analytics port should be 8603"
         assert 1024 <= config.ANALYTICS_PORT <= 65535, "Analytics port should be in valid range"
-        assert config.TIMETRACKER_PORT == 8504, "Time tracker port should be 8504"
+        assert config.TIMETRACKER_PORT == 8604, "Time tracker port should be 8604"
         assert 1024 <= config.TIMETRACKER_PORT <= 65535, "Time tracker port should be in valid range"
-        assert config.NOTIFICATIONS_PORT == 8505, "Notifications port should be 8505"
+        assert config.NOTIFICATIONS_PORT == 8606, "Notifications port should be 8606"
         assert 1024 <= config.NOTIFICATIONS_PORT <= 65535, "Notifications port should be in valid range"
         
         # Validate all ports are unique to prevent conflicts
@@ -65,8 +65,6 @@ class TestConfig:
         assert 5 <= config.AUTO_REFRESH_SECONDS <= 300, "Auto refresh should be reasonable (5s-5min)"
         assert config.CACHE_TTL_SECONDS == 60, "Cache TTL should be 60 seconds"
         assert 10 <= config.CACHE_TTL_SECONDS <= 3600, "Cache TTL should be reasonable (10s-1hr)"
-        assert config.DEFAULT_TASK_LIMIT == 100, "Default task limit should be 100"
-        assert 10 <= config.DEFAULT_TASK_LIMIT <= 10000, "Task limit should be reasonable"
         assert config.GROUP_INTERVAL_MINUTES == 5, "Group interval should be 5 minutes"
         assert 1 <= config.GROUP_INTERVAL_MINUTES <= 60, "Group interval should be reasonable"
         assert config.SCREENSHOT_INTERVAL_SECONDS == 4, "Screenshot interval should be 4 seconds"
@@ -148,7 +146,7 @@ class TestConfig:
         assert isinstance(config.ENABLE_ANALYTICS, bool), "Analytics flag should be boolean"
         
         # Test defaults for non-specified variables with consistency
-        assert config.ANALYTICS_PORT == 8503, "Should use default for unspecified values"
+        assert config.ANALYTICS_PORT == 8603, "Should use default for unspecified values"
         assert isinstance(config.ANALYTICS_PORT, int), "Default port should be integer"
         assert config.ANALYTICS_PORT != config.TASK_BOARD_PORT, "Default and custom ports should differ"
         
@@ -216,7 +214,7 @@ class TestConfig:
             assert config.SHOW_SCREENSHOTS is False
             assert config.AUTO_REFRESH_SECONDS == 60
             # Test that defaults are preserved for non-specified values
-            assert config.ANALYTICS_PORT == 8503
+            assert config.ANALYTICS_PORT == 8603
         finally:
             os.unlink(config_path)
     
@@ -226,7 +224,7 @@ class TestConfig:
             config = Config.from_file('/nonexistent/config.json')
             
             # Should return default config on error
-            assert config.TASK_BOARD_PORT == 8502
+            assert config.TASK_BOARD_PORT == 8602
             assert mock_logger.error.called
     
     def test_config_from_file_json_error(self):
@@ -240,7 +238,7 @@ class TestConfig:
                 config = Config.from_file(config_path)
                 
                 # Should return default config on JSON error
-                assert config.TASK_BOARD_PORT == 8502
+                assert config.TASK_BOARD_PORT == 8602
                 assert mock_logger.error.called
         finally:
             os.unlink(config_path)
@@ -346,10 +344,10 @@ class TestConfig:
         # Create config with known ports for testing
         config = Config(
             MEMOS_PORT=8839,
-            TASK_BOARD_PORT=8502,
-            ANALYTICS_PORT=8503,
-            TIMETRACKER_PORT=8504,
-            NOTIFICATIONS_PORT=8505
+            TASK_BOARD_PORT=8602,
+            ANALYTICS_PORT=8603,
+            TIMETRACKER_PORT=8604,
+            NOTIFICATIONS_PORT=8606
         )
         
         # Validate config initialization
@@ -360,10 +358,10 @@ class TestConfig:
         # Test all valid services with comprehensive URL validation
         service_tests = [
             ('memos', 8839, 'http://localhost:8839'),
-            ('task_board', 8502, 'http://localhost:8502'),
-            ('analytics', 8503, 'http://localhost:8503'),
-            ('timetracker', 8504, 'http://localhost:8504'),
-            ('notifications', 8505, 'http://localhost:8505')
+            ('task_board', 8602, 'http://localhost:8602'),
+            ('analytics', 8603, 'http://localhost:8603'),
+            ('timetracker', 8604, 'http://localhost:8604'),
+            ('notifications', 8606, 'http://localhost:8606')
         ]
         
         url_generation_times = []
@@ -782,11 +780,11 @@ class TestGlobalConfigManagement:
             config = get_config()
             
             assert isinstance(config, Config)
-            assert config.TASK_BOARD_PORT == 8502
+            assert config.TASK_BOARD_PORT == 8602
             # Validate complete default configuration
             assert config.DB_PATH == os.path.expanduser("~/.memos/database.db")
             assert config.MEMOS_PORT == 8839
-            assert config.ANALYTICS_PORT == 8503
+            assert config.ANALYTICS_PORT == 8603
             # Verify all feature flags are set correctly
             assert config.ENABLE_NOTIFICATIONS is True
             assert config.ENABLE_ANALYTICS is True
@@ -807,7 +805,7 @@ class TestGlobalConfigManagement:
                     reset_config()
                     config = get_config()
                     assert isinstance(config, Config)
-                    assert config.TASK_BOARD_PORT == 8502  # Should fall back to defaults
+                    assert config.TASK_BOARD_PORT == 8602  # Should fall back to defaults
                     # Verify error was logged (from Config.from_file method)
                     mock_logger.error.assert_called_once()
                     # Verify the error message content
@@ -822,7 +820,7 @@ class TestGlobalConfigManagement:
                     reset_config()
                     config = get_config()
                     assert isinstance(config, Config)
-                    assert config.TASK_BOARD_PORT == 8502  # Should fall back to defaults
+                    assert config.TASK_BOARD_PORT == 8602  # Should fall back to defaults
                     # Verify error was logged due to JSON decode error
                     mock_logger.error.assert_called_once()
                     call_args = mock_logger.error.call_args[0][0]
@@ -856,7 +854,7 @@ class TestGlobalConfigManagement:
                     # Reset config AFTER setting up the patches to ensure fresh state
                     reset_config()
                     config = get_config()
-                    assert config.TASK_BOARD_PORT == 8502  # Should use defaults
+                    assert config.TASK_BOARD_PORT == 8602  # Should use defaults
                     mock_logger.error.assert_called()
     
     def test_get_config_singleton(self):
@@ -953,10 +951,10 @@ class TestConfigIntegration:
         # Test all valid configuration
         valid_config = Config(
             MEMOS_PORT=8839,
-            TASK_BOARD_PORT=8502,
-            ANALYTICS_PORT=8503,
-            TIMETRACKER_PORT=8504,
-            NOTIFICATIONS_PORT=8505
+            TASK_BOARD_PORT=8602,
+            ANALYTICS_PORT=8603,
+            TIMETRACKER_PORT=8604,
+            NOTIFICATIONS_PORT=8606
         )
         
         with patch('os.path.exists', return_value=True):

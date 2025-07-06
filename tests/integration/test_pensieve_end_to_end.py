@@ -144,7 +144,7 @@ def test_pensieve_complete_pipeline_capture_to_api_retrieval():  # type: ignore[
     if not streamlit_running:
         # Try to start streamlit if not running
         import subprocess
-        subprocess.Popen(["./venv/bin/streamlit", "run", "task_board.py", "--server.headless", "true", "--server.port", "8502"],
+        subprocess.Popen(["./venv/bin/streamlit", "run", "task_board.py", "--server.headless", "true", "--server.port", "8602"],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)  # Reduced for performance
         

@@ -4,7 +4,6 @@ Leverages Pensieve's embedding generation to enable semantic task search and gro
 """
 import json
 import logging
-import sqlite3
 from typing import List, Dict, Tuple, Optional, Union
 import numpy as np
 from datetime import datetime, timedelta
@@ -83,7 +82,7 @@ class EmbeddingsSearchEngine:
                 if result:
                     return self._parse_embedding(result['value'])
                 return None
-        except sqlite3.Error as e:
+        except Exception as e:
             logger.error(f"Error fetching embedding: {e}")
             return None
     
@@ -167,7 +166,7 @@ class EmbeddingsSearchEngine:
                 
                 return results[:limit]
                 
-        except sqlite3.Error as e:
+        except Exception as e:
             logger.error(f"Error in semantic search: {e}")
             return []
     
@@ -211,7 +210,8 @@ class EmbeddingsSearchEngine:
         
         try:
             with self._get_connection() as conn:
-                df = pd.read_sql_query(query, conn, params=[cutoff_time])
+                # Use DatabaseManager's query method for better compatibility
+                df = self.db_manager.query_to_dataframe(query, [cutoff_time])
                 
                 if df.empty:
                     return []
@@ -322,9 +322,8 @@ class EmbeddingStats:
         
         try:
             with self.db_manager.get_connection(readonly=True) as conn:
-                cursor = conn.cursor()
-                cursor.execute(query)
-                result = cursor.fetchone()
+                # Use DatabaseManager's query method for better compatibility
+                result = self.db_manager.execute_query(query, fetch_one=True)
                 
                 if result:
                     total = result['total_entities']
@@ -339,6 +338,6 @@ class EmbeddingStats:
                     }
                 return {}
                 
-        except sqlite3.Error as e:
+        except Exception as e:
             logger.error(f"Error getting embedding stats: {e}")
             return {}

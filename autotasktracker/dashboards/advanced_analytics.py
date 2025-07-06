@@ -20,6 +20,7 @@ from .components import (
     ComparisonChart,
     NoDataMessage
 )
+from .components.common_sidebar import CommonSidebar, SidebarSection
 from .data import TaskRepository, MetricsRepository
 from .cache import cached_data, MetricsCache
 from autotasktracker.config import get_config
@@ -49,11 +50,9 @@ class AdvancedAnalyticsDashboard(BaseDashboard):
             st.session_state.ai_insights_enabled = True
             
     def render_sidebar(self):
-        """Render advanced sidebar controls."""
-        with st.sidebar:
-            st.header("🧠 Advanced Analytics")
-            
-            # Analysis type selector
+        """Render sidebar controls using common sidebar component."""
+        # Define custom sections for advanced analytics
+        def render_analysis_type():
             analysis_type = st.selectbox(
                 "Analysis Type",
                 ["productivity", "patterns", "predictions", "comparisons"],
@@ -62,12 +61,9 @@ class AdvancedAnalyticsDashboard(BaseDashboard):
                 ),
                 key="analysis_type"
             )
+            return {'analysis_type': analysis_type}
             
-            # Time filter with custom ranges
-            time_filter = TimeFilterComponent.render()
-            
-            # Advanced options
-            st.subheader("Advanced Options")
+        def render_advanced_options():
             comparison_mode = st.checkbox(
                 "Comparison Mode",
                 value=st.session_state.comparison_mode,
@@ -81,9 +77,9 @@ class AdvancedAnalyticsDashboard(BaseDashboard):
                 key="ai_insights_enabled",
                 help="Enable AI-powered insights and recommendations"
             )
+            return {'comparison_mode': comparison_mode, 'ai_insights': ai_insights}
             
-            # Analysis parameters
-            st.subheader("Parameters")
+        def render_parameters():
             confidence_threshold = st.slider(
                 "Confidence Threshold",
                 min_value=0.1,
@@ -100,17 +96,38 @@ class AdvancedAnalyticsDashboard(BaseDashboard):
                 value=3,
                 help="Moving average window for trend smoothing"
             )
+            return {'confidence_threshold': confidence_threshold, 'smoothing_window': smoothing_window}
             
-            # Export options
-            st.subheader("Export")
+        def render_export():
             if st.button("📊 Export Analysis Report"):
-                self.export_analysis_report(analysis_type, time_filter)
-                
-            # Session controls
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
+                self.export_analysis_report(st.session_state.analysis_type, st.session_state.time_filter)
+            return None
             
-            return analysis_type, time_filter, comparison_mode, ai_insights, confidence_threshold, smoothing_window
+        # Custom sections for advanced analytics
+        custom_sections = [
+            SidebarSection("Analysis Type", render_analysis_type),
+            SidebarSection("Advanced Options", render_advanced_options),
+            SidebarSection("Parameters", render_parameters),
+            SidebarSection("Export", render_export)
+        ]
+        
+        # Render common sidebar with custom sections
+        results = CommonSidebar.render(
+            header_title="Advanced Analytics",
+            header_icon="🧠",
+            db_manager=self.db_manager,
+            custom_sections=custom_sections
+        )
+        
+        # Extract and combine results
+        analysis_type = results.get('analysis_type', {}).get('analysis_type', 'productivity')
+        time_filter = results.get('time_filter')
+        comparison_mode = results.get('advanced_options', {}).get('comparison_mode', False)
+        ai_insights = results.get('advanced_options', {}).get('ai_insights', True)
+        confidence_threshold = results.get('parameters', {}).get('confidence_threshold', 0.7)
+        smoothing_window = results.get('parameters', {}).get('smoothing_window', 3)
+        
+        return analysis_type, time_filter, comparison_mode, ai_insights, confidence_threshold, smoothing_window
             
     @cached_data(ttl_seconds=600, key_prefix="advanced_productivity")
     def get_productivity_analysis(self, start_date, end_date, confidence_threshold):

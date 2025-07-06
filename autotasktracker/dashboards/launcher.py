@@ -73,7 +73,7 @@ class DashboardLauncher:
         """Check if all prerequisites are met."""
         # Check if database is accessible
         try:
-            from ..core.database import DatabaseManager
+            from autotasktracker.core import DatabaseManager
             db = DatabaseManager()
             if not db.test_connection():
                 logger.error("Database connection failed")
@@ -241,8 +241,8 @@ class DashboardLauncher:
         """Print dashboard status in a formatted way."""
         status = self.status()
         
-        print("\n📊 Dashboard Status:")
-        print("=" * 60)
+        logger.info("\n📊 Dashboard Status:")
+        logger.info("=" * 60)
         
         for dashboard_name, info in status.items():
             icon = "🟢" if info['running'] else "🔴"
@@ -254,12 +254,12 @@ class DashboardLauncher:
                 if dashboard_name not in self.running_processes:
                     status_text += " (External)"
                 
-            print(f"{icon} {info['name']:<20} {status_text:<15} {port_text}")
+            logger.info(f"{icon} {info['name']:<20} {status_text:<15} {port_text}")
             
             if info['url']:
-                print(f"   └─ {info['url']}")
+                logger.info(f"   └─ {info['url']}")
                 
-        print()
+        logger.info("")
 
 
 def main():
@@ -300,9 +300,9 @@ def main():
     elif args.action == 'launch':
         # Interactive mode
         launcher.print_status()
-        print("\nWhich dashboard would you like to launch?")
+        logger.info("\nWhich dashboard would you like to launch?")
         for i, (name, config) in enumerate(DASHBOARD_CONFIGS.items(), 1):
-            print(f"{i}. {config['icon']} {config['name']} - {config['description']}")
+            logger.info(f"{i}. {config['icon']} {config['name']} - {config['description']}")
             
         try:
             choice = int(input("\nEnter number (or 0 for all): "))
@@ -312,9 +312,9 @@ def main():
                 dashboard_name = list(DASHBOARD_CONFIGS.keys())[choice - 1]
                 launcher.launch_dashboard(dashboard_name)
             else:
-                print("Invalid choice")
+                logger.warning("Invalid choice")
         except (ValueError, KeyboardInterrupt):
-            print("Cancelled")
+            logger.info("Cancelled")
 
 
 if __name__ == "__main__":

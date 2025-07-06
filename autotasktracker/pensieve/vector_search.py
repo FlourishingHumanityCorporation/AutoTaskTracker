@@ -9,8 +9,11 @@ from dataclasses import dataclass, asdict
 import asyncio
 
 from .postgresql_adapter import get_postgresql_adapter
-from .api_client import get_pensieve_client
+from .api_client import get_pensieve_client, PensieveAPIError
 from .advanced_search import SearchQuery, SearchResult, get_advanced_search
+from autotasktracker.core.exceptions import (
+    DatabaseError, AIProcessingError, PensieveIntegrationError, EmbeddingError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +101,17 @@ class EnhancedVectorSearch:
             logger.info(f"pgvector search returned {len(enhanced_results)} results")
             return enhanced_results[:query.max_results]
             
+        except DatabaseError as e:
+            logger.error(f"Database error in pgvector search: {e}")
+            return await self._search_with_postgresql(query)
+        except EmbeddingError as e:
+            logger.error(f"Embedding error in pgvector search: {e}")
+            return await self._search_with_postgresql(query)
+        except PensieveAPIError as e:
+            logger.error(f"Pensieve API error in pgvector search: {e}")
+            return await self._search_with_postgresql(query)
         except Exception as e:
-            logger.error(f"pgvector search failed: {e}")
+            logger.error(f"Unexpected error in pgvector search: {e}")
             return await self._search_with_postgresql(query)
     
     async def _search_with_postgresql(self, query: VectorSearchQuery) -> List[VectorSearchResult]:
@@ -131,8 +143,17 @@ class EnhancedVectorSearch:
             logger.info(f"PostgreSQL search returned {len(enhanced_results)} results")
             return enhanced_results[:query.max_results]
             
+        except DatabaseError as e:
+            logger.error(f"Database error in PostgreSQL search: {e}")
+            return await self._search_with_fallback(query)
+        except EmbeddingError as e:
+            logger.error(f"Embedding generation failed in PostgreSQL search: {e}")
+            return await self._search_with_fallback(query)
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Connection error in PostgreSQL search: {e}")
+            return await self._search_with_fallback(query)
         except Exception as e:
-            logger.error(f"PostgreSQL search failed: {e}")
+            logger.error(f"Unexpected error in PostgreSQL search: {e}")
             return await self._search_with_fallback(query)
     
     async def _search_with_fallback(self, query: VectorSearchQuery) -> List[VectorSearchResult]:
@@ -218,12 +239,12 @@ class EnhancedVectorSearch:
                 search_params["category"] = categories
             
             # Make API call (this would be pgvector-specific endpoint)
-            frames = self.pensieve_client.get_frames(limit=limit)
+            entities = self.pensieve_client.get_entities(limit=limit)
             
-            # For each frame, get metadata and calculate similarity
+            # For each entity, get metadata and calculate similarity
             results = []
-            for frame in frames:
-                metadata = self.pensieve_client.get_metadata(frame.id)
+            for entity in entities:
+                metadata = self.pensieve_client.get_entity_metadata(entity.id)
                 
                 # Calculate vector similarity if embeddings exist
                 if 'embeddings' in metadata:
@@ -233,13 +254,13 @@ class EnhancedVectorSearch:
                         
                         if similarity >= threshold:
                             results.append({
-                                'frame': frame,
+                                'entity': entity,
                                 'metadata': metadata,
                                 'vector_similarity': similarity,
                                 'vector_distance': 1.0 - similarity
                             })
                     except Exception as e:
-                        logger.debug(f"Failed to calculate similarity for frame {frame.id}: {e}")
+                        logger.debug(f"Failed to calculate similarity for entity {entity.id}: {e}")
             
             # Sort by similarity
             results.sort(key=lambda x: x['vector_similarity'], reverse=True)
@@ -281,7 +302,7 @@ class EnhancedVectorSearch:
     ) -> VectorSearchResult:
         """Enhance a vector search result with additional metadata."""
         try:
-            frame = result['frame']
+            entity = result['entity']
             metadata = result['metadata']
             
             # Extract basic information
@@ -290,7 +311,7 @@ class EnhancedVectorSearch:
             category = metadata.get("category", 'Other')
             
             # Get OCR text
-            ocr_text = self.pensieve_client.get_ocr_result(frame.id)
+            ocr_text = self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
             
             # Calculate embedding quality
             embedding_quality = self._assess_embedding_quality(metadata.get('embeddings'))
@@ -303,9 +324,9 @@ class EnhancedVectorSearch:
             
             # Create enhanced result
             enhanced_result = VectorSearchResult(
-                entity_id=frame.id,
+                entity_id=entity.id,
                 window_title=window_title,
-                timestamp=frame.created_at,
+                timestamp=entity.created_at,
                 relevance_score=result['vector_similarity'],
                 search_method='pgvector',
                 highlights=self._extract_highlights(ocr_text, window_title),
@@ -448,7 +469,8 @@ class EnhancedVectorSearch:
             else:
                 return "low"
                 
-        except Exception:
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug(f"Error assessing embedding quality: {e}")
             return "unknown"
     
     async def _find_similar_activities(self, similarity_score: float, category: str) -> List[str]:
@@ -465,7 +487,8 @@ class EnhancedVectorSearch:
             
             return category_activities.get(category, ['Related Activity', 'Similar Task'])[:3]
             
-        except Exception:
+        except (KeyError, ValueError, TypeError) as e:
+            logger.debug(f"Error finding similar activities: {e}")
             return []
     
     def _determine_semantic_cluster(self, tasks: List[Any], category: str) -> Optional[str]:
@@ -483,7 +506,8 @@ class EnhancedVectorSearch:
             else:
                 return 'general_activity'
                 
-        except Exception:
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug(f"Error determining semantic cluster: {e}")
             return None
     
     def _parse_tasks(self, tasks_data: Any) -> List[Dict[str, Any]]:
@@ -505,7 +529,8 @@ class EnhancedVectorSearch:
             
             return parsed_tasks
             
-        except Exception:
+        except (ValueError, TypeError, AttributeError, KeyError) as e:
+            logger.debug(f"Error parsing task data: {e}")
             return []
     
     def _extract_highlights(self, ocr_text: str, window_title: str) -> List[str]:

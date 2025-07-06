@@ -42,6 +42,10 @@ def _validate_path_security(path: str) -> str:
     if is_test_mode and ("test" in path.lower() or path.startswith("test_")):
         return path
     
+    # Allow PostgreSQL URIs
+    if path.startswith(('postgresql://', 'postgres://')):
+        return path
+    
     # Normalize path to prevent traversal attacks
     normalized = os.path.normpath(path)
     
@@ -139,10 +143,31 @@ class Config:
     """Central configuration for AutoTaskTracker with environment variable support."""
     
     # Database settings
-    DB_PATH: str = field(default_factory=lambda: os.path.expanduser("~/.memos/database.db"))
-    SCREENSHOTS_DIR: str = field(default_factory=lambda: os.path.expanduser("~/.memos/screenshots"))
-    LOGS_DIR: str = field(default_factory=lambda: os.path.expanduser("~/.memos/logs"))
-    VLM_CACHE_DIR: str = field(default_factory=lambda: os.path.expanduser("~/.memos/vlm_cache"))
+    DB_PATH: str = field(default_factory=lambda: os.getenv("AUTOTASK_DATABASE_URL", "postgresql://postgres:mysecretpassword@localhost:5433/autotasktracker"))
+    
+    # Directory settings - use Pensieve configuration when available
+    def _get_pensieve_path(self, default_path: str, config_key: str) -> str:
+        """Get path from Pensieve config or fall back to default."""
+        if self.PENSIEVE_CONFIG_SYNC:
+            try:
+                pensieve_config = self.get_pensieve_config()
+                if pensieve_config and config_key in pensieve_config:
+                    return pensieve_config[config_key]
+            except Exception:
+                pass  # Fall back to default
+        return os.path.expanduser(default_path)
+    
+    @property 
+    def SCREENSHOTS_DIR(self) -> str:
+        return self._get_pensieve_path("~/.memos/screenshots", "screenshots_dir")
+    
+    @property
+    def LOGS_DIR(self) -> str:
+        return self._get_pensieve_path("~/.memos/logs", "logs_dir")
+    
+    @property
+    def VLM_CACHE_DIR(self) -> str:
+        return self._get_pensieve_path("~/.memos/vlm_cache", "cache_dir")
     
     # VLM configuration (allow override for testing)
     vlm_model: Optional[str] = field(default=None)
@@ -154,15 +179,15 @@ class Config:
     # Server ports
     MEMOS_PORT: int = 8839
     MEMOS_WEB_PORT: int = 8840
-    TASK_BOARD_PORT: int = 8502
-    ANALYTICS_PORT: int = 8503
-    TIMETRACKER_PORT: int = 8504
-    TIME_TRACKER_PORT: int = 8505  # Alias for compatibility
-    NOTIFICATIONS_PORT: int = 8506
-    ADVANCED_ANALYTICS_PORT: int = 8507
-    OVERVIEW_PORT: int = 8508
-    FOCUS_TRACKER_PORT: int = 8509
-    DAILY_SUMMARY_PORT: int = 8510
+    TASK_BOARD_PORT: int = 8602
+    ANALYTICS_PORT: int = 8603
+    TIMETRACKER_PORT: int = 8604
+    TIME_TRACKER_PORT: int = 8605  # Alias for compatibility
+    NOTIFICATIONS_PORT: int = 8606
+    ADVANCED_ANALYTICS_PORT: int = 8607
+    OVERVIEW_PORT: int = 8608
+    FOCUS_TRACKER_PORT: int = 8609
+    DAILY_SUMMARY_PORT: int = 8610
     
     # VLM configuration
     VLM_MODEL: str = "minicpm-v"
@@ -349,20 +374,30 @@ class Config:
     
     def get_pensieve_config(self) -> Optional[Dict[str, Any]]:
         """Get Pensieve configuration if available."""
+        if not hasattr(self, '_pensieve_config_cache'):
+            self._pensieve_config_cache = None
+            
         if not self.PENSIEVE_CONFIG_SYNC:
             return None
+            
+        # Use cached config to avoid repeated imports
+        if self._pensieve_config_cache is not None:
+            return self._pensieve_config_cache
             
         try:
             from autotasktracker.pensieve.config_sync import get_synced_config
             synced_config = get_synced_config()
-            return {
+            self._pensieve_config_cache = {
                 'api_base_url': synced_config.api_base_url,
                 'database_path': synced_config.database_path,
                 'screenshots_dir': synced_config.screenshots_dir,
+                'logs_dir': getattr(synced_config, 'logs_dir', os.path.expanduser('~/.memos/logs')),
+                'cache_dir': getattr(synced_config, 'cache_dir', os.path.expanduser('~/.memos/vlm_cache')),
                 'ocr_timeout': synced_config.ocr_timeout,
                 'batch_size': synced_config.batch_size,
                 'cache_enabled': self.PENSIEVE_CACHE_ENABLED
             }
+            return self._pensieve_config_cache
         except Exception as e:
             logger.warning(f"Failed to get Pensieve config: {e}")
             return None

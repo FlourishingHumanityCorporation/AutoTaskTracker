@@ -32,6 +32,7 @@ from autotasktracker.dashboards.components import (
     DashboardHeader
 )
 from autotasktracker.dashboards.components.smart_defaults import SmartDefaultsComponent
+from autotasktracker.dashboards.components.common_sidebar import CommonSidebar, SidebarSection
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.config import get_config
 
@@ -83,24 +84,9 @@ class TaskBoardDashboard(BaseDashboard):
             st.session_state.category_filter = []  # Empty = all categories
             
     def render_sidebar(self):
-        """Render sidebar controls."""
-        with st.sidebar:
-            st.header("⚙️ Task Board Settings")
-            
-            # Time filter with smart defaults
-            time_filter = TimeFilterComponent.render(db_manager=self.db_manager)
-            
-            # Smart default button using new component
-            SmartDefaultsComponent.render_smart_defaults_button(
-                db_manager=self.db_manager,
-                show_explanation=False  # Keep it compact in sidebar
-            )
-            
-            # Category filter (fixed logic)
-            categories = CategoryFilterComponent.render(multiselect=True)
-            
-            # Display options
-            st.subheader("Display Options")
+        """Render sidebar controls using common sidebar component."""
+        # Define custom sections for task board specific options
+        def render_display_options():
             show_screenshots = st.checkbox(
                 "Show Screenshots",
                 value=st.session_state.show_screenshots,
@@ -114,17 +100,14 @@ class TaskBoardDashboard(BaseDashboard):
                 value=st.session_state.min_duration,
                 key="min_duration"
             )
-            
-            # Real-time updates
-            self.render_realtime_controls()
-            
-            # Export functionality in sidebar for quick access
-            st.subheader("📥 Export Data")
+            return {'show_screenshots': show_screenshots, 'min_duration': min_duration}
+        
+        def render_export_section():
             if st.button("Export to CSV", help="Export current task data as CSV for reporting"):
                 st.session_state.export_csv = True
-            
-            # Debug capture controls
-            st.subheader("🐛 Debug Capture")
+            return None
+        
+        def render_debug_section():
             debug_capture = get_debug_capture()
             
             col1, col2 = st.columns(2)
@@ -140,10 +123,10 @@ class TaskBoardDashboard(BaseDashboard):
                 if st.button("📊 Session Info", help="Show debug session information"):
                     summary = debug_capture.get_session_summary()
                     st.json(summary)
-                
-            # Real-time controls
-            st.sidebar.markdown("### 🔄 Real-time Updates")
-            realtime_enabled = st.sidebar.checkbox(
+            return None
+        
+        def render_realtime_section():
+            realtime_enabled = st.checkbox(
                 "Enable real-time updates",
                 value=st.session_state.realtime_enabled,
                 help="Automatically refresh when new screenshots are processed"
@@ -151,7 +134,7 @@ class TaskBoardDashboard(BaseDashboard):
             st.session_state.realtime_enabled = realtime_enabled
             
             if realtime_enabled:
-                refresh_interval = st.sidebar.slider(
+                refresh_interval = st.slider(
                     "Refresh interval (seconds)",
                     min_value=10,
                     max_value=120,
@@ -161,9 +144,34 @@ class TaskBoardDashboard(BaseDashboard):
                 self.refresh_interval = refresh_interval
                 
                 # Show last update time
-                st.sidebar.caption(f"Last updated: {st.session_state.last_update_time.strftime('%H:%M:%S')}")
-            
-            return time_filter, categories, show_screenshots, min_duration
+                st.caption(f"Last updated: {st.session_state.last_update_time.strftime('%H:%M:%S')}")
+            return None
+        
+        # Custom sections for task board
+        custom_sections = [
+            SidebarSection("Display Options", render_display_options),
+            SidebarSection("📥 Export Data", render_export_section),
+            SidebarSection("🐛 Debug Capture", render_debug_section),
+            SidebarSection("🔄 Real-time Updates", render_realtime_section)
+        ]
+        
+        # Render common sidebar with custom sections
+        results = CommonSidebar.render(
+            header_title="Task Board Settings",
+            header_icon="⚙️",
+            db_manager=self.db_manager,
+            custom_sections=custom_sections,
+            session_controls_position="none"  # We have custom realtime controls
+        )
+        
+        # Extract results for backwards compatibility
+        time_filter = results.get('time_filter')
+        categories = results.get('categories')
+        display_opts = results.get('display_options', {})
+        show_screenshots = display_opts.get('show_screenshots')
+        min_duration = display_opts.get('min_duration')
+        
+        return time_filter, categories, show_screenshots, min_duration
             
     def render_metrics(self, metrics_repo: MetricsRepository, start_date: datetime, end_date: datetime):
         """Render metrics section."""

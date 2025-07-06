@@ -8,14 +8,29 @@ import os
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 from queue import Queue, Empty
 import pandas as pd
 from contextlib import contextmanager
 import logging
+from urllib.parse import urlparse
 from autotasktracker.config import get_config
 from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPIError
 from autotasktracker.pensieve.config_reader import get_pensieve_config
+from autotasktracker.core.exceptions import DatabaseError, PensieveIntegrationError
+
+# PostgreSQL imports with fallback
+try:
+    import psycopg2
+    from psycopg2.pool import ThreadedConnectionPool
+    from psycopg2.extras import RealDictCursor
+    from psycopg2 import sql, Error as PostgreSQLError
+    POSTGRESQL_AVAILABLE = True
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("PostgreSQL dependencies not available. Install psycopg2-binary for PostgreSQL support.")
+    POSTGRESQL_AVAILABLE = False
+    PostgreSQLError = Exception  # Fallback for type hints
 
 # Import performance monitoring (with fallback if not available)
 try:
@@ -39,14 +54,17 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    """Manages database connections with connection pooling and performance optimizations."""
+    """Manages database connections with connection pooling and performance optimizations.
+    
+    Supports both SQLite and PostgreSQL backends with automatic detection.
+    """
     
     def __init__(self, db_path: Optional[str] = None, use_pensieve_api: bool = True):
         """
         Initialize DatabaseManager with connection pooling and Pensieve integration.
         
         Args:
-            db_path: Path to the database. If None, uses Pensieve config.
+            db_path: Path to the database or PostgreSQL URI. If None, uses Pensieve config.
             use_pensieve_api: Whether to use Pensieve API when available.
         """
         self.use_pensieve_api = use_pensieve_api
@@ -54,6 +72,11 @@ class DatabaseManager:
         self._api_healthy = False
         self._last_health_check = 0
         self._health_check_interval = 30  # Check API health every 30 seconds
+        
+        # Database type detection
+        self._is_postgresql = False
+        self._postgresql_pool = None
+        self._postgresql_config = None
         
         # Initialize intelligent caching
         from autotasktracker.pensieve.cache_manager import get_cache_manager
@@ -67,8 +90,22 @@ class DatabaseManager:
                     self._pensieve_client = get_pensieve_client()
                     self._api_healthy = self._pensieve_client.is_healthy()
                     logger.info(f"Using Pensieve API for database access (healthy: {self._api_healthy})")
+                except (ImportError, AttributeError) as e:
+                    logger.warning(f"Pensieve module not properly installed: {e}")
+                    self._api_healthy = False
+                    config = get_config()
+                    self.db_path = config.get_db_path()
+                except (ConnectionError, TimeoutError) as e:
+                    logger.warning(f"Failed to connect to Pensieve API: {e}")
+                    self._api_healthy = False
+                    config = get_config()
+                    self.db_path = config.get_db_path()
+                except PensieveAPIError as e:
+                    logger.warning(f"Pensieve API error during initialization: {e}")
+                    config = get_config()
+                    self.db_path = config.get_db_path()
                 except Exception as e:
-                    logger.warning(f"Failed to initialize Pensieve client, falling back to direct DB: {e}")
+                    logger.warning(f"Unexpected error initializing Pensieve client: {e}")
                     config = get_config()
                     self.db_path = config.get_db_path()
             else:
@@ -77,6 +114,85 @@ class DatabaseManager:
         else:
             self.db_path = db_path
         
+        # Detect database type and configure accordingly
+        self._detect_database_type()
+        if self._is_postgresql:
+            self._initialize_postgresql()
+        else:
+            # Initialize SQLite connection pools
+            self._initialize_sqlite()
+        
+    def _detect_database_type(self):
+        """Detect whether the database is PostgreSQL or SQLite."""
+        if self.db_path and isinstance(self.db_path, str):
+            # Check if the path contains a PostgreSQL URI (even if it's a file path)
+            if ('postgresql://' in self.db_path or 'postgres://' in self.db_path):
+                # Extract the actual PostgreSQL URI from the path
+                if self.db_path.startswith('postgresql://') or self.db_path.startswith('postgres://'):
+                    # Direct URI
+                    uri = self.db_path
+                else:
+                    # URI embedded in file path - extract it
+                    import re
+                    match = re.search(r'postgres(?:ql)?://[^/\s]+/\w+', self.db_path)
+                    if match:
+                        uri = match.group(0)
+                    else:
+                        # Fallback to the full path for now
+                        uri = self.db_path
+                
+                self.db_path = uri  # Use the extracted URI
+                self._is_postgresql = True
+                logger.info(f"Detected PostgreSQL database: {uri}")
+            else:
+                self._is_postgresql = False
+                logger.info("Detected SQLite database")
+        else:
+            self._is_postgresql = False
+            logger.info("Defaulting to SQLite database")
+    
+    def _initialize_postgresql(self):
+        """Initialize PostgreSQL connection pool."""
+        if not POSTGRESQL_AVAILABLE:
+            raise DatabaseError("PostgreSQL dependencies not available. Install psycopg2-binary")
+        
+        try:
+            # Parse PostgreSQL URI
+            parsed = urlparse(self.db_path)
+            self._postgresql_config = {
+                'host': parsed.hostname or 'localhost',
+                'port': parsed.port or 5432,
+                'database': parsed.path.lstrip('/') or 'postgres',
+                'user': parsed.username or 'postgres',
+                'password': parsed.password or ''
+            }
+            
+            # Create connection pool with timeouts
+            self._postgresql_pool = ThreadedConnectionPool(
+                minconn=1,
+                maxconn=5,
+                connect_timeout=10,
+                **self._postgresql_config
+            )
+            
+            logger.info(f"PostgreSQL connection pool initialized for {self._postgresql_config['host']}:{self._postgresql_config['port']}/{self._postgresql_config['database']}")
+            
+            # Test connection
+            conn = self._postgresql_pool.getconn()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT version()")
+                    version = cursor.fetchone()[0]
+                    logger.info(f"PostgreSQL version: {version}")
+            finally:
+                self._postgresql_pool.putconn(conn)
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize PostgreSQL: {e}")
+            raise DatabaseError(f"PostgreSQL initialization failed: {e}") from e
+    
+    def _initialize_sqlite(self):
+        """Initialize SQLite connection pools."""
         # Connection pooling - separate pools for read-only and read-write
         self._readonly_pool = Queue(maxsize=16)
         self._readwrite_pool = Queue(maxsize=4)
@@ -154,11 +270,20 @@ class DatabaseManager:
             self._readwrite_pool.put(conn)
             with self._pool_lock:
                 self._active_connections += 1
-        except Exception as e:
-            logger.warning(f"Failed to warm up connection pool: {e}")
+        except sqlite3.Error as e:
+            logger.warning(f"Database error during connection pool warm-up: {e}")
+        except OSError as e:
+            logger.warning(f"OS error during connection pool warm-up (check disk space/permissions): {e}")
     
     def _create_connection(self, readonly: bool = False) -> sqlite3.Connection:
         """Create a new database connection with optimizations."""
+        # Check if db_path is actually a PostgreSQL URI
+        if 'postgresql://' in str(self.db_path):
+            raise DatabaseError(
+                f"Cannot create SQLite connection to PostgreSQL URI: {self.db_path}. "
+                "Use Pensieve API methods instead."
+            )
+            
         try:
             if readonly and self._wal_mode_enabled:
                 # Read-only connections in WAL mode
@@ -180,7 +305,7 @@ class DatabaseManager:
             
         except sqlite3.Error as e:
             logger.error(f"Failed to create database connection: {e}")
-            raise
+            raise DatabaseError(f"SQLite connection failed: {e}") from e
     
     def _get_pooled_connection(self, readonly: bool = True) -> sqlite3.Connection:
         """Get a connection from the pool or create a new one."""
@@ -238,16 +363,24 @@ class DatabaseManager:
         Yields:
             sqlite3.Connection: Database connection
         """
+        if self._is_postgresql:
+            with self._get_postgresql_connection(readonly) as conn:
+                yield conn
+            return
+        
         conn = None
         try:
             conn = self._get_pooled_connection(readonly)
             yield conn
         except sqlite3.OperationalError as e:
-            logger.error(f"Database connection error: {e}")
-            raise  # Re-raise the exception instead of double yield
+            logger.error(f"SQLite connection error: {e}")
+            raise DatabaseError(f"SQLite connection failed: {e}") from e
+        except sqlite3.DatabaseError as e:
+            logger.error(f"SQLite database error: {e}")
+            raise DatabaseError(f"SQLite operation failed: {e}") from e
         except Exception as e:
             logger.error(f"Unexpected database error: {e}")
-            raise
+            raise DatabaseError(f"Unexpected database error: {e}") from e
         finally:
             if conn:
                 if readonly:
@@ -261,13 +394,47 @@ class DatabaseManager:
                     with self._pool_lock:
                         self._active_connections = max(0, self._active_connections - 1)
     
+    @contextmanager
+    def _get_postgresql_connection(self, readonly: bool = True):
+        """Get PostgreSQL connection from pool."""
+        if not self._postgresql_pool:
+            raise DatabaseError("PostgreSQL pool not initialized")
+        
+        conn = None
+        try:
+            conn = self._postgresql_pool.getconn()
+            conn.autocommit = readonly  # Read-only queries use autocommit
+            yield conn
+        except PostgreSQLError as e:
+            logger.error(f"PostgreSQL connection error: {e}")
+            raise DatabaseError(f"PostgreSQL connection failed: {e}") from e
+        except Exception as e:
+            logger.error(f"Unexpected PostgreSQL error: {e}")
+            raise DatabaseError(f"Unexpected PostgreSQL error: {e}") from e
+        finally:
+            if conn:
+                try:
+                    self._postgresql_pool.putconn(conn)
+                except Exception as e:
+                    logger.debug(f"Failed to return PostgreSQL connection to pool: {e}")
+    
     def test_connection(self) -> bool:
         """Test if database connection can be established."""
+        # If using Pensieve API, test API health instead of SQLite connection
+        if self.use_pensieve_api and self._pensieve_client:
+            try:
+                return self._check_api_health()
+            except Exception as e:
+                logger.debug(f"Pensieve API health check failed: {e}")
+                return False
+        
+        # Test SQLite connection
         try:
             with self.get_connection() as conn:
                 conn.execute("SELECT 1")
                 return True
-        except sqlite3.OperationalError:
+        except (sqlite3.OperationalError, DatabaseError, PensieveIntegrationError) as e:
+            logger.debug(f"SQLite connection test failed: {e}")
             return False
     
     def get_pool_stats(self) -> Dict[str, Any]:
@@ -526,21 +693,30 @@ class DatabaseManager:
                    start_date: Optional[datetime] = None,
                    end_date: Optional[datetime] = None,
                    limit: int = 100,
-                   offset: int = 0) -> pd.DataFrame:
+                   offset: int = 0,
+                   include_ai_fields: bool = False,
+                   time_filter: Optional[str] = None) -> pd.DataFrame:
         """
-        Fetch tasks (screenshots with metadata) with API-first approach and intelligent caching.
+        Unified method to fetch tasks with optional AI fields and time filters.
+        Consolidates fetch_tasks, fetch_tasks_by_time_filter, and fetch_tasks_with_ai.
         
         Args:
             start_date: Start date filter
             end_date: End date filter  
             limit: Maximum number of records to return
             offset: Number of records to skip
+            include_ai_fields: If True, includes VLM descriptions and embedding status
+            time_filter: Convenience time filter ("Last 15 Minutes", "Today", etc.)
             
         Returns:
             DataFrame with task data
         """
+        # Handle time_filter convenience parameter
+        if time_filter and not start_date:
+            start_date = self._get_start_date_from_filter(time_filter)
+        
         # Create cache key for this query
-        cache_key = f"fetch_tasks_{start_date}_{end_date}_{limit}_{offset}"
+        cache_key = f"fetch_tasks_{start_date}_{end_date}_{limit}_{offset}_{include_ai_fields}"
         
         # Try cache first for exact same query
         cached_df = self.cache.get(cache_key)
@@ -548,8 +724,8 @@ class DatabaseManager:
             logger.debug(f"Cache hit for fetch_tasks query")
             return cached_df
         
-        # Try API-first approach (if no date filters for better API compatibility)
-        if self.use_pensieve_api and not start_date and not end_date and offset == 0:
+        # Try API-first approach (if no date filters and not requesting AI fields)
+        if self.use_pensieve_api and not start_date and not end_date and offset == 0 and not include_ai_fields:
             try:
                 entities = self.get_entities_via_api(limit=limit, processed_only=False)
                 if entities:
@@ -591,39 +767,72 @@ class DatabaseManager:
         # Fallback to SQLite with Pensieve schema adapter
         from autotasktracker.core import PensieveSchemaAdapter
         
-        query = PensieveSchemaAdapter.adapt_fetch_tasks_query()
+        # Use different query based on whether AI fields are requested
+        if include_ai_fields:
+            # Use the more complex query with AI metadata joins
+            query = self._get_ai_enhanced_query()
+        else:
+            # Use standard query from schema adapter
+            query = PensieveSchemaAdapter.adapt_fetch_tasks_query()
+        
         params = []
         
         if start_date:
-            query += " AND e.created_at >= ?"
+            if self._is_postgresql:
+                query += " AND e.created_at >= %s"
+            else:
+                query += " AND e.created_at >= ?"
             params.append(start_date.isoformat())
         
         if end_date:
-            query += " AND e.created_at <= ?"
+            if self._is_postgresql:
+                query += " AND e.created_at <= %s"
+            else:
+                query += " AND e.created_at <= ?"
             params.append(end_date.isoformat())
         
-        query += " ORDER BY e.created_at DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
+        if self._is_postgresql:
+            # PostgreSQL uses $1, $2 syntax and different LIMIT/OFFSET
+            query += " ORDER BY e.created_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+        else:
+            # SQLite uses ? parameters
+            query += " ORDER BY e.created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
         
         try:
             with self.get_connection() as conn:
-                df = pd.read_sql_query(query, conn, params=params)
+                if self._is_postgresql:
+                    # PostgreSQL execution with psycopg2
+                    df = self._execute_postgresql_query(conn, query, params)
+                else:
+                    # SQLite execution
+                    df = pd.read_sql_query(query, conn, params=params)
+                
                 # Apply schema adaptation to add missing columns
                 df = PensieveSchemaAdapter.adapt_dataframe(df)
                 
                 # Cache the result
                 self.cache.set(cache_key, df, ttl=300)
                 
-                logger.info(f"Fetched {len(df)} tasks via SQLite fallback")
+                db_type = "PostgreSQL" if self._is_postgresql else "SQLite"
+                logger.info(f"Fetched {len(df)} tasks via {db_type}")
                 return df
                 
+        except DatabaseError as e:
+            logger.error(f"Database connection error: {e}")
+            return pd.DataFrame()
         except pd.io.sql.DatabaseError as e:
-            logger.error(f"Error fetching tasks: {e}")
+            logger.error(f"Database error fetching tasks: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Unexpected error fetching tasks: {e}")
             return pd.DataFrame()
     
     def fetch_tasks_by_time_filter(self, time_filter: str, limit: int = 100) -> pd.DataFrame:
         """
-        Fetch tasks based on predefined time filters.
+        Convenience method for fetching tasks by time filter.
+        Now delegates to the unified fetch_tasks method.
         
         Args:
             time_filter: One of "Last 15 Minutes", "Last Hour", "Today", 
@@ -633,19 +842,7 @@ class DatabaseManager:
         Returns:
             DataFrame with task data
         """
-        now = datetime.now()
-        
-        time_filters = {
-            "Last 15 Minutes": now - timedelta(minutes=15),
-            "Last Hour": now - timedelta(hours=1),
-            "Today": now.replace(hour=0, minute=0, second=0, microsecond=0),
-            "Last 24 Hours": now - timedelta(days=1),
-            "Last 7 Days": now - timedelta(days=7),
-            "All Time": datetime(2000, 1, 1)
-        }
-        
-        start_date = time_filters.get(time_filter, datetime(2000, 1, 1))
-        return self.fetch_tasks(start_date=start_date, limit=limit)
+        return self.fetch_tasks(time_filter=time_filter, limit=limit)
     
     def get_screenshot_count(self, date: Optional[datetime] = None) -> int:
         """
@@ -754,7 +951,8 @@ class DatabaseManager:
                            limit: int = 100,
                            offset: int = 0) -> pd.DataFrame:
         """
-        Fetch tasks with AI-enhanced data (VLM descriptions and embeddings).
+        Convenience method for fetching tasks with AI fields.
+        Now delegates to the unified fetch_tasks method.
         
         Args:
             start_date: Start date filter
@@ -765,48 +963,13 @@ class DatabaseManager:
         Returns:
             DataFrame with task and AI data
         """
-        query = """
-        SELECT
-            e.id,
-            e.filepath,
-            e.filename,
-            datetime(e.created_at, 'localtime') as created_at,
-            e.file_created_at,
-            e.last_scan_at,
-            me.value as ocr_text,
-            me2.value as active_window,
-            me3.value as vlm_description,
-            CASE WHEN me4.value IS NOT NULL THEN 1 ELSE 0 END as has_embedding
-        FROM
-            entities e
-            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = "ocr_result"
-            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = "active_window"
-            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key IN ('minicpm_v_result', "vlm_structured")
-            LEFT JOIN metadata_entries me4 ON e.id = me4.entity_id AND me4.key = 'embedding'
-        WHERE
-            e.file_type_group = 'image'
-        """
-        
-        params = []
-        
-        if start_date:
-            query += " AND datetime(e.created_at, 'localtime') >= ?"
-            params.append(start_date.isoformat())
-        
-        if end_date:
-            query += " AND datetime(e.created_at, 'localtime') <= ?"
-            params.append(end_date.isoformat())
-        
-        query += " ORDER BY e.created_at DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-        
-        try:
-            with self.get_connection() as conn:
-                df = pd.read_sql_query(query, conn, params=params)
-                return df
-        except pd.io.sql.DatabaseError as e:
-            logger.error(f"Error fetching tasks with AI data: {e}")
-            return pd.DataFrame()
+        return self.fetch_tasks(
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            include_ai_fields=True
+        )
     
     def get_ai_coverage_stats(self) -> Dict[str, Any]:
         """
@@ -866,6 +1029,147 @@ class DatabaseManager:
         except pd.io.sql.DatabaseError as e:
             logger.error(f"Error searching activities: {e}")
             return pd.DataFrame()
+    
+    def _get_start_date_from_filter(self, time_filter: str) -> datetime:
+        """Convert time filter string to start date."""
+        now = datetime.now()
+        
+        time_filters = {
+            "Last 15 Minutes": now - timedelta(minutes=15),
+            "Last Hour": now - timedelta(hours=1),
+            "Today": now.replace(hour=0, minute=0, second=0, microsecond=0),
+            "Last 24 Hours": now - timedelta(days=1),
+            "Last 7 Days": now - timedelta(days=7),
+            "All Time": datetime(2000, 1, 1)
+        }
+        
+        return time_filters.get(time_filter, datetime(2000, 1, 1))
+    
+    def _get_ai_enhanced_query(self) -> str:
+        """Get SQL query for fetching tasks with AI metadata."""
+        return """
+        SELECT
+            e.id,
+            e.filepath,
+            e.filename,
+            datetime(e.created_at, 'localtime') as created_at,
+            e.file_created_at,
+            e.last_scan_at,
+            me.value as ocr_text,
+            me2.value as active_window,
+            me3.value as vlm_description,
+            CASE WHEN me4.value IS NOT NULL THEN 1 ELSE 0 END as has_embedding
+        FROM
+            entities e
+            LEFT JOIN metadata_entries me ON e.id = me.entity_id AND me.key = "ocr_result"
+            LEFT JOIN metadata_entries me2 ON e.id = me2.entity_id AND me2.key = "active_window"
+            LEFT JOIN metadata_entries me3 ON e.id = me3.entity_id AND me3.key IN ('minicpm_v_result', "vlm_structured")
+            LEFT JOIN metadata_entries me4 ON e.id = me4.entity_id AND me4.key = 'embedding'
+        WHERE
+            e.file_type_group = 'image'
+        """
+    
+    def close_all_connections(self):
+        """Close all pooled connections."""
+        logger.info("Closing all database connections")
+        
+        if self._is_postgresql:
+            if self._postgresql_pool:
+                try:
+                    self._postgresql_pool.closeall()
+                    logger.info("PostgreSQL connection pool closed")
+                except Exception as e:
+                    logger.warning(f"Error closing PostgreSQL pool: {e}")
+        else:
+            # Close SQLite connections
+            while not self._readonly_pool.empty():
+                try:
+                    conn = self._readonly_pool.get_nowait()
+                    conn.close()
+                except (Empty, sqlite3.Error):
+                    pass
+            
+            # Close read-write connections
+            while not self._readwrite_pool.empty():
+                try:
+                    conn = self._readwrite_pool.get_nowait()
+                    conn.close()
+                except (Empty, sqlite3.Error):
+                    pass
+            
+            with self._pool_lock:
+                self._active_connections = 0
+
+    def __del__(self):
+        """Cleanup connections when object is destroyed."""
+        try:
+            self.close_all_connections()
+        except Exception as e:
+            logger.debug(f"Error during connection cleanup: {e}")
+    
+    def get_database_type(self) -> str:
+        """Get the database type (postgresql or sqlite)."""
+        return "postgresql" if self._is_postgresql else "sqlite"
+    
+    def get_connection_info(self) -> Dict[str, Any]:
+        """Get connection information for debugging."""
+        if self._is_postgresql:
+            return {
+                "type": "postgresql",
+                "config": self._postgresql_config,
+                "pool_active": self._postgresql_pool is not None
+            }
+        else:
+            return {
+                "type": "sqlite",
+                "path": self.db_path,
+                "active_connections": self._active_connections,
+                "wal_mode": self._wal_mode_enabled
+            }
+
+    def get_tables(self) -> List[str]:
+        """Get list of tables in the database."""
+        try:
+            with self.get_connection() as conn:
+                if self._is_postgresql:
+                    with conn.cursor() as cursor:
+                        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+                        return [row[0] for row in cursor.fetchall()]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to get tables: {e}")
+            return []
+    
+    def _execute_postgresql_query(self, conn, query: str, params: List[Any]) -> pd.DataFrame:
+        """Execute a query on PostgreSQL and return DataFrame."""
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(query, params)
+                
+                # Handle empty result sets
+                if cursor.description is None:
+                    return pd.DataFrame()
+                
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+                
+                # Convert to DataFrame
+                if not rows:
+                    # Return empty DataFrame with correct columns
+                    return pd.DataFrame(columns=columns)
+                
+                data = []
+                for row in rows:
+                    data.append(dict(row))
+                
+                return pd.DataFrame(data)
+                
+        except PostgreSQLError as e:
+            logger.error(f"PostgreSQL query error: {e}")
+            raise DatabaseError(f"PostgreSQL query failed: {e}") from e
 
 
 # Singleton instance for convenience

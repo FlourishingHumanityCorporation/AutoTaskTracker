@@ -8,9 +8,9 @@ import argparse
 import logging
 from datetime import datetime
 
-# Add project to path
+# Add project to path properly
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(project_root)
+sys.path.insert(0, project_root)
 
 from generate_embeddings_simple import EmbeddingGenerator
 from autotasktracker.core import DatabaseManager
@@ -53,9 +53,10 @@ def check_ai_status():
         import requests
         response = requests.get(get_config().get_ollama_url(), timeout=2)
         print("✅ Ollama server running")
-    except:
+    except (requests.RequestException, ConnectionError, TimeoutError) as e:
         print("⚠️  Ollama server not running (VLM features disabled)")
         print("   Start with: ollama serve")
+        logging.debug(f"Ollama connection error: {e}")
     
     # Check if minicpm-v model exists
     try:
@@ -66,8 +67,9 @@ def check_ai_status():
         else:
             print("⚠️  minicpm-v model not found")
             print("   Install with: ollama pull minicpm-v")
-    except:
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError) as e:
         print("⚠️  Could not check Ollama models")
+        logging.debug(f"Ollama check error: {e}")
 
 def generate_embeddings(limit=None):
     """Generate embeddings for screenshots."""
@@ -164,10 +166,12 @@ def setup_ai():
                 print("⚠️  minicpm-v model not found")
                 print("   To enable VLM, run: ollama pull minicpm-v")
                 print("   Then run: python ai_cli.py enable-vlm")
-        except:
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
             print("⚠️  Could not check models")
-    except:
+            logging.debug(f"Model check error: {e}")
+    except (requests.RequestException, ConnectionError, ImportError) as e:
         print("⚠️  Ollama not running")
+        logging.debug(f"Ollama setup error: {e}")
         print("   To enable VLM:")
         print("   1. Install Ollama: https://ollama.ai")
         print("   2. Run: ollama serve")

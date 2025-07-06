@@ -1,8 +1,8 @@
-# Test Results: Extraction Methods on Real Screenshots
+# Extraction Methods Test Results
 
-## Summary
+## Overview
 
-We now have comprehensive tests that validate different extraction methods on real captured screenshots from AutoTaskTracker usage. Here's what we found:
+Comprehensive validation of extraction methods using real captured screenshots from AutoTaskTracker. Test results indicate functionality and performance characteristics.
 
 ## Test Coverage
 
@@ -24,7 +24,7 @@ We now have comprehensive tests that validate different extraction methods on re
   - Window title + OCR data
   - Window title + VLM descriptions
   - All data sources combined
-- Successfully processed screenshots with 0.50 confidence scores
+- Processed screenshots with 0.50 confidence scores
 - Shows how AI features enhance basic extraction
 
 ### 4. **Method Comparison** (`test_extraction_method_comparison_on_same_screenshots`)

@@ -183,7 +183,7 @@ Found {len(hardcoded_violations)} hardcoded values in production files:
                     continue  # These files legitimately configure ports
                     
                 # Check for hardcoded dashboard ports
-                port_pattern = r'\b(8502|8503|8504|8505|8506)\b'
+                port_pattern = r'\b(8602|8603|8604|8605|8606)\b'
                 matches = re.findall(port_pattern, content)
                 
                 if matches:

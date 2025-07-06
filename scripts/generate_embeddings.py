@@ -104,21 +104,21 @@ class PensieveEmbeddingsGenerator:
     def _get_screenshots_via_api(self, limit: int = None) -> List[Dict[str, Any]]:
         """Get screenshots via Pensieve API."""
         try:
-            frames = self.pensieve_client.get_frames(limit=limit or 100)
+            entities = self.pensieve_client.get_entities(limit=limit or 100)
             screenshots = []
             
-            for frame in frames:
+            for entity in entities:
                 # Check if embeddings already exist
-                metadata = self.pensieve_client.get_metadata(frame.id, 'embeddings')
+                metadata = self.pensieve_client.get_entity_metadata(entity.id, 'embeddings')
                 if not metadata.get('embeddings'):
                     # Get additional data
-                    all_metadata = self.pensieve_client.get_metadata(frame.id)
-                    ocr_text = self.pensieve_client.get_ocr_result(frame.id)
+                    all_metadata = self.pensieve_client.get_entity_metadata(entity.id)
+                    ocr_text = self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
                     
                     screenshots.append({
-                        'id': frame.id,
-                        'filepath': frame.filepath,
-                        'created_at': frame.created_at,
+                        'id': entity.id,
+                        'filepath': entity.filepath,
+                        'created_at': entity.created_at,
                         "active_window": all_metadata.get("active_window", ''),
                         'ai_task': all_metadata.get('extracted_tasks', {}).get("tasks", []),
                         "ocr_result": ocr_text or ''
@@ -220,7 +220,8 @@ class PensieveEmbeddingsGenerator:
                             for item in ocr_data[:5]:
                                 if isinstance(item, list) and len(item) >= 2:
                                     text_parts.append(str(item[1]))
-                except:
+                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    logger.debug(f"Failed to parse OCR data for screenshot {screenshot['id']}: {e}")
                     pass
             
             combined_text = " ".join(text_parts)

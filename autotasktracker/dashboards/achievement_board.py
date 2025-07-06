@@ -11,6 +11,7 @@ from .components import (
     MetricsRow,
     NoDataMessage
 )
+from .components.common_sidebar import CommonSidebar, SidebarSection
 from .data import TaskRepository, MetricsRepository
 from .cache import cached_data
 from autotasktracker.config import get_config
@@ -176,15 +177,9 @@ class AchievementBoardDashboard(BaseDashboard):
         return random.choice(quotes)
         
     def render_sidebar(self):
-        """Render sidebar controls."""
-        with st.sidebar:
-            st.header("🏆 Achievement Settings")
-            
-            # Time filter
-            time_filter = TimeFilterComponent.render()
-            
-            # Display options
-            st.subheader("Display Options")
+        """Render sidebar controls using common sidebar component."""
+        # Define custom sections for achievement board
+        def render_display_options():
             show_screenshots = st.checkbox(
                 "Show Screenshots",
                 value=st.session_state.show_screenshots,
@@ -198,20 +193,37 @@ class AchievementBoardDashboard(BaseDashboard):
                 value=st.session_state.min_achievement_duration,
                 key="min_achievement_duration"
             )
+            return {'show_screenshots': show_screenshots, 'min_duration': min_duration}
             
-            # Achievement stats
-            st.subheader("Achievement Stats")
+        def render_achievement_stats():
             for level_key, level_info in ACHIEVEMENT_LEVELS.items():
                 st.metric(
                     f"{level_info['emoji']} {level_info['name']}",
                     f"{level_info['min']}-{level_info['max']} min"
                 )
-                
-            # Session controls
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
+            return None
             
-            return time_filter, show_screenshots, min_duration
+        # Custom sections for achievement board
+        custom_sections = [
+            SidebarSection("Display Options", render_display_options),
+            SidebarSection("Achievement Stats", render_achievement_stats)
+        ]
+        
+        # Render common sidebar with custom sections
+        results = CommonSidebar.render(
+            header_title="Achievement Settings",
+            header_icon="🏆",
+            db_manager=self.db_manager,
+            custom_sections=custom_sections
+        )
+        
+        # Extract results for backwards compatibility
+        time_filter = results.get('time_filter')
+        display_opts = results.get('display_options', {})
+        show_screenshots = display_opts.get('show_screenshots')
+        min_duration = display_opts.get('min_duration')
+        
+        return time_filter, show_screenshots, min_duration
             
     @cached_data(ttl_seconds=300, key_prefix="achievements")
     def get_achievement_data(self, start_date: datetime, end_date: datetime, min_duration: int):

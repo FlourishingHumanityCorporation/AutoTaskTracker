@@ -21,6 +21,7 @@ from autotasktracker.dashboards.components import (
     RawDataViewer,
     PeriodStats
 )
+from autotasktracker.dashboards.components.common_sidebar import CommonSidebar, SidebarSection
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.dashboards.cache import MetricsCache
 from autotasktracker.config import get_config
@@ -39,33 +40,39 @@ class AnalyticsDashboard(BaseDashboard):
         )
         
     def render_sidebar(self):
-        """Render sidebar controls."""
-        with st.sidebar:
-            st.header("📊 Analytics Settings")
-            
-            # Time filter
-            time_filter = TimeFilterComponent.render()
-            
-            # Category filter
-            categories = CategoryFilterComponent.render(multiselect=True)
-            
-            # Display options
-            st.subheader("Charts")
+        """Render sidebar controls using common sidebar component."""
+        # Define custom chart options section
+        def render_chart_options():
             show_categories = st.checkbox("Category Distribution", value=True)
             show_hourly = st.checkbox("Hourly Activity", value=True)
             show_durations = st.checkbox("Task Durations", value=True)
             show_trends = st.checkbox("Daily Trends", value=True)
-            
-            # Session controls
-            from .components.session_controls import SessionControlsComponent
-            SessionControlsComponent.render_minimal(position="sidebar")
-            
-            return time_filter, categories, {
+            return {
                 'show_categories': show_categories,
                 'show_hourly': show_hourly,
                 'show_durations': show_durations,
                 'show_trends': show_trends
             }
+        
+        # Custom sections for analytics
+        custom_sections = [
+            SidebarSection("Charts", render_chart_options)
+        ]
+        
+        # Render common sidebar with custom sections
+        results = CommonSidebar.render(
+            header_title="Analytics Settings",
+            header_icon="📊",
+            db_manager=self.db_manager,
+            custom_sections=custom_sections
+        )
+        
+        # Extract results for backwards compatibility
+        time_filter = results.get('time_filter')
+        categories = results.get('categories')
+        chart_options = results.get('charts', {})
+        
+        return time_filter, categories, chart_options
             
     def render_overview_metrics(self, metrics_repo: MetricsRepository, start_date: datetime, end_date: datetime):
         """Render overview metrics section."""

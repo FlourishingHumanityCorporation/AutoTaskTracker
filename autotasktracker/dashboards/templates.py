@@ -15,6 +15,7 @@ from .components import (
     NoDataMessage,
     DataTable
 )
+from .components.common_sidebar import CommonSidebar, SidebarSection
 from .data import TaskRepository, MetricsRepository
 from autotasktracker.config import get_config
 
@@ -52,44 +53,54 @@ class DashboardTemplate:
                 self.custom_features = custom_features or []
                 
             def render_sidebar(self):
-                with st.sidebar:
-                    st.header(f"{icon} {title.split(' -')[0]} Settings")
-                    
-                    # Standard time filter
-                    time_filter = TimeFilterComponent.render()
-                    
-                    # Category filter if requested
-                    categories = None
-                    if 'category_filter' in self.custom_features:
-                        categories = CategoryFilterComponent.render(multiselect=True)
-                    
-                    # Chart options
-                    chart_options = {}
-                    if self.charts_config:
-                        st.subheader("Charts")
+                """Render sidebar controls using common sidebar component."""
+                # Define custom sections based on configuration
+                custom_sections = []
+                
+                # Chart options section if configured
+                if self.charts_config:
+                    def render_chart_options():
+                        chart_options = {}
                         for chart in self.charts_config:
                             chart_options[chart] = st.checkbox(
                                 chart.replace('_', ' ').title(),
                                 value=True,
                                 key=f"show_{chart}"
                             )
-                    
-                    # Custom features
-                    feature_options = {}
-                    if self.custom_features:
-                        st.subheader("Features")
-                        for feature in self.custom_features:
-                            if feature != 'category_filter':  # Already handled above
+                        return {'chart_options': chart_options}
+                    custom_sections.append(SidebarSection("Charts", render_chart_options))
+                
+                # Custom features section if configured
+                if self.custom_features:
+                    # Filter out category_filter as it's handled by common sidebar
+                    other_features = [f for f in self.custom_features if f != 'category_filter']
+                    if other_features:
+                        def render_feature_options():
+                            feature_options = {}
+                            for feature in other_features:
                                 feature_options[feature] = st.checkbox(
                                     feature.replace('_', ' ').title(),
                                     key=f"enable_{feature}"
                                 )
-                    
-                    # Session controls
-                    from .components.session_controls import SessionControlsComponent
-                    SessionControlsComponent.render_minimal(position="sidebar")
-                    
-                    return time_filter, categories, chart_options, feature_options
+                            return {'feature_options': feature_options}
+                        custom_sections.append(SidebarSection("Features", render_feature_options))
+                
+                # Render common sidebar with dynamic configuration
+                results = CommonSidebar.render(
+                    header_title=f"{title.split(' -')[0]} Settings",
+                    header_icon=icon,
+                    db_manager=self.db_manager,
+                    enable_category_filter='category_filter' in self.custom_features,
+                    custom_sections=custom_sections
+                )
+                
+                # Extract results for backwards compatibility
+                time_filter = results.get('time_filter')
+                categories = results.get('categories')
+                chart_options = results.get('chart_options', {}).get('chart_options', {})
+                feature_options = results.get('feature_options', {}).get('feature_options', {})
+                
+                return time_filter, categories, chart_options, feature_options
                     
             def run(self):
                 if not self.ensure_connection():

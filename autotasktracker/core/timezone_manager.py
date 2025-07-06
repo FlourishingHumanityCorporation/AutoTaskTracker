@@ -44,7 +44,8 @@ class TimezoneManager:
                 return time.altzone / 3600  # DST offset in hours
             else:
                 return time.timezone / 3600  # Standard offset in hours
-        except Exception:
+        except (OSError, AttributeError, ValueError) as e:
+            logger.debug(f"Error getting timezone offset: {e}")
             return 0.0
     
     def local_to_utc(self, local_dt: datetime) -> datetime:

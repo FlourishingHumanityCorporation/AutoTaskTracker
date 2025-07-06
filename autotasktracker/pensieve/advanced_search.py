@@ -111,15 +111,15 @@ class PensieveAdvancedSearch:
         
         try:
             # Use Pensieve's search API with semantic mode
-            api_results = self.pensieve_client.search_frames(
+            api_results = self.pensieve_client.search_entities(
                 query=f"semantic:{query.text}",
                 limit=query.max_results
             )
             
-            for frame in api_results:
+            for entity in api_results:
                 # Get additional metadata
-                metadata = self.pensieve_client.get_metadata(frame.id)
-                ocr_text = self.pensieve_client.get_ocr_result(frame.id)
+                metadata = self.pensieve_client.get_entity_metadata(entity.id)
+                ocr_text = self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
                 
                 # Extract relevant data
                 window_title = metadata.get("active_window", '')
@@ -133,9 +133,9 @@ class PensieveAdvancedSearch:
                 
                 if relevance_score >= query.min_relevance:
                     result = SearchResult(
-                        entity_id=frame.id,
-                        filepath=frame.filepath,
-                        timestamp=datetime.fromisoformat(frame.timestamp),
+                        entity_id=entity.id,
+                        filepath=entity.filepath,
+                        timestamp=datetime.fromisoformat(entity.timestamp),
                         window_title=window_title,
                         ocr_text=ocr_text,
                         extracted_tasks=extracted_tasks,
@@ -189,9 +189,9 @@ class PensieveAdvancedSearch:
                 
                 if relevance_score >= query.min_relevance:
                     result = SearchResult(
-                        entity_id=frame.id,
-                        filepath=frame.filepath,
-                        timestamp=datetime.fromisoformat(frame.timestamp),
+                        entity_id=entity.id,
+                        filepath=entity.filepath,
+                        timestamp=datetime.fromisoformat(entity.timestamp),
                         window_title=window_title,
                         ocr_text=ocr_text,
                         extracted_tasks=extracted_tasks,

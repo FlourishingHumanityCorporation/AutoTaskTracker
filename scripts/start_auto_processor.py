@@ -9,10 +9,18 @@ import subprocess
 import argparse
 import signal
 import time
+import logging
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).parent
 AUTO_PROCESSOR_SCRIPT = SCRIPT_DIR / "processing" / "auto_processor.py"
@@ -58,7 +66,7 @@ def start_processor(interval=30, background=True):
         try:
             subprocess.run(cmd)
         except KeyboardInterrupt:
-            print("\nAuto processor stopped")
+            logger.info("Auto processor stopped")
         return True
 
 
@@ -125,27 +133,27 @@ def status():
     if is_running():
         with open(PID_FILE, 'r') as f:
             pid = int(f.read().strip())
-        print(f"✅ Auto processor is running (PID {pid})")
+        logger.info(f"✅ Auto processor is running (PID {pid})")
         
         # Show log tail if available
         if LOG_FILE.exists():
-            print("\nRecent log entries:")
+            logger.info("\nRecent log entries:")
             try:
                 with open(LOG_FILE, 'r') as f:
                     lines = f.readlines()
                     for line in lines[-5:]:  # Last 5 lines
-                        print(f"   {line.rstrip()}")
+                        logger.info(f"   {line.rstrip()}")
             except Exception as e:
-                print(f"   Could not read log: {e}")
+                logger.error(f"   Could not read log: {e}")
     else:
-        print("❌ Auto processor is not running")
+        logger.info("❌ Auto processor is not running")
     
     return is_running()
 
 
 def restart(interval=30):
     """Restart the auto processor."""
-    print("Restarting auto processor...")
+    logger.info("Restarting auto processor...")
     stop_processor()
     time.sleep(1)
     return start_processor(interval, background=True)

@@ -12,7 +12,7 @@ from PIL import Image
 
 # Enhanced search capabilities  
 try:
-    from ...pensieve.enhanced_search import get_enhanced_search, SearchQuery
+    from autotasktracker.pensieve.enhanced_search import get_enhanced_search, SearchQuery
     ENHANCED_SEARCH_AVAILABLE = True
 except ImportError:
     ENHANCED_SEARCH_AVAILABLE = False
@@ -192,7 +192,7 @@ class TaskGroup:
         expanded: bool = False
     ) -> None:
         """Render a basic task group without AI enhancements."""
-        from ...core.timezone_manager import get_timezone_manager
+        from autotasktracker.core.timezone_manager import get_timezone_manager
         import os
         from PIL import Image
         

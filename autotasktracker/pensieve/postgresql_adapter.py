@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 from .api_client import get_pensieve_client, PensieveAPIError
 from .config_reader import get_pensieve_config
-from ..core.database import DatabaseManager
+from autotasktracker.core import DatabaseManager
+from autotasktracker.core.exceptions import DatabaseError, PensieveIntegrationError, ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,14 @@ class PostgreSQLAdapter:
             try:
                 self._fallback_db = DatabaseManager(use_pensieve_api=False)
                 logger.debug("Initialized fallback SQLite database")
+            except DatabaseError as e:
+                logger.warning(f"Database error initializing fallback: {e}")
+                self._fallback_db = None
+            except (OSError, IOError) as e:
+                logger.warning(f"File system error initializing fallback database: {e}")
+                self._fallback_db = None
             except Exception as e:
-                logger.warning(f"Failed to initialize fallback database: {e}")
-                # Return a mock that will gracefully fail
+                logger.warning(f"Unexpected error initializing fallback database: {e}")
                 self._fallback_db = None
         return self._fallback_db
     
@@ -79,8 +85,14 @@ class PostgreSQLAdapter:
                     performance_tier=performance_tier
                 )
             
+        except PensieveAPIError as e:
+            logger.debug(f"Pensieve API error detecting PostgreSQL capabilities: {e}")
+        except (ConnectionError, TimeoutError) as e:
+            logger.debug(f"Connection error detecting PostgreSQL capabilities: {e}")
+        except (KeyError, ValueError) as e:
+            logger.debug(f"Invalid response detecting PostgreSQL capabilities: {e}")
         except Exception as e:
-            logger.debug(f"Failed to detect PostgreSQL capabilities: {e}")
+            logger.debug(f"Unexpected error detecting PostgreSQL capabilities: {e}")
         
         # Default to SQLite capabilities
         return PostgreSQLCapabilities(
@@ -134,27 +146,27 @@ class PostgreSQLAdapter:
         """Get tasks using pgvector-optimized queries."""
         try:
             # Make API call to get optimized results
-            frames = self.pensieve_client.get_frames(limit=limit)
+            entities = self.pensieve_client.get_entities(limit=limit)
             
             # Enhance with metadata and task info, applying date and category filters
             tasks = []
-            for frame in frames:
+            for entity in entities:
                 # Apply date filter
-                frame_date = self._parse_frame_date(frame.created_at)
-                if not self._is_date_in_range(frame_date, start_date, end_date):
+                entity_date = self._parse_frame_date(entity.created_at)
+                if not self._is_date_in_range(entity_date, start_date, end_date):
                     continue
                 
-                metadata = self.pensieve_client.get_metadata(frame.id)
+                metadata = self.pensieve_client.get_entity_metadata(entity.id)
                 
                 if "tasks" in metadata:
                     task_data = {
-                        'id': frame.id,
-                        'timestamp': frame.created_at,
-                        'filepath': frame.filepath,
+                        'id': entity.id,
+                        'timestamp': entity.created_at,
+                        'filepath': entity.filepath,
                         "tasks": self._parse_tasks_safely(metadata.get("tasks")),
                         "category": metadata.get("category", 'Other'),
                         "active_window": metadata.get("active_window", ''),
-                        "ocr_result": self.pensieve_client.get_ocr_result(frame.id)
+                        "ocr_result": self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
                     }
                     
                     # Apply category filter if specified
@@ -178,27 +190,27 @@ class PostgreSQLAdapter:
         """Get tasks using PostgreSQL-optimized queries."""
         try:
             # Use Pensieve API with PostgreSQL backend
-            frames = self.pensieve_client.get_frames(limit=limit)
+            entities = self.pensieve_client.get_entities(limit=limit)
             
             tasks = []
             # Batch metadata requests for better performance with date filtering
-            for frame in frames:
+            for entity in entities:
                 # Apply date filter
-                frame_date = self._parse_frame_date(frame.created_at)
-                if not self._is_date_in_range(frame_date, start_date, end_date):
+                entity_date = self._parse_frame_date(entity.created_at)
+                if not self._is_date_in_range(entity_date, start_date, end_date):
                     continue
                 
-                metadata = self.pensieve_client.get_metadata(frame.id)
+                metadata = self.pensieve_client.get_entity_metadata(entity.id)
                 
                 if "tasks" in metadata:
                     task_data = {
-                        'id': frame.id,
-                        'timestamp': frame.created_at,
-                        'filepath': frame.filepath,
+                        'id': entity.id,
+                        'timestamp': entity.created_at,
+                        'filepath': entity.filepath,
                         "tasks": self._parse_tasks_safely(metadata.get("tasks")),
                         "category": metadata.get("category", 'Other'),
                         "active_window": metadata.get("active_window", ''),
-                        "ocr_result": self.pensieve_client.get_ocr_result(frame.id)
+                        "ocr_result": self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
                     }
                     
                     if not categories or task_data["category"] in categories:
