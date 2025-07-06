@@ -27,7 +27,9 @@ from autotasktracker.dashboards.components import (
     MetricsRow,
     TaskGroup as TaskGroupComponent,
     NoDataMessage,
-    EnhancedSearch
+    EnhancedSearch,
+    ExportComponent,
+    RealtimeStatusComponent
 )
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.config import get_config
@@ -116,10 +118,9 @@ class TaskBoardDashboard(BaseDashboard):
             # Real-time updates
             self.render_realtime_controls()
             
-            # Export functionality
+            # Export functionality in sidebar for quick access
             st.subheader("📥 Export Data")
             if st.button("Export to CSV", help="Export current task data as CSV for reporting"):
-                # This will be handled in the main run method
                 st.session_state.export_csv = True
             
             # Debug capture controls
@@ -185,66 +186,6 @@ class TaskBoardDashboard(BaseDashboard):
                 help="Average number of activities per active day"
             )
             
-    def export_task_data_to_csv(
-        self, 
-        task_groups: list,
-        start_date: datetime,
-        end_date: datetime
-    ) -> str:
-        """Export task data to CSV format for professional reporting.
-        
-        Returns:
-            CSV content as string
-        """
-        import io
-        import csv
-        
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        # Header row matching user story example
-        writer.writerow([
-            'Date',
-            'Task Group', 
-            'Duration',
-            'Start Time',
-            'End Time',
-            'Category',
-            'Description',
-            'Activities',
-            'Confidence'
-        ])
-        
-        for group in task_groups:
-            # Format data for CSV
-            date = group.start_time.strftime('%Y-%m-%d')
-            task_name = group.window_title
-            duration = f"{group.duration_minutes:.0f}min"
-            start_time = group.start_time.strftime('%H:%M')
-            end_time = group.end_time.strftime('%H:%M')
-            category = group.category
-            
-            # Create description from task activities
-            activities = [task.title for task in group.tasks[:3]]  # First 3 activities
-            description = '; '.join(activities) if activities else task_name
-            activity_count = len(group.tasks)
-            
-            # Confidence indicator
-            confidence = 'High' if group.duration_minutes >= 2 else 'Medium' if group.duration_minutes >= 1 else 'Low'
-            
-            writer.writerow([
-                date,
-                task_name,
-                duration,
-                start_time,
-                end_time,
-                category,
-                description,
-                activity_count,
-                confidence
-            ])
-        
-        return output.getvalue()
 
     def render_task_groups(
         self, 
@@ -387,16 +328,21 @@ class TaskBoardDashboard(BaseDashboard):
             st.markdown("Track and visualize your daily tasks and activities")
         
         with col2:
-            # Real-time status indicator
+            # Real-time status indicator using component
+            realtime_mode = "static"
+            processor_stats = None
+            
             if st.session_state.get('realtime_enabled', False):
                 processor_stats = self.event_processor.get_statistics()
-                if processor_stats['running']:
-                    st.success("🔄 Live")
-                    st.caption(f"Events: {processor_stats['events_processed']}")
-                else:
-                    st.warning("⏸️ Paused")
-            else:
-                st.info("📋 Static")
+                realtime_mode = "live" if processor_stats.get('running') else "paused"
+            
+            RealtimeStatusComponent.render(
+                mode=realtime_mode,
+                event_count=processor_stats.get('events_processed') if processor_stats else None,
+                last_update=st.session_state.get('last_update_time'),
+                processor_stats=processor_stats,
+                config={"compact_mode": False, "show_connection_details": False}
+            )
         
         # Enhanced search section
         with st.expander("🔍 Enhanced Search", expanded=False):
@@ -442,16 +388,18 @@ class TaskBoardDashboard(BaseDashboard):
                     ]
                 
                 if export_groups:
-                    csv_content = self.export_task_data_to_csv(export_groups, start_date, end_date)
+                    # Use ExportComponent for CSV generation
+                    csv_content = ExportComponent.format_task_export(
+                        export_groups, start_date, end_date
+                    )
                     
-                    # Create download button
+                    # Create download button using ExportComponent
                     filename = f"autotasktracker_export_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
-                    st.download_button(
-                        label="📥 Download CSV",
+                    ExportComponent.render_csv_button(
                         data=csv_content,
-                        file_name=filename,
-                        mime="text/csv",
-                        help=f"Export contains {len(export_groups)} task groups from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+                        filename=filename,
+                        label="📥 Download CSV",
+                        help_text=f"Export contains {len(export_groups)} task groups from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
                     )
                     st.success(f"✅ CSV export ready! {len(export_groups)} task groups included.")
                 else:

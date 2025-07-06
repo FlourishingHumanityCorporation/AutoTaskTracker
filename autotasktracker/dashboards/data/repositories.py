@@ -12,6 +12,7 @@ from ...core.categorizer import extract_window_title
 from ...pensieve.postgresql_adapter import get_postgresql_adapter, PostgreSQLAdapter
 from ...pensieve.cache_manager import get_cache_manager
 from .models import Task, Activity, TaskGroup, DailyMetrics
+from .core.window_normalizer import get_window_normalizer
 
 logger = logging.getLogger(__name__)
 
@@ -340,11 +341,8 @@ class TaskRepository(BaseRepository):
     def _normalize_window_title(self, window_title: str) -> str:
         """Normalize window title for better task context extraction.
         
-        Transforms generic app titles into meaningful work descriptions.
-        Examples:
-        - "AutoTaskTracker — ✳ Project Premortem — claude" → "Project Premortem (AI Consultation)"
-        - "Gmail — Inbox (5) — paul@example.com" → "Email Management"
-        - "VS Code — task_board.py — AutoTaskTracker" → "Code Development (task_board.py)"
+        Uses the WindowTitleNormalizer to transform generic app titles 
+        into meaningful work descriptions.
         
         Args:
             window_title: Raw window title
@@ -352,104 +350,8 @@ class TaskRepository(BaseRepository):
         Returns:
             Meaningful task description for grouping
         """
-        if not window_title:
-            return "Unknown Activity"
-            
-        # Clean up session-specific noise first
-        normalized = window_title
-        normalized = re.sub(r'MallocNanoZone=\d+', '', normalized)
-        normalized = re.sub(r'—\s*\d+×\d+$', '', normalized)
-        normalized = re.sub(r'—\s*▸\s*\w+', '', normalized)  # Remove terminal shell indicators
-        normalized = re.sub(r'\([a-f0-9]{7,}\)', '', normalized)  # Remove git hashes
-        normalized = re.sub(r'—+', '—', normalized)
-        normalized = re.sub(r'\s+', ' ', normalized).strip()
-        
-        # Extract meaningful task context
-        task_name = self._extract_task_context(normalized)
-        
-        return task_name
-    
-    def _extract_task_context(self, title: str) -> str:
-        """Extract meaningful task context from a normalized window title.
-        
-        Uses pattern matching to identify work activities and create
-        human-readable task descriptions.
-        """
-        # Common application patterns and their work context
-        app_patterns = {
-            # Development
-            r'VS Code.*?([^—]+\.(?:py|js|ts|jsx|tsx|html|css|sql|md))': r'Code Development (\1)',
-            r'Terminal.*?([^—]+)': r'Terminal Work (\1)',
-            r'Xcode.*?([^—]+)': r'iOS Development (\1)',
-            
-            # Communication
-            r'Gmail|Mail.*?(?:Inbox|Compose)': 'Email Management',
-            r'Slack.*?([^—]+)': r'Team Communication (\1)',
-            r'Zoom.*?([^—]+)': r'Video Meeting (\1)',
-            r'Teams.*?([^—]+)': r'Team Meeting (\1)',
-            
-            # Productivity
-            r'Excel.*?([^—]+\.xlsx?)': r'Spreadsheet Analysis (\1)',
-            r'Word.*?([^—]+\.docx?)': r'Document Writing (\1)',
-            r'PowerPoint.*?([^—]+\.pptx?)': r'Presentation Creation (\1)',
-            r'Notion.*?([^—]+)': r'Documentation (\1)',
-            
-            # Web browsing with context
-            r'Chrome.*?Stack Overflow': 'Research & Problem Solving',
-            r'Chrome.*?GitHub': 'Code Repository Management',
-            r'Chrome.*?Confluence|Jira': 'Project Management',
-            r'Safari.*?LinkedIn': 'Professional Networking',
-            
-            # AI Tools
-            r'AutoTaskTracker.*?✳\s*([^—]+)': r'\1 (AI Consultation)',
-            r'ChatGPT|Claude': 'AI Research & Development',
-            
-            # Design
-            r'Figma.*?([^—]+)': r'Design Work (\1)',
-            r'Sketch.*?([^—]+)': r'UI Design (\1)',
-            
-            # Database
-            r'(?:MySQL|PostgreSQL|SQLite).*?([^—]+)': r'Database Management (\1)',
-            r'TablePlus.*?([^—]+)': r'Database Analysis (\1)',
-        }
-        
-        # Try to match specific patterns
-        for pattern, replacement in app_patterns.items():
-            match = re.search(pattern, title, re.IGNORECASE)
-            if match:
-                if '(' in replacement and '\\1' in replacement:
-                    # Extract the captured group
-                    context = match.group(1).strip()
-                    # Clean up context
-                    context = re.sub(r'[—\-]+.*$', '', context).strip()
-                    if context:
-                        return replacement.replace('\\1', context)
-                else:
-                    return replacement
-        
-        # Fallback: Extract app name and main context
-        if ' — ' in title:
-            parts = [p.strip() for p in title.split(' — ') if p.strip()]
-            if len(parts) >= 2:
-                app_name = parts[0]
-                context = parts[1]
-                
-                # Skip generic markers
-                if context in ['✳', '✳ ', '']:
-                    context = parts[2] if len(parts) > 2 else app_name
-                
-                # Create meaningful task name
-                if app_name.lower() in ['chrome', 'safari', 'firefox']:
-                    return f"Web Research ({context})"
-                elif app_name.lower() in ['terminal', 'iterm', 'iterm2']:
-                    return f"Terminal Work ({context})"
-                elif context != app_name:
-                    return f"{context} ({app_name})"
-                else:
-                    return app_name
-        
-        # Final fallback: Return cleaned title
-        return title.split(' — ')[0] if ' — ' in title else title
+        normalizer = get_window_normalizer()
+        return normalizer.normalize(window_title)
     
     def get_task_groups(
         self,
