@@ -4,12 +4,11 @@ Shows cache hit rates, response times, and system performance.
 """
 
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime, timedelta
 import logging
+
+# Heavy imports moved to function level for conditional loading
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +99,7 @@ class PerformanceMetricsDisplay:
                 })
             
             if details_data:
+                import pandas as pd
                 df = pd.DataFrame(details_data)
                 st.dataframe(df, use_container_width=True)
     
@@ -250,6 +250,8 @@ class PerformanceMetricsDisplay:
         st.subheader(f"📈 Performance Trends ({hours}h)")
         
         try:
+            import plotly.graph_objects as go
+            
             # Get historical data for key metrics
             metrics_to_show = [
                 ("database_query_ms", "Database Query Time (ms)", "blue"),
@@ -317,6 +319,9 @@ class PerformanceMetricsDisplay:
                 })
         
         if chart_data:
+            import pandas as pd
+            import plotly.express as px
+            
             st.subheader("🎯 Cache Hit Rates")
             
             df = pd.DataFrame(chart_data)

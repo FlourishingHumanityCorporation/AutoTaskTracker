@@ -24,9 +24,6 @@ This test suite checks for common codebase issues that hurt maintainability:
    - test_no_sys_path_hacks ← 🚨 IMPORTS
    - test_database_connection_patterns ← 🚨 DATABASE
 
-📚 DOCUMENTATION TESTS:
-   Run separately: pytest tests/test_documentation_health.py -v
-
 Run: pytest tests/test_codebase_health.py -v
 """
 

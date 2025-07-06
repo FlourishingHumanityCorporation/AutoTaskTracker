@@ -260,8 +260,9 @@ class AITaskDashboard(BaseDashboard):
             # Add auto-refresh
             self.add_auto_refresh(interval_seconds=60)  # Refresh every 60 seconds
             
-            # Add cache controls to sidebar
-            self.render_cache_controls()
+            # Add session controls to sidebar
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
             
             # Render filters in the sidebar
             self._render_filters()

@@ -3,7 +3,6 @@
 import streamlit as st
 from datetime import datetime, timedelta
 from typing import Tuple, List, Optional
-import streamlit as st
 
 
 class TimeFilterComponent:
@@ -14,63 +13,6 @@ class TimeFilterComponent:
         "Last 7 Days", "This Month", "Last 30 Days", "All Time"
     ]
     
-    @staticmethod
-    def get_smart_default(db_manager=None) -> str:
-        """Get smart default based on actual data availability.
-        
-        Args:
-            db_manager: Database manager to check data
-            
-        Returns:
-            Best default time filter based on data
-        """
-        if db_manager is None:
-            return "Last 7 Days"  # Safe default
-            
-        try:
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            
-            # Check different time periods for data availability
-            time_periods = {
-                "Today": (now.replace(hour=0, minute=0, second=0, microsecond=0), now),
-                "Yesterday": (
-                    (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0),
-                    (now - timedelta(days=1)).replace(hour=23, minute=59, second=59)
-                ),
-                "Last 7 Days": (now - timedelta(days=7), now),
-                "Last 30 Days": (now - timedelta(days=30), now)
-            }
-            
-            # Check each period for substantial data
-            period_scores = {}
-            for period_name, (start_date, end_date) in time_periods.items():
-                try:
-                    tasks_df = db_manager.fetch_tasks(start_date=start_date, end_date=end_date, limit=50)
-                    task_count = len(tasks_df)
-                    
-                    # Score based on task count and recency
-                    recency_weight = 1.0 if period_name in ["Today", "Yesterday"] else 0.7
-                    period_scores[period_name] = task_count * recency_weight
-                except Exception:
-                    period_scores[period_name] = 0
-            
-            # Find the best period with substantial data (at least 5 tasks)
-            best_period = None
-            best_score = 0
-            
-            # Prioritize recent periods if they have good data
-            for period in ["Today", "Yesterday", "Last 7 Days", "Last 30 Days"]:
-                score = period_scores.get(period, 0)
-                if score >= 5 and score > best_score:  # At least 5 tasks
-                    best_period = period
-                    best_score = score
-            
-            # If no period has enough data, default to Last 7 Days
-            return best_period if best_period else "Last 7 Days"
-            
-        except Exception:
-            return "Last 7 Days"  # Safe fallback
     
     @staticmethod
     def render(key: str = "time_filter", default: Optional[str] = None, db_manager=None) -> str:
@@ -85,7 +27,8 @@ class TimeFilterComponent:
             Selected time filter
         """
         if default is None:
-            default = TimeFilterComponent.get_smart_default(db_manager)
+            from .smart_defaults import SmartDefaultsComponent
+            default = SmartDefaultsComponent.get_time_period_default(db_manager)
             
         current_value = st.session_state.get(key, default)
         

@@ -183,8 +183,9 @@ class RealTimeDashboard(BaseDashboard):
                 )
             )
             
-            # Cache controls
-            self.render_cache_controls()
+            # Session controls
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
     
     def run(self):
         """Main dashboard execution."""

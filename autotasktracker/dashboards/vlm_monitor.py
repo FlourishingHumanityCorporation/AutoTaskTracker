@@ -163,8 +163,9 @@ class VLMMonitorDashboard(BaseDashboard):
             if st.button("🔄 Restart Watch Service"):
                 st.info("Run in terminal: `python scripts/vlm_optimizer.py --restart`")
                 
-            # Cache controls
-            self.render_cache_controls()
+            # Session controls
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
     
     def run(self):
         """Main dashboard execution."""

@@ -17,6 +17,7 @@ except ImportError:
     px = None
 
 from .base_component import StatelessComponent
+from .timeline_visualization import TimelineVisualizationComponent
 
 
 class VLMCoverageGauge(StatelessComponent):
@@ -120,7 +121,7 @@ class VLMProcessingTimeline(StatelessComponent):
     
     @staticmethod
     def render(rate_df: pd.DataFrame, title: str = "Real-time Processing (Last 2 Hours)"):
-        """Render processing timeline.
+        """Render processing timeline using specialized VLM chart.
         
         Args:
             rate_df: DataFrame with timestamp and type columns
@@ -134,6 +135,7 @@ class VLMProcessingTimeline(StatelessComponent):
             st.info("Processing timeline requires plotly installation")
             return
             
+        # This remains specialized for VLM processing with dual y-axes and coverage rate
         # Convert to timeline visualization
         rate_df['timestamp'] = pd.to_datetime(rate_df['timestamp'])
         rate_df['minute'] = rate_df['timestamp'].dt.floor('T')

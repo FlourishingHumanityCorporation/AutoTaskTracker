@@ -16,7 +16,10 @@ from autotasktracker.dashboards.components import (
     HourlyActivityChart,
     TaskDurationChart,
     TrendChart,
-    NoDataMessage
+    NoDataMessage,
+    DashboardHeader,
+    RawDataViewer,
+    PeriodStats
 )
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.dashboards.cache import MetricsCache
@@ -53,8 +56,9 @@ class AnalyticsDashboard(BaseDashboard):
             show_durations = st.checkbox("Task Durations", value=True)
             show_trends = st.checkbox("Daily Trends", value=True)
             
-            # Cache controls
-            self.render_cache_controls()
+            # Session controls
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
             
             return time_filter, categories, {
                 'show_categories': show_categories,
@@ -65,8 +69,6 @@ class AnalyticsDashboard(BaseDashboard):
             
     def render_overview_metrics(self, metrics_repo: MetricsRepository, start_date: datetime, end_date: datetime):
         """Render overview metrics section."""
-        st.subheader("📈 Overview")
-        
         # Get summary metrics
         summary = metrics_repo.get_metrics_summary(start_date, end_date)
         
@@ -74,13 +76,25 @@ class AnalyticsDashboard(BaseDashboard):
         period_days = (end_date - start_date).days + 1
         avg_daily = summary['total_activities'] / max(summary['active_days'], 1)
         
-        # Display metrics
-        MetricsRow.render({
-            "📊 Total Activities": summary['total_activities'],
-            "📅 Active Days": f"{summary['active_days']}/{period_days}",
-            "🪟 Unique Windows": summary['unique_windows'],
-            "📱 Daily Average": f"{avg_daily:.0f}"
-        })
+        # Prepare stats for PeriodStats component
+        stats = {
+            'total_activities': summary['total_activities'],
+            'active_days': summary['active_days'],
+            'period_days': period_days,
+            'unique_windows': summary['unique_windows'],
+            'daily_average': avg_daily
+        }
+        
+        # Use PeriodStats to render
+        PeriodStats.render_period_statistics(
+            stats=stats,
+            title="📈 Overview",
+            metrics_to_show=['total_activities', 'active_days', 'unique_windows', 'daily_average'],
+            format_functions={
+                'active_days': lambda x: f"{stats['active_days']}/{stats['period_days']}",
+                'daily_average': lambda x: f"{x:.0f}"
+            }
+        )
         
     def render_category_analysis(self, start_date: datetime, end_date: datetime, chart_options: dict):
         """Render category analysis section."""
@@ -274,15 +288,65 @@ class AnalyticsDashboard(BaseDashboard):
             if most_used_app[1] > total_duration * 0.4:
                 st.write(f"• {most_used_app[0]} dominates your time - consider diversifying")
                 
+    def render_raw_data(self, task_repo: TaskRepository, start_date: datetime, end_date: datetime):
+        """Render raw data viewer section."""
+        # Get raw data
+        df = task_repo.get_raw_data(start_date, end_date)
+        
+        if not df.empty:
+            # Configure columns for better display
+            column_config = {
+                "timestamp": st.column_config.DatetimeColumn(
+                    "Timestamp",
+                    format="YYYY-MM-DD HH:mm:ss"
+                ),
+                "window_title": st.column_config.TextColumn(
+                    "Window Title",
+                    width="large"
+                ),
+                "category": st.column_config.TextColumn(
+                    "Category",
+                    width="small"
+                ),
+                "ocr_text": st.column_config.TextColumn(
+                    "OCR Text",
+                    width="large",
+                    help="Extracted text from screenshot"
+                )
+            }
+            
+            # Default columns to show
+            default_columns = ["timestamp", "window_title", "category", "ocr_text"]
+            if "ocr_text" not in df.columns:
+                default_columns.remove("ocr_text")
+            
+            # Render the raw data viewer
+            RawDataViewer.render(
+                data=df,
+                title="Raw Activity Data",
+                key_prefix="analytics_raw",
+                page_size=50,
+                enable_search=True,
+                enable_export=True,
+                enable_column_selection=True,
+                column_config=column_config,
+                default_columns=default_columns,
+                expandable=True,
+                expanded_by_default=False
+            )
+                
     def run(self):
         """Main dashboard execution."""
         # Check database connection
         if not self.ensure_connection():
             return
             
-        # Header
-        st.title("📊 Analytics Dashboard")
-        st.markdown("Analyze your productivity patterns and get insights")
+        # Header using DashboardHeader component
+        DashboardHeader.render_simple(
+            title="Analytics Dashboard",
+            subtitle="Analyze your productivity patterns and get insights",
+            icon="📊"
+        )
         
         # Render sidebar and get filters
         time_filter, categories, chart_options = self.render_sidebar()
@@ -309,6 +373,11 @@ class AnalyticsDashboard(BaseDashboard):
         
         # Insights section
         self.render_insights(task_repo, start_date, end_date)
+        
+        st.divider()
+        
+        # Raw data section
+        self.render_raw_data(task_repo, start_date, end_date)
         
 
 def main():

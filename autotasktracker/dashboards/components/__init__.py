@@ -22,6 +22,12 @@ from .realtime_components import (
     RealtimeMetricsRow, LiveActivityFeed, SmartSearchInterface,
     SystemStatusDisplay, PerformanceMetricsDisplay, EventProcessorControl
 )
+from .dashboard_header import DashboardHeader
+from .raw_data_viewer import RawDataViewer
+from .period_stats import PeriodStats
+from .session_controls import SessionControlsComponent
+from .smart_defaults import SmartDefaultsComponent
+from .timeline_visualization import TimelineVisualizationComponent
 
 __all__ = [
     'TimeFilterComponent',
@@ -63,5 +69,11 @@ __all__ = [
     'SmartSearchInterface',
     'SystemStatusDisplay',
     'PerformanceMetricsDisplay',
-    'EventProcessorControl'
+    'EventProcessorControl',
+    'DashboardHeader',
+    'RawDataViewer',
+    'PeriodStats',
+    'SessionControlsComponent',
+    'SmartDefaultsComponent',
+    'TimelineVisualizationComponent'
 ]

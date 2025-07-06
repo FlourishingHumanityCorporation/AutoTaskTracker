@@ -69,7 +69,7 @@ class CategoryPieChart:
         
 
 class TimelineChart:
-    """Activity timeline visualization."""
+    """Activity timeline visualization - DEPRECATED: Use TimelineVisualizationComponent instead."""
     
     @staticmethod
     def render(
@@ -78,7 +78,9 @@ class TimelineChart:
         height: int = 400,
         color_by: str = "category"
     ):
-        """Render activity timeline.
+        """Render activity timeline - delegates to TimelineVisualizationComponent.
+        
+        DEPRECATED: This class is deprecated. Use TimelineVisualizationComponent.render_activity_timeline() instead.
         
         Args:
             activities: List of activity dicts with 'start', 'end', "tasks", "category"
@@ -86,35 +88,14 @@ class TimelineChart:
             height: Chart height
             color_by: Field to color by
         """
-        if not activities:
-            st.info("No timeline data to display")
-            return
-            
-        if not PLOTLY_AVAILABLE:
-            _fallback_chart(title)
-            return
-            
-        # Convert to DataFrame
-        df = pd.DataFrame(activities)
-        
-        fig = px.timeline(
-            df,
-            x_start="start",
-            x_end="end",
-            y="tasks",
-            color=color_by,
+        # Delegate to the new comprehensive timeline component
+        from .timeline_visualization import TimelineVisualizationComponent
+        TimelineVisualizationComponent.render_activity_timeline(
+            activities=activities,
             title=title,
-            height=height
+            height=height,
+            color_by=color_by
         )
-        
-        fig.update_yaxes(autorange="reversed")
-        fig.update_layout(
-            xaxis_title="Time",
-            yaxis_title="Tasks",
-            showlegend=True
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
         
 
 class HourlyActivityChart:

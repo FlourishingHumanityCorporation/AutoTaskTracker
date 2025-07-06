@@ -6,14 +6,12 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 
-try:
-    import plotly.graph_objects as go
-    PLOTLY_AVAILABLE = True
-except ImportError:
-    PLOTLY_AVAILABLE = False
-    go = None
+# Plotly imports moved to timeline_visualization component
 
 from .base_component import StatelessComponent
+from .timeline_visualization import TimelineVisualizationComponent
+from .export import ExportComponent
+from .metrics import MetricsRow
 
 
 class TimeTrackerTimeline(StatelessComponent):
@@ -26,7 +24,7 @@ class TimeTrackerTimeline(StatelessComponent):
         height_per_task: int = 50,
         min_height: int = 400
     ):
-        """Render time tracker timeline chart.
+        """Render time tracker timeline chart using TimelineVisualizationComponent.
         
         Args:
             time_data: Dict of task_name: list of periods
@@ -35,50 +33,15 @@ class TimeTrackerTimeline(StatelessComponent):
             height_per_task: Height per task row
             min_height: Minimum chart height
         """
-        if not time_data:
-            st.info("No timeline data to display")
-            return
-            
-        if not PLOTLY_AVAILABLE:
-            st.info(f"📊 **{title}**\n\nInteractive charts require plotly installation")
-            return
-            
-        fig = go.Figure()
-        
-        # Create a bar for each task
-        for task, periods in time_data.items():
-            for period in periods:
-                fig.add_trace(go.Bar(
-                    x=[period['duration']],
-                    y=[task],
-                    orientation='h',
-                    name=task,
-                    text=f"{period['duration']:.1f} min",
-                    textposition='inside',
-                    hovertemplate=(
-                        f"<b>{task}</b><br>"
-                        f"Start: {period['start'].strftime('%H:%M')}<br>"
-                        f"End: {period['end'].strftime('%H:%M')}<br>"
-                        f"Duration: {period['duration']:.1f} min<br>"
-                        f"Active: {period.get('active_duration', period['duration']):.1f} min<br>"
-                        f"Category: {period.get('category', 'Unknown')}<br>"
-                        f"Confidence: {period.get('confidence', 1.0):.2f}"
-                        "<extra></extra>"
-                    ),
-                    showlegend=False,
-                    marker_color=period.get('color', 'lightblue')
-                ))
-        
-        fig.update_layout(
+        # Delegate to consolidated timeline component
+        TimelineVisualizationComponent.render_task_timeline(
+            time_data=time_data,
             title=title,
-            xaxis_title="Duration (minutes)",
-            yaxis_title="Tasks",
-            barmode='stack',
-            height=max(min_height, len(time_data) * height_per_task),
-            showlegend=False
+            height_per_task=height_per_task,
+            min_height=min_height,
+            show_duration_labels=True,
+            color_scheme="custom"  # Use custom colors from period['color']
         )
-        
-        st.plotly_chart(fig, use_container_width=True)
 
 
 class TimeTrackerMetrics(StatelessComponent):
@@ -86,44 +49,43 @@ class TimeTrackerMetrics(StatelessComponent):
     
     @staticmethod
     def render(daily_summary: Dict[str, Any], category_times: Dict[str, float]):
-        """Render time tracker metrics.
+        """Render time tracker metrics using MetricsRow component.
         
         Args:
             daily_summary: Summary from TimeTracker.get_daily_summary()
             category_times: Dict of category: total_minutes
         """
-        # First row of metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            total_time = daily_summary['total_time_minutes']
-            time_display = f"{total_time:.1f} min" if total_time < 120 else f"{total_time/60:.1f} hours"
-            st.metric("Total Time", time_display)
-        with col2:
-            active_time = daily_summary['active_time_minutes']
-            st.metric("Active Time", f"{active_time:.1f} min", 
-                     delta=f"-{daily_summary['idle_percentage']:.1f}% idle")
-        with col3:
-            st.metric("Focus Score", f"{daily_summary['focus_score']}/100", 
-                     help="Based on number of 30+ minute sessions")
-        with col4:
-            st.metric("Sessions", daily_summary['sessions_count'], 
-                     delta=f"{daily_summary['average_session_minutes']:.1f} min avg")
+        # Prepare first row metrics with deltas
+        total_time = daily_summary['total_time_minutes']
+        time_display = f"{total_time:.1f} min" if total_time < 120 else f"{total_time/60:.1f} hours"
         
-        # Second row of metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Unique Tasks", daily_summary['unique_tasks'])
-        with col2:
-            st.metric("Longest Session", f"{daily_summary['longest_session_minutes']:.1f} min")
-        with col3:
-            high_conf = daily_summary['high_confidence_sessions']
-            total_sessions = daily_summary['sessions_count']
-            conf_pct = (high_conf / total_sessions * 100) if total_sessions > 0 else 0
-            st.metric("High Confidence", f"{high_conf}/{total_sessions}", 
-                     delta=f"{conf_pct:.0f}%")
-        with col4:
-            most_used = max(category_times.items(), key=lambda x: x[1])[0] if category_times else "N/A"
-            st.metric("Top Category", most_used)
+        first_row_metrics = {
+            "Total Time": time_display,
+            "Active Time": (f"{daily_summary['active_time_minutes']:.1f} min", 
+                           f"-{daily_summary['idle_percentage']:.1f}% idle"),
+            "Focus Score": f"{daily_summary['focus_score']}/100",
+            "Sessions": (daily_summary['sessions_count'], 
+                        f"{daily_summary['average_session_minutes']:.1f} min avg")
+        }
+        
+        # Render first row using MetricsRow
+        MetricsRow.render(first_row_metrics, columns=4, with_delta=True)
+        
+        # Prepare second row metrics
+        high_conf = daily_summary['high_confidence_sessions']
+        total_sessions = daily_summary['sessions_count']
+        conf_pct = (high_conf / total_sessions * 100) if total_sessions > 0 else 0
+        most_used = max(category_times.items(), key=lambda x: x[1])[0] if category_times else "N/A"
+        
+        second_row_metrics = {
+            "Unique Tasks": daily_summary['unique_tasks'],
+            "Longest Session": f"{daily_summary['longest_session_minutes']:.1f} min",
+            "High Confidence": (f"{high_conf}/{total_sessions}", f"{conf_pct:.0f}%"),
+            "Top Category": most_used
+        }
+        
+        # Render second row using MetricsRow
+        MetricsRow.render(second_row_metrics, columns=4, with_delta=True)
 
 
 class TimeTrackerTaskList(StatelessComponent):
@@ -203,11 +165,10 @@ class TimeTrackerTaskList(StatelessComponent):
             - 🔴 **Low (<0.5)**: Many gaps or sparse data - estimate only
             """)
         
-        # Export button
-        csv = task_df.to_csv(index=False)
-        st.download_button(
+        # Export button using ExportComponent
+        ExportComponent.render_csv_button(
+            data=task_df,
+            filename=f"time_tracking_{selected_date.strftime('%Y%m%d')}.csv",
             label="📥 Download Task Report (CSV)",
-            data=csv,
-            file_name=f"time_tracking_{selected_date.strftime('%Y%m%d')}.csv",
-            mime="text/csv"
+            help_text="Download detailed time tracking report"
         )

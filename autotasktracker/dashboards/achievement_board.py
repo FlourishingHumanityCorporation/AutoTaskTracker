@@ -207,8 +207,9 @@ class AchievementBoardDashboard(BaseDashboard):
                     f"{level_info['min']}-{level_info['max']} min"
                 )
                 
-            # Cache controls
-            self.render_cache_controls()
+            # Session controls
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
             
             return time_filter, show_screenshots, min_duration
             

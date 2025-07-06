@@ -160,6 +160,14 @@ Main modules: core/ (business logic), ai/ (AI features), dashboards/ (Streamlit 
 
 ## Dashboard Components
 
+AutoTaskTracker uses a **component-based architecture** for all dashboards, promoting code reuse and maintainability. For detailed documentation, see [Dashboard Component Architecture](./dashboard_components.md).
+
+### Architecture Overview
+- **Base Dashboard Class**: Common functionality shared by all dashboards
+- **Reusable Components**: UI elements extracted into standalone components
+- **Repository Pattern**: Clean data access layer with caching support
+- **Stateless Design**: Most components are stateless for easier testing
+
 ### 1. Task Board (`autotasktracker/dashboards/task_board.py`)
 
 **Purpose**: Main dashboard for task visualization and management.
@@ -172,11 +180,7 @@ Main modules: core/ (business logic), ai/ (AI features), dashboards/ (Streamlit 
 - Export functionality (CSV, JSON, text reports)
 - Category filtering and search
 
-**Smart Grouping Algorithm**:
-- Groups tasks within configurable time intervals
-- Considers category similarity and project context
-- Uses shared keywords for intelligent grouping
-- Maintains chronological order within groups
+**Components Used**: `TimeFilterComponent`, `CategoryFilterComponent`, `MetricsRow`, `TaskGroup`, `ExportComponent`, `RealtimeStatusComponent`
 
 ### 2. Analytics Dashboard (`autotasktracker/dashboards/analytics.py`)
 
@@ -189,13 +193,26 @@ Main modules: core/ (business logic), ai/ (AI features), dashboards/ (Streamlit 
 - Productivity trends and streaks
 - Interactive charts with Plotly
 
-**Metrics Calculated**: Hours worked, activity counts, category distribution, focus sessions, and productivity trends. See `autotasktracker/dashboards/analytics.py` for complete metrics.
+**Components Used**: `TimeFilterComponent`, `MetricsRow`, `CategoryPieChart`, `HourlyActivityChart`, `TaskDurationChart`, `TrendChart`
 
-### 3. Additional Dashboards
+### 3. Time Tracker (`autotasktracker/dashboards/timetracker.py`)
 
-- **Time Tracker**: Detailed time-based analysis and session tracking
-- **Notifications**: Alert system for productivity insights
+**Purpose**: Detailed time-based analysis and session tracking.
+
+**Features**:
+- Session timeline visualization
+- Time distribution by category
+- Confidence-based tracking
+- Enhanced session detection
+
+**Components Used**: `TimeTrackerTimeline`, `TimeTrackerMetrics`, `TimeTrackerTaskList`, `CategoryPieChart`
+
+### 4. Additional Dashboards
+
+- **VLM Monitor**: Vision Language Model processing monitoring with coverage metrics
+- **Real-time Dashboard**: Live event monitoring with smart search interface
 - **Achievement Board**: Gamification and progress tracking
+- **AI Task Dashboard**: Enhanced task analysis with VLM insights
 
 ## Database Layer
 

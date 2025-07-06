@@ -15,7 +15,8 @@ from autotasktracker.dashboards.components import (
     NoDataMessage,
     TimeTrackerTimeline,
     TimeTrackerMetrics,
-    TimeTrackerTaskList
+    TimeTrackerTaskList,
+    DashboardHeader
 )
 from autotasktracker.dashboards.data.repositories import TaskRepository
 from autotasktracker.core import TimeTracker
@@ -70,8 +71,9 @@ class TimeTrackerDashboard(BaseDashboard):
                 help="Minimum duration to count as a session"
             )
             
-            # Cache controls
-            self.render_cache_controls()
+            # Session controls  
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
             
             return {
                 'selected_date': selected_date,
@@ -150,9 +152,12 @@ class TimeTrackerDashboard(BaseDashboard):
         if not self.ensure_connection():
             return
             
-        # Header
-        st.title("⏱️ Task Time Tracker")
-        st.write("Detailed time tracking for all your activities with intelligent task recognition")
+        # Header using DashboardHeader component
+        DashboardHeader.render_simple(
+            title="Task Time Tracker",
+            subtitle="Detailed time tracking for all your activities with intelligent task recognition",
+            icon="⏱️"
+        )
         
         # Render sidebar and get settings
         settings = self.render_sidebar()

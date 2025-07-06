@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 
 from .base_component import StatelessComponent
+from .export import ExportComponent
 
 logger = logging.getLogger(__name__)
 
@@ -274,34 +275,34 @@ class TaskSummaryTable(StatelessComponent):
         filename: Optional[str],
         config: Dict[str, Any]
     ) -> None:
-        """Render export functionality."""
+        """Render export functionality using ExportComponent."""
         export_format = config["export_format"].lower()
-        
-        if export_format == "csv":
-            data = df.to_csv(index=False)
-            mime = "text/csv"
-            extension = "csv"
-        elif export_format == "json":
-            data = df.to_json(orient="records", indent=2)
-            mime = "application/json"
-            extension = "json"
-        else:
-            logger.warning(f"Unsupported export format: {export_format}")
-            return
         
         # Generate filename if not provided
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"task_summary_{timestamp}.{extension}"
-        elif not filename.endswith(f".{extension}"):
-            filename = f"{filename}.{extension}"
+            filename = f"task_summary_{timestamp}"
         
-        st.download_button(
-            label=f"📥 Download Summary ({export_format.upper()})",
-            data=data,
-            file_name=filename,
-            mime=mime
-        )
+        # Use ExportComponent for consistent export behavior
+        if export_format == "csv":
+            # Only add extension if not already present
+            csv_filename = filename if filename.endswith('.csv') else f"{filename}.csv"
+            ExportComponent.render_csv_button(
+                data=df,
+                filename=csv_filename,
+                label="📥 Download Summary (CSV)"
+            )
+        elif export_format == "json":
+            # Only add extension if not already present  
+            json_filename = filename if filename.endswith('.json') else f"{filename}.json"
+            ExportComponent.render_json_button(
+                data=df,
+                filename=json_filename,
+                label="📥 Download Summary (JSON)"
+            )
+        else:
+            logger.warning(f"Unsupported export format: {export_format}")
+            return
     
     @staticmethod
     def render_compact(

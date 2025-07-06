@@ -106,8 +106,9 @@ class AdvancedAnalyticsDashboard(BaseDashboard):
             if st.button("📊 Export Analysis Report"):
                 self.export_analysis_report(analysis_type, time_filter)
                 
-            # Cache controls
-            self.render_cache_controls()
+            # Session controls
+            from .components.session_controls import SessionControlsComponent
+            SessionControlsComponent.render_minimal(position="sidebar")
             
             return analysis_type, time_filter, comparison_mode, ai_insights, confidence_threshold, smoothing_window
             

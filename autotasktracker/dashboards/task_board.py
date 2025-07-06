@@ -11,7 +11,6 @@ import streamlit as st
 from datetime import datetime, timedelta
 import logging
 import time
-import threading
 
 # Real-time integration imports
 from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
@@ -29,8 +28,10 @@ from autotasktracker.dashboards.components import (
     NoDataMessage,
     EnhancedSearch,
     ExportComponent,
-    RealtimeStatusComponent
+    RealtimeStatusComponent,
+    DashboardHeader
 )
+from autotasktracker.dashboards.components.smart_defaults import SmartDefaultsComponent
 from autotasktracker.dashboards.data.repositories import TaskRepository, MetricsRepository
 from autotasktracker.config import get_config
 
@@ -75,8 +76,7 @@ class TaskBoardDashboard(BaseDashboard):
             
         # Initialize smart time filter if not set
         if 'time_filter' not in st.session_state:
-            from .components.filters import TimeFilterComponent
-            st.session_state.time_filter = TimeFilterComponent.get_smart_default(self.db_manager)
+            st.session_state.time_filter = SmartDefaultsComponent.get_time_period_default(self.db_manager)
             
         # Initialize category filter to empty (all categories) if not set
         if 'category_filter' not in st.session_state:
@@ -90,11 +90,11 @@ class TaskBoardDashboard(BaseDashboard):
             # Time filter with smart defaults
             time_filter = TimeFilterComponent.render(db_manager=self.db_manager)
             
-            # Smart default button
-            if st.button("🎯 Smart Default", help="Reset to optimal time period based on your data"):
-                smart_default = TimeFilterComponent.get_smart_default(self.db_manager)
-                st.session_state.time_filter = smart_default
-                st.rerun()
+            # Smart default button using new component
+            SmartDefaultsComponent.render_smart_defaults_button(
+                db_manager=self.db_manager,
+                show_explanation=False  # Keep it compact in sidebar
+            )
             
             # Category filter (fixed logic)
             categories = CategoryFilterComponent.render(multiselect=True)
@@ -231,8 +231,7 @@ class TaskBoardDashboard(BaseDashboard):
                 )
             else:
                 # Data exists, but filters are too restrictive
-                from .components.filters import TimeFilterComponent
-                smart_default = TimeFilterComponent.get_smart_default(self.db_manager)
+                smart_default = SmartDefaultsComponent.get_time_period_default(self.db_manager)
                 
                 NoDataMessage.render(
                     "No tasks found for current filters",
@@ -321,28 +320,29 @@ class TaskBoardDashboard(BaseDashboard):
         
         capture_event("database_connected")
             
-        # Header with real-time status
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.title("📋 Task Board")
-            st.markdown("Track and visualize your daily tasks and activities")
+        # Header with real-time status using DashboardHeader component
+        realtime_mode = "static"
+        processor_stats = None
         
-        with col2:
-            # Real-time status indicator using component
-            realtime_mode = "static"
-            processor_stats = None
-            
-            if st.session_state.get('realtime_enabled', False):
-                processor_stats = self.event_processor.get_statistics()
-                realtime_mode = "live" if processor_stats.get('running') else "paused"
-            
-            RealtimeStatusComponent.render(
-                mode=realtime_mode,
-                event_count=processor_stats.get('events_processed') if processor_stats else None,
-                last_update=st.session_state.get('last_update_time'),
-                processor_stats=processor_stats,
-                config={"compact_mode": False, "show_connection_details": False}
-            )
+        if st.session_state.get('realtime_enabled', False):
+            processor_stats = self.event_processor.get_statistics()
+            realtime_mode = "live" if processor_stats.get('running') else "paused"
+        
+        DashboardHeader.render(
+            title="Task Board",
+            subtitle="Track and visualize your daily tasks and activities",
+            icon="📋",
+            right_column_content={
+                'component': RealtimeStatusComponent,
+                'params': {
+                    'mode': realtime_mode,
+                    'event_count': processor_stats.get('events_processed') if processor_stats else None,
+                    'last_update': st.session_state.get('last_update_time'),
+                    'processor_stats': processor_stats,
+                    'config': {"compact_mode": False, "show_connection_details": False}
+                }
+            }
+        )
         
         # Enhanced search section
         with st.expander("🔍 Enhanced Search", expanded=False):
