@@ -117,35 +117,84 @@ class EnhancedSearch:
 
 
 class TaskGroup:
-    """Component for displaying grouped tasks."""
+    """Component for displaying grouped tasks with AI-enhanced visualization.
+    
+    This component can handle both traditional task lists and AI-enriched task data.
+    For AI-enhanced display, tasks should be dictionaries containing AI metadata.
+    """
     
     @staticmethod
     def render(
         window_title: str,
         duration_minutes: float,
-        tasks: List[str],
+        tasks: List[Any],
         category: str,
         timestamp: datetime,
         end_time: Optional[datetime] = None,
         screenshot_path: Optional[str] = None,
         show_screenshot: bool = True,
-        expanded: bool = False
-    ):
-        """Render a task group.
+        expanded: bool = False,
+        use_ai_display: bool = True
+    ) -> None:
+        """Render a task group with optional AI-enhanced visualization.
         
         Args:
             window_title: Window/application title
             duration_minutes: Duration in minutes
-            tasks: List of tasks/activities
+            tasks: List of tasks/activities (can be strings or dicts with AI metadata)
             category: Task category
             timestamp: When the task started
             end_time: When the task ended (optional)
             screenshot_path: Optional path to screenshot
             show_screenshot: Whether to show screenshot
             expanded: Whether to expand by default
+            use_ai_display: Whether to use AI-enhanced display when possible
         """
-        # Format time period display using proper timezone manager
+        # Try to use AI display if available and requested
+        if use_ai_display and tasks and isinstance(tasks[0], dict):
+            from .ai_task_display import AITaskDisplay
+            AITaskDisplay.render_task_group(
+                window_title=window_title,
+                duration_minutes=duration_minutes,
+                tasks=tasks,
+                category=category,
+                timestamp=timestamp,
+                end_time=end_time,
+                screenshot_path=screenshot_path,
+                show_screenshot=show_screenshot,
+                expanded=expanded
+            )
+            return
+            
+        # Fall back to basic display for non-AI tasks or if AI display is disabled
+        TaskGroup._render_basic(
+            window_title=window_title,
+            duration_minutes=duration_minutes,
+            tasks=tasks,
+            category=category,
+            timestamp=timestamp,
+            end_time=end_time,
+            screenshot_path=screenshot_path,
+            show_screenshot=show_screenshot,
+            expanded=expanded
+        )
+    
+    @staticmethod
+    def _render_basic(
+        window_title: str,
+        duration_minutes: float,
+        tasks: List[Any],
+        category: str,
+        timestamp: datetime,
+        end_time: Optional[datetime] = None,
+        screenshot_path: Optional[str] = None,
+        show_screenshot: bool = True,
+        expanded: bool = False
+    ) -> None:
+        """Render a basic task group without AI enhancements."""
         from ...core.timezone_manager import get_timezone_manager
+        import os
+        from PIL import Image
         
         tz_manager = get_timezone_manager()
         if end_time:
@@ -155,7 +204,7 @@ class TaskGroup:
             time_period = f"[{tz_manager.format_for_display(timestamp)}]"
             confidence_indicator = "🔴"  # Low confidence without end time
         
-        # Main header with enhanced format: "Task Name (duration) [time-period] confidence"
+        # Main header with enhanced format
         header = f"**{window_title}** ({duration_minutes:.0f} min) {time_period} {confidence_indicator}"
         
         with st.expander(header, expanded=expanded):
@@ -173,7 +222,8 @@ class TaskGroup:
                 if tasks:
                     st.markdown("**Activities:**")
                     for task in tasks[:5]:  # Limit to 5 tasks
-                        st.markdown(f"• {task}")
+                        task_text = task.get('title', task) if isinstance(task, dict) else str(task)
+                        st.markdown(f"• {task_text}")
                     if len(tasks) > 5:
                         st.caption(f"... and {len(tasks) - 5} more")
                         

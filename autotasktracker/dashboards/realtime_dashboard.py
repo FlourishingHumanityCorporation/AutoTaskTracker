@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import pandas as pd
 
-from autotasktracker.dashboards import BaseDashboard
+from autotasktracker.dashboards.base import BaseDashboard
 from autotasktracker.pensieve.event_processor import get_event_processor, PensieveEvent
 from autotasktracker.pensieve.advanced_search import get_advanced_search, SearchQuery
 from autotasktracker.pensieve.vector_search import get_enhanced_vector_search, VectorSearchQuery

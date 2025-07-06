@@ -10,8 +10,7 @@ AutoTaskTracker captures screenshots every few seconds and uses OCR/AI to automa
 - **AI-Powered Analysis** - OCR, embeddings, and optional VLM processing
 - **Live Dashboards** - Task board, analytics, and time tracking
 - **Smart Categorization** - Automatic activity classification
-- **Data Export** - CSV, JSON, and report generation
-- **Privacy First** - All data stays local
+
 
 ## Quick Start
 

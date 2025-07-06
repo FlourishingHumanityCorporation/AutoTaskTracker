@@ -38,6 +38,19 @@ AutoTaskTracker/
 └── docs/                      # Documentation
 ```
 
+## Core Concepts
+
+### Unique Windows
+
+AutoTaskTracker tracks and analyzes your application windows and browser tabs to provide insights into your work patterns. For a comprehensive guide, see the [Unique Windows documentation](../concepts/unique_windows.md).
+
+Key aspects:
+- Tracks distinct application windows and browser tabs
+- Provides metrics on focus and context switching
+- Helps optimize workflow and productivity
+
+This metric is particularly useful for understanding your work habits and identifying opportunities to improve focus and efficiency.
+
 ## Component Relationships
 
 ### Data Flow Architecture

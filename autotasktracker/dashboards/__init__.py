@@ -7,16 +7,31 @@ Usage:
     from autotasktracker.dashboards import DashboardManager, TaskBoard, Analytics
 """
 
-# Main dashboard functions  
-from .task_board import main as task_board_main
-from .analytics import main as analytics_main
-from .timetracker import main as timetracker_main
-from .launcher import main as launcher_main
+# Main dashboard functions (imported locally to avoid circular imports)
+# Importing these at the module level causes circular imports
+# They are imported inside functions when needed instead
 
-# Dashboard components
-from .base import BaseDashboard
-from .cache import DashboardCache
-from .notifications import TaskNotifier
+# Core components (imported directly from their modules when needed)
+# from .base import BaseDashboard  # Imported locally to prevent circular imports
+# from .cache import DashboardCache  # Imported locally to prevent circular imports
+# from .notifications import TaskNotifier  # Imported locally to prevent circular imports
+
+# Lazy imports for dashboard main functions
+def get_task_board():
+    from .task_board import main as task_board_main
+    return task_board_main
+
+def get_analytics():
+    from .analytics import main as analytics_main
+    return analytics_main
+
+def get_timetracker():
+    from .timetracker import main as timetracker_main
+    return timetracker_main
+
+def get_launcher():
+    from .launcher import main as launcher_main
+    return launcher_main
 
 # Utilities
 from .utils import format_datetime, safe_divide, get_color_palette

@@ -86,6 +86,49 @@ class BaseRepository:
 class TaskRepository(BaseRepository):
     """Repository for task-related data access."""
     
+    def count_tasks_today(self) -> int:
+        """Count the number of tasks recorded today.
+        
+        Returns:
+            int: Number of tasks recorded today
+        """
+        from datetime import datetime, time
+        
+        # Get today's date at midnight
+        today_start = datetime.combine(datetime.today(), time.min)
+        today_end = datetime.combine(datetime.today(), time.max)
+        
+        # Try PostgreSQL adapter first if available
+        if self.use_pensieve and self.pg_adapter:
+            try:
+                task_dicts = self.pg_adapter.get_tasks_optimized(
+                    start_date=today_start,
+                    end_date=today_end,
+                    limit=10000  # High limit to ensure we get all of today's tasks
+                )
+                return len(task_dicts)
+            except Exception as e:
+                logger.warning(f"PostgreSQL adapter failed, falling back to SQLite: {e}")
+        
+        # Fallback to direct SQLite query
+        query = """
+        SELECT COUNT(*) as task_count
+        FROM tasks
+        WHERE timestamp BETWEEN ? AND ?
+        """
+        
+        params = (
+            today_start.strftime('%Y-%m-%d %H:%M:%S'),
+            today_end.strftime('%Y-%m-%d %H:%M:%S')
+        )
+        
+        try:
+            result = self._execute_query(query, params)
+            return int(result.iloc[0]['task_count']) if not result.empty else 0
+        except Exception as e:
+            logger.error(f"Error counting today's tasks: {e}")
+            return 0
+    
     def get_tasks_for_period(
         self, 
         start_date: datetime, 
@@ -131,12 +174,20 @@ class TaskRepository(BaseRepository):
             m1.value as ocr_text,
             m2.value as active_window,
             m3.value as tasks,
-            m4.value as category
+            m4.value as category,
+            m5.value as minicpm_v_result,
+            m6.value as vlm_result,
+            m7.value as subtasks,
+            m8.value as tasks_json
         FROM entities e
         LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "ocr_result"
         LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
         LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
         LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
+        LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = "minicpm_v_result"
+        LEFT JOIN metadata_entries m6 ON e.id = m6.entity_id AND m6.key = "vlm_result"
+        LEFT JOIN metadata_entries m7 ON e.id = m7.entity_id AND m7.key = "subtasks"
+        LEFT JOIN metadata_entries m8 ON e.id = m8.entity_id AND m8.key = "tasks"
         WHERE e.created_at >= ? AND e.created_at <= ?
         """
         
@@ -173,6 +224,34 @@ class TaskRepository(BaseRepository):
             utc_timestamp = pd.to_datetime(row['created_at'])
             local_timestamp = tz_manager.utc_to_local(utc_timestamp)
             
+            # Parse AI metadata if available
+            metadata = {}
+            
+            # Parse AI results if they exist
+            if 'minicpm_v_result' in row and row['minicpm_v_result']:
+                try:
+                    metadata['minicpm_v_result'] = row['minicpm_v_result']
+                except Exception as e:
+                    logger.warning(f"Failed to parse minicpm_v_result for task {row['id']}: {e}")
+            
+            if 'vlm_result' in row and row['vlm_result']:
+                try:
+                    metadata['vlm_result'] = row['vlm_result']
+                except Exception as e:
+                    logger.warning(f"Failed to parse vlm_result for task {row['id']}: {e}")
+            
+            if 'subtasks' in row and row['subtasks']:
+                try:
+                    metadata['subtasks'] = row['subtasks']
+                except Exception as e:
+                    logger.warning(f"Failed to parse subtasks for task {row['id']}: {e}")
+            
+            if 'tasks_json' in row and row['tasks_json']:
+                try:
+                    metadata['tasks'] = row['tasks_json']
+                except Exception as e:
+                    logger.warning(f"Failed to parse tasks_json for task {row['id']}: {e}")
+            
             task = Task(
                 id=row['id'],
                 title=task_title,
@@ -180,15 +259,16 @@ class TaskRepository(BaseRepository):
                 timestamp=local_timestamp,
                 duration_minutes=5,  # Default 5 min per capture
                 window_title=window_title,
-                ocr_text=row.get("ocr_result"),
-                screenshot_path=row.get('filepath')
+                ocr_text=row.get("ocr_text"),
+                screenshot_path=row.get('filepath'),
+                metadata=metadata if metadata else None
             )
             tasks.append(task)
             
         return tasks
     
     def _convert_task_dicts_to_objects(self, task_dicts: List[Dict[str, Any]]) -> List[Task]:
-        """Convert PostgreSQL adapter results to Task objects."""
+        """Convert PostgreSQL adapter results to Task objects with AI metadata."""
         from ...core.timezone_manager import get_timezone_manager
         tz_manager = get_timezone_manager()
         
@@ -196,11 +276,14 @@ class TaskRepository(BaseRepository):
         for task_dict in task_dicts:
             # Extract task title from tasks array or use window title
             task_title = task_dict.get("active_window", 'Unknown')
+            tasks_data = None
+            
             if task_dict.get("tasks"):
                 # Use first task title if available
                 first_task = task_dict["tasks"][0] if isinstance(task_dict["tasks"], list) else task_dict["tasks"]
                 if isinstance(first_task, dict) and 'title' in first_task:
                     task_title = first_task['title']
+                    tasks_data = task_dict["tasks"]
                 elif isinstance(first_task, str):
                     task_title = first_task
             
@@ -217,6 +300,28 @@ class TaskRepository(BaseRepository):
             else:
                 local_timestamp = timestamp or datetime.now()
             
+            # Prepare AI metadata
+            metadata = {}
+            ai_fields = [
+                'minicpm_v_result', 'vlm_result', 'subtasks', 'tasks'
+            ]
+            
+            for field in ai_fields:
+                if field in task_dict and task_dict[field]:
+                    try:
+                        # Handle potential JSON strings
+                        if isinstance(task_dict[field], str):
+                            metadata[field] = json.loads(task_dict[field])
+                        else:
+                            metadata[field] = task_dict[field]
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Failed to parse {field} for task {task_dict.get('id')}: {e}")
+                        metadata[field] = task_dict[field]  # Keep original if parsing fails
+            
+            # If we have tasks data from earlier, ensure it's in the metadata
+            if tasks_data and 'tasks' not in metadata:
+                metadata['tasks'] = tasks_data
+            
             task = Task(
                 id=task_dict.get('id'),
                 title=task_title,
@@ -225,7 +330,8 @@ class TaskRepository(BaseRepository):
                 duration_minutes=5,  # Default 5 min per capture
                 window_title=window_title,
                 ocr_text=task_dict.get("ocr_result"),
-                screenshot_path=task_dict.get('filepath')
+                screenshot_path=task_dict.get('filepath'),
+                metadata=metadata if metadata else None
             )
             tasks.append(task)
             

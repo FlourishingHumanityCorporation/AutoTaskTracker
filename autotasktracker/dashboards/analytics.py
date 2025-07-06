@@ -7,7 +7,7 @@ import logging
 
 # Removed sys.path hack - using proper package imports
 
-from autotasktracker.dashboards import BaseDashboard
+from autotasktracker.dashboards.base import BaseDashboard
 from autotasktracker.dashboards.components import (
     TimeFilterComponent, 
     CategoryFilterComponent,

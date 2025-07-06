@@ -19,7 +19,7 @@ from autotasktracker.pensieve.cache_manager import get_cache_manager
 
 # Removed sys.path hack - using proper package imports
 
-from autotasktracker.dashboards import BaseDashboard
+from autotasktracker.dashboards.base import BaseDashboard
 from autotasktracker.utils.debug_capture import get_debug_capture, capture_event
 from autotasktracker.dashboards.components import (
     TimeFilterComponent, 
@@ -308,30 +308,57 @@ class TaskBoardDashboard(BaseDashboard):
         # Sort by duration
         task_groups.sort(key=lambda x: x.duration_minutes, reverse=True)
         
-        # Display task groups
+        # Display task groups with AI-enhanced display
         st.subheader(f"📋 Tasks ({len(task_groups)})")
         
+        # Add a toggle to switch between AI and basic view
+        col1, col2 = st.columns(2)
+        with col1:
+            use_ai_display = st.toggle(
+                "✨ AI-Enhanced View", 
+                value=True,
+                help="Enable AI-powered task extraction and analysis"
+            )
+        
+        # Group tasks by window title and category for display
         for i, group in enumerate(task_groups[:20]):  # Limit to top 20
             # Extract first task for screenshot
             screenshot_path = group.tasks[0].screenshot_path if group.tasks else None
             
-            # Get task descriptions
-            task_descriptions = []
-            for task in group.tasks[:3]:  # Show first 3 tasks
-                if task.metadata and 'description' in task.metadata:
-                    task_descriptions.append(task.metadata['description'])
-                    
+            # Prepare task data - pass full task objects for AI display
+            task_data = []
+            for task in group.tasks[:5]:  # Show up to 5 tasks
+                task_info = {
+                    'id': task.id,
+                    'title': task.title,
+                    'timestamp': task.timestamp.isoformat(),
+                    'ocr_text': task.ocr_text,
+                    'screenshot_path': task.screenshot_path
+                }
+                
+                # Include AI metadata if available
+                if task.metadata:
+                    task_info.update(task.metadata)
+                
+                task_data.append(task_info)
+            
+            # Render the task group with AI-enhanced display
             TaskGroupComponent.render(
                 window_title=group.window_title,
                 duration_minutes=group.duration_minutes,
-                tasks=task_descriptions,
+                tasks=task_data,  # Pass full task data including AI metadata
                 category=group.category,
                 timestamp=group.start_time,
                 end_time=group.end_time,
                 screenshot_path=screenshot_path,
                 show_screenshot=show_screenshots,
-                expanded=(i < 3)  # Expand first 3
+                expanded=(i < 3),  # Expand first 3
+                use_ai_display=use_ai_display  # Pass the toggle state
             )
+            
+            # Add a subtle divider between task groups
+            if i < len(task_groups[:20]) - 1:
+                st.divider()
             
     def run(self):
         """Main dashboard execution with debug capture and real-time updates."""
