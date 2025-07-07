@@ -62,7 +62,7 @@ class PensieveCacheManager:
         
         Args:
             memory_size_limit: Maximum number of items in memory cache
-            disk_cache_dir: Directory for disk cache (default: ~/.memos/autotask_cache)
+            disk_cache_dir: Directory for disk cache (default: /Users/paulrohde/AutoTaskTracker.memos/autotask_cache)
             default_ttl: Default time-to-live for cache entries in seconds
         """
         self.memory_size_limit = memory_size_limit

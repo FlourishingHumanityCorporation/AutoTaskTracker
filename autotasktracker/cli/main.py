@@ -62,7 +62,7 @@ def config():
     from autotasktracker.config import get_config
     config = get_config()
     click.echo("Current Configuration:")
-    click.echo(f"  Database: {config.get_db_path()}")
+    click.echo(f"  Database: {config.get_database_url()}")
     click.echo(f"  Memos Directory: {config.memos_dir}")
     click.echo(f"  AI Features Enabled: {config.AI_FEATURES_ENABLED}")
     click.echo(f"  Debug Mode: {config.DEBUG}")

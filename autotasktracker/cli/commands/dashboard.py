@@ -5,6 +5,7 @@ import subprocess
 import time
 import os
 from pathlib import Path
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -27,23 +28,25 @@ def start(type, port, browser):
     from autotasktracker import dashboard as task_dashboard
     from autotasktracker import analytics, timetracker
     
+    config = get_config()
+    
     dashboards = {
         'task': {
             'name': 'Task Board',
             'module': 'autotasktracker.dashboards.task_board',
-            'default_port': 8602,
+            'default_port': config.TASK_BOARD_PORT,
             'icon': '📋'
         },
         'analytics': {
             'name': 'Analytics',
             'module': 'autotasktracker.dashboards.analytics', 
-            'default_port': 8603,
+            'default_port': config.ANALYTICS_PORT,
             'icon': '📊'
         },
         'time': {
             'name': 'Time Tracker',
             'module': 'autotasktracker.dashboards.timetracker',
-            'default_port': 8605,
+            'default_port': config.TIMETRACKER_PORT,
             'icon': '⏱️'
         }
     }
@@ -134,10 +137,12 @@ def status():
     """Check dashboard status."""
     import requests
     
+    config = get_config()
+    
     dashboards = [
-        {'name': 'Task Board', 'port': 8502},
-        {'name': 'Analytics', 'port': 8503},
-        {'name': 'Time Tracker', 'port': 8505}
+        {'name': 'Task Board', 'port': config.TASK_BOARD_PORT},
+        {'name': 'Analytics', 'port': config.ANALYTICS_PORT},
+        {'name': 'Time Tracker', 'port': config.TIMETRACKER_PORT}
     ]
     
     click.echo("📊 Dashboard Status")

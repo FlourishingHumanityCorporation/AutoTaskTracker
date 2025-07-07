@@ -27,13 +27,7 @@ from .cache_manager import (
     PensieveCacheManager
 )
 
-from .config_sync import (
-    get_pensieve_config_sync,
-    get_synced_config,
-    reset_config_sync,
-    PensieveConfigSync,
-    SyncedConfiguration
-)
+# Config sync removed to prevent circular imports
 
 from .event_integration import (
     get_event_integrator,
@@ -81,13 +75,6 @@ __all__ = [
     "get_cache_manager",
     "reset_cache_manager",
     "PensieveCacheManager",
-    
-    # Configuration Sync
-    "get_pensieve_config_sync",
-    "get_synced_config",
-    "reset_config_sync",
-    "PensieveConfigSync", 
-    "SyncedConfiguration",
     
     # Event Integration
     "get_event_integrator",

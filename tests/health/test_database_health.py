@@ -73,7 +73,7 @@ Specific violations:
   
 ❌ INCORRECT USAGE:
   import sqlite3
-  conn = sqlite3.connect("~/.memos/database.db")
+  conn = sqlite3.connect("/Users/paulrohde/AutoTaskTracker.memos/database.db")
 
 All database access should go through DatabaseManager for:
 - Connection pooling

@@ -407,7 +407,7 @@ class TestSensitiveDataFilterPerformance:
             "OCR extracted: Password field visible in screenshot - FILTERED",
             
             # Mixed sensitivity AutoTaskTracker scenarios
-            "AutoTaskTracker config: database.url=sqlite:///~/.memos/database.db (local)",
+            "AutoTaskTracker config: database.url=sqlite:////Users/paulrohde/AutoTaskTracker.memos/database.db (local)",
             "Pensieve screenshot contains email: support@autotasktracker.dev and phone: 555-0123",
             "VLM analysis detected payment form: Credit card field visible in UI capture",
             

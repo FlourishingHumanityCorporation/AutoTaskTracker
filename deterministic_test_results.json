@@ -1,0 +1,45 @@
+{
+  "consistency_report": {
+    "total_runs": 3,
+    "avg_processing_time": 5.9030845165252686,
+    "min_processing_time": 2.86102294921875e-06,
+    "max_processing_time": 17.709242820739746,
+    "description_consistency": true,
+    "task_consistency": true,
+    "category_consistency": true,
+    "unique_descriptions": 1,
+    "unique_tasks": 1,
+    "unique_categories": 1,
+    "sample_description": "The image shows a user interface of an Integrated Development Environment (IDE), specifically focused on editing and running Python code. Here's the detailed analysis:\n\n1. **What file is being edited*...",
+    "sample_task": "Software Development",
+    "sample_category": "Development"
+  },
+  "all_results": [
+    {
+      "description": "The image shows a user interface of an Integrated Development Environment (IDE), specifically focused on editing and running Python code. Here's the detailed analysis:\n\n1. **What file is being edited**: The IDE indicates that the current file being worked on is named `main.py`. This suggests it might be a main script or entry point for the application.\n\n2. **Programming language**: The task mentioned in the interface (\"Task: Writing Python function\") and the visible code snippet (`def calculate_sum(a, b): return a + b`) confirm that the programming language being used is Python.\n\n3. **Any visible errors or debugging**: There are no explicit error messages displayed on the screen at this moment. However, there's an indication of \"Deterministic VLM Test\" with specific conditions listed (Temperature 0.0 for consistent output), which suggests some form of testing might be in progress but not currently showing any issues.\n\n4. **Code structure visible**: The code snippet shows a simple function definition (`def calculate_sum(a, b): return a + b`). This indicates that the user is likely working on writing or debugging basic arithmetic functions within Python.\n\n5. **Project context from file tree**: There's no detailed view of the project hierarchy (file tree) in this screenshot; only the current active file `main.py` and its associated controls are visible.\n\nThis analysis provides a clear understanding of what is being done with the IDE, including which language is used for coding and some aspects of how it",
+      "tasks": "Software Development",
+      "category": "Development",
+      "app_type": "IDE",
+      "confidence": 0.8
+    },
+    {
+      "description": "The image shows a user interface of an Integrated Development Environment (IDE), specifically focused on editing and running Python code. Here's the detailed analysis:\n\n1. **What file is being edited**: The IDE indicates that the current file being worked on is named `main.py`. This suggests it might be a main script or entry point for the application.\n\n2. **Programming language**: The task mentioned in the interface (\"Task: Writing Python function\") and the visible code snippet (`def calculate_sum(a, b): return a + b`) confirm that the programming language being used is Python.\n\n3. **Any visible errors or debugging**: There are no explicit error messages displayed on the screen at this moment. However, there's an indication of \"Deterministic VLM Test\" with specific conditions listed (Temperature 0.0 for consistent output), which suggests some form of testing might be in progress but not currently showing any issues.\n\n4. **Code structure visible**: The code snippet shows a simple function definition (`def calculate_sum(a, b): return a + b`). This indicates that the user is likely working on writing or debugging basic arithmetic functions within Python.\n\n5. **Project context from file tree**: There's no detailed view of the project hierarchy (file tree) in this screenshot; only the current active file `main.py` and its associated controls are visible.\n\nThis analysis provides a clear understanding of what is being done with the IDE, including which language is used for coding and some aspects of how it",
+      "tasks": "Software Development",
+      "category": "Development",
+      "app_type": "IDE",
+      "confidence": 0.8
+    },
+    {
+      "description": "The image shows a user interface of an Integrated Development Environment (IDE), specifically focused on editing and running Python code. Here's the detailed analysis:\n\n1. **What file is being edited**: The IDE indicates that the current file being worked on is named `main.py`. This suggests it might be a main script or entry point for the application.\n\n2. **Programming language**: The task mentioned in the interface (\"Task: Writing Python function\") and the visible code snippet (`def calculate_sum(a, b): return a + b`) confirm that the programming language being used is Python.\n\n3. **Any visible errors or debugging**: There are no explicit error messages displayed on the screen at this moment. However, there's an indication of \"Deterministic VLM Test\" with specific conditions listed (Temperature 0.0 for consistent output), which suggests some form of testing might be in progress but not currently showing any issues.\n\n4. **Code structure visible**: The code snippet shows a simple function definition (`def calculate_sum(a, b): return a + b`). This indicates that the user is likely working on writing or debugging basic arithmetic functions within Python.\n\n5. **Project context from file tree**: There's no detailed view of the project hierarchy (file tree) in this screenshot; only the current active file `main.py` and its associated controls are visible.\n\nThis analysis provides a clear understanding of what is being done with the IDE, including which language is used for coding and some aspects of how it",
+      "tasks": "Software Development",
+      "category": "Development",
+      "app_type": "IDE",
+      "confidence": 0.8
+    }
+  ],
+  "processing_times": [
+    17.709242820739746,
+    7.867813110351562e-06,
+    2.86102294921875e-06
+  ]
+}

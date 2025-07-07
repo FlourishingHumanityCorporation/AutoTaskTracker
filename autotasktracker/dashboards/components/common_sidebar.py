@@ -72,7 +72,30 @@ class CommonSidebar:
             
             # Category filter section
             if enable_category_filter:
-                results['categories'] = CategoryFilterComponent.render(multiselect=True)
+                # Fetch available categories from database
+                available_categories = None
+                if db_manager:
+                    try:
+                        with db_manager.get_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                SELECT DISTINCT me.value as category
+                                FROM metadata_entries me 
+                                WHERE me.key = 'category' 
+                                AND me.value IS NOT NULL
+                                AND me.value <> ''
+                                ORDER BY me.value
+                            ''')
+                            categories_data = cursor.fetchall()
+                            if categories_data:
+                                available_categories = ["All Categories"] + [row[0] for row in categories_data]
+                    except Exception as e:
+                        st.warning(f"Could not load categories: {e}")
+                
+                results['categories'] = CategoryFilterComponent.render(
+                    categories=available_categories,
+                    multiselect=True
+                )
             
             # Custom sections
             if custom_sections:

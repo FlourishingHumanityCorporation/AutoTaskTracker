@@ -32,7 +32,7 @@ class TestEmbeddingsExtractionOnRealScreenshots:
     @pytest.fixture
     def real_memos_db_path(self) -> str:
         """Get the real memos database path."""
-        memos_db = Path.home() / ".memos" / "database.db"
+        memos_db = Path("/Users/paulrohde/AutoTaskTracker.memos") / "database.db"
         if not memos_db.exists():
             pytest.skip("Real memos database not found - need actual AutoTaskTracker usage data")
         return str(memos_db)

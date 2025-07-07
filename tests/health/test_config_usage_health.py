@@ -45,7 +45,7 @@ class TestConfigUsageHealth:
         # Patterns that should use config
         hardcoded_patterns = {
             'ports': {
-                'pattern': r'\b(8502|8503|8504|8505|8506|8839|11434)\b',
+                'pattern': r'\b(8502|8503|8504|8505|8506|8841|11434)\b',
                 'should_use': 'config.TASK_BOARD_PORT, config.ANALYTICS_PORT, etc.'
             },
             'localhost_urls': {
@@ -61,7 +61,7 @@ class TestConfigUsageHealth:
                 'should_use': 'config.get_db_path()'
             },
             'api_endpoints': {
-                'pattern': r'["\']http://localhost:(8839|11434)[^"\']*["\']',
+                'pattern': r'["\']http://localhost:(8841|11434)[^"\']*["\']',
                 'should_use': 'config.get_service_url("memos") or config.get_ollama_url()'
             }
         }
@@ -248,7 +248,7 @@ Found {len(hardcoded_violations)} hardcoded values in production files:
                 
                 # Check for hardcoded URLs
                 url_patterns = [
-                    r'["\']http://localhost:8839[^"\']*["\']',
+                    r'["\']http://localhost:8841[^"\']*["\']',
                     r'["\']http://localhost:11434[^"\']*["\']',
                     r'["\']http://127\.0\.0\.1:\d+[^"\']*["\']'
                 ]

@@ -1,7 +1,7 @@
 """End-to-end happy-path test: screenshot file → DB → processed → Streamlit UI.
 
 This test launches Pensieve watcher + serve, injects a synthetic screenshot into
-an isolated HOME (~/.memos) and then starts `task_board.py` (Streamlit). We use
+an isolated HOME (/Users/paulrohde/AutoTaskTracker.memos) and then starts `task_board.py` (Streamlit). We use
 Playwright to confirm the dashboard shows at least one activity card, meaning
 backend + UI are wired together.
 
@@ -98,7 +98,7 @@ def test_complete_end_to_end_user_journey_from_screenshot_to_dashboard_display(e
 
     from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
-    screenshots_dir = home_dir / ".memos" / "screenshots" / today
+    screenshots_dir = Path("/Users/paulrohde/AutoTaskTracker.memos") / "screenshots" / today
     screenshots_dir.mkdir(parents=True, exist_ok=True)
 
     # Count existing files for state tracking

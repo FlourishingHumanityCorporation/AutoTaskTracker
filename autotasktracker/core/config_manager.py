@@ -279,7 +279,7 @@ class ConfigManager:
         
         try:
             # Test database path
-            db_path = self.config.get_db_path()
+            db_path = self.config.get_database_url()
             if not os.path.exists(os.path.dirname(db_path)):
                 validation_results['errors'].append(f"Database directory does not exist: {os.path.dirname(db_path)}")
                 validation_results['valid'] = False

@@ -666,7 +666,7 @@ class PensieveBackendOptimizer:
         try:
             # Test if we can access the database directory
             config = get_synced_config()
-            db_path = Path(config.database_path if hasattr(config, 'database_path') else "~/.memos/database.db").expanduser()
+            db_path = Path(config.database_path if hasattr(config, 'database_path') else "/Users/paulrohde/AutoTaskTracker.memos/database.db").expanduser()
             
             if not db_path.exists():
                 logger.error(f"Database file not found: {db_path}")
@@ -707,7 +707,7 @@ class PensieveBackendOptimizer:
         """Check file system permissions."""
         try:
             config = get_synced_config()
-            memos_dir = Path("~/.memos").expanduser()
+            memos_dir = Path("/Users/paulrohde/AutoTaskTracker.memos").expanduser()
             
             # Check if we can read/write to memos directory
             if not memos_dir.exists():
@@ -727,7 +727,7 @@ class PensieveBackendOptimizer:
         """Create database backup."""
         try:
             config = get_synced_config()
-            db_path = Path(config.database_path if hasattr(config, 'database_path') else "~/.memos/database.db").expanduser()
+            db_path = Path(config.database_path if hasattr(config, 'database_path') else "/Users/paulrohde/AutoTaskTracker.memos/database.db").expanduser()
             backup_path = db_path.parent / f"database_backup_{int(time.time())}.db"
             
             import shutil
@@ -1053,7 +1053,7 @@ class PensieveBackendOptimizer:
             logger.info("Restoring database backup...")
             
             config = get_synced_config()
-            db_path = Path(config.database_path if hasattr(config, 'database_path') else "~/.memos/database.db").expanduser()
+            db_path = Path(config.database_path if hasattr(config, 'database_path') else "/Users/paulrohde/AutoTaskTracker.memos/database.db").expanduser()
             backup_dir = db_path.parent
             
             # Find most recent backup

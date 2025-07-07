@@ -5,6 +5,7 @@ AI-powered task discovery from screenshots
 """
 
 import sys
+import os
 import subprocess
 import argparse
 from pathlib import Path
@@ -12,7 +13,8 @@ from pathlib import Path
 # Add package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from autotasktracker import get_config
+# Configuration import
+from autotasktracker.config import get_config
 
 
 def main():
@@ -43,12 +45,19 @@ Examples:
     )
     
     args = parser.parse_args()
+    
+    # Configuration setup
     config = get_config()
     
     if args.command == 'start':
         print("Starting AutoTaskTracker services...")
-        # Start memos
-        subprocess.run(['memos', 'start'])
+        # Set AutoTaskTracker-specific environment variables (Option 2: Environment-Based)
+        env = os.environ.copy()
+        env['MEMOS_BASE_DIR'] = '/Users/paulrohde/AutoTaskTracker.memos'
+        env['MEMOS_SERVER_PORT'] = '8841'
+        env['MEMOS_DATABASE_PATH'] = 'postgresql://postgres:mysecretpassword@localhost:5433/autotasktracker'
+        print(f"Using AutoTaskTracker environment configuration")
+        subprocess.run(['/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python', '-m', 'memos.commands', 'start'], env=env)
         print("✅ Memos backend started")
         
         # Start main dashboard
@@ -65,7 +74,12 @@ Examples:
         
     elif args.command == 'stop':
         print("Stopping AutoTaskTracker services...")
-        subprocess.run(['memos', 'stop'])
+        # Use AutoTaskTracker-specific environment variables
+        env = os.environ.copy()
+        env['MEMOS_BASE_DIR'] = '/Users/paulrohde/AutoTaskTracker.memos'
+        env['MEMOS_SERVER_PORT'] = '8841'
+        env['MEMOS_DATABASE_PATH'] = 'postgresql://postgres:mysecretpassword@localhost:5433/autotasktracker'
+        subprocess.run(['/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python', '-m', 'memos.commands', 'stop'], env=env)
         subprocess.run(['pkill', '-f', 'streamlit'])
         print("✅ All services stopped")
         
@@ -131,7 +145,7 @@ Examples:
         cmd = [
             sys.executable, '-m', 'streamlit', 'run',
             'autotasktracker/dashboards/vlm_monitor.py',
-            '--server.port', '8610'
+            '--server.port', str(config.VLM_MONITOR_PORT)
         ]
         if args.headless:
             cmd.extend(['--server.headless', 'true'])
@@ -147,7 +161,12 @@ Examples:
         print("Checking AutoTaskTracker status...")
         # Check memos
         try:
-            result = subprocess.run(['memos', 'ps'], capture_output=True, text=True)
+            # Use AutoTaskTracker-specific environment variables
+            env = os.environ.copy()
+            env['MEMOS_BASE_DIR'] = '/Users/paulrohde/AutoTaskTracker.memos'
+            env['MEMOS_SERVER_PORT'] = '8841'
+            env['MEMOS_DATABASE_PATH'] = 'postgresql://postgres:mysecretpassword@localhost:5433/autotasktracker'
+            result = subprocess.run(['/Users/paulrohde/CodeProjects/AutoTaskTracker/venv/bin/python', '-m', 'memos.commands', 'ps'], capture_output=True, text=True, env=env)
             print(result.stdout)
         except FileNotFoundError:
             print("❌ Memos not found in PATH. Make sure it's installed and activated.")

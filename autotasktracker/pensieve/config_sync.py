@@ -23,7 +23,7 @@ class SyncedConfiguration:
     # Pensieve-derived settings
     screenshots_dir: str = ""
     database_path: str = ""
-    api_base_url: str = "http://localhost:8839"
+    api_base_url: str = "http://localhost:8841"
     
     # Performance settings from Pensieve
     ocr_timeout: int = 30
@@ -60,7 +60,7 @@ class PensieveConfigSync:
         self._sync_interval = 300  # Sync every 5 minutes
         
         # Configuration file for persistent settings
-        self.config_file = Path.home() / ".memos" / "autotask_config.json"
+        self.config_file = Path("/Users/paulrohde/AutoTaskTracker.memos") / "autotask_config.json"
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
     
     def get_synced_config(self, force_refresh: bool = False) -> SyncedConfiguration:
@@ -128,8 +128,8 @@ class PensieveConfigSync:
         
         # Extract Pensieve settings
         screenshots_dir = pensieve_config.get('screenshots_dir', 
-                                            pensieve_config.get('data_dir', '~/.memos/screenshots'))
-        database_path = pensieve_config.get('database_path', '~/.memos/database.db')
+                                            pensieve_config.get('data_dir', '/Users/paulrohde/AutoTaskTracker.memos/screenshots'))
+        database_path = pensieve_config.get('database_path', '/Users/paulrohde/AutoTaskTracker.memos/database.db')
         
         # Performance settings from Pensieve
         ocr_timeout = pensieve_config.get('ocr_timeout', 30)
@@ -137,7 +137,7 @@ class PensieveConfigSync:
         max_concurrent = pensieve_config.get('max_concurrent_requests', 10)
         
         # API settings
-        api_port = pensieve_config.get('port', 8839)
+        api_port = pensieve_config.get('port', 8841)
         api_host = pensieve_config.get('host', 'localhost')
         api_base_url = f"http://{api_host}:{api_port}"
         
@@ -205,9 +205,9 @@ class PensieveConfigSync:
     def _get_default_config(self) -> SyncedConfiguration:
         """Get default configuration when Pensieve is not available."""
         return SyncedConfiguration(
-            screenshots_dir=os.path.expanduser("~/.memos/screenshots"),
-            database_path=os.path.expanduser("~/.memos/database.db"),
-            api_base_url="http://localhost:8839"
+            screenshots_dir="/Users/paulrohde/AutoTaskTracker.memos/screenshots",
+            database_path="/Users/paulrohde/AutoTaskTracker.memos/database.db",
+            api_base_url="http://localhost:8841"
         )
     
     def _save_config_to_file(self, config: SyncedConfiguration) -> None:

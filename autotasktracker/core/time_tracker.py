@@ -300,7 +300,7 @@ class TimeTracker:
         try:
             import yaml
             config = get_config()
-            config_path = config.memos_dir / "config.yaml"
+            config_path = config.memos_dir / "config_autotasktracker.yaml"
             
             if config_path.exists():
                 with open(config_path, 'r') as f:

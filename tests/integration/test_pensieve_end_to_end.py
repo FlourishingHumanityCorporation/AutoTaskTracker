@@ -27,8 +27,8 @@ import requests
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 VENV_BIN = REPO_ROOT / "venv" / "bin"
 MEMOS_CMD = str(VENV_BIN / "memos")
-DB_PATH = Path.home() / ".memos" / "database.db"
-API_URL = "http://localhost:8839"
+DB_PATH = Path("/Users/paulrohde/AutoTaskTracker.memos") / "database.db"
+API_URL = "http://localhost:8841"
 STREAMLIT_URL = "http://localhost:8502"
 
 CAPTURE_TIMEOUT = 60      # total seconds allowed for capture+process

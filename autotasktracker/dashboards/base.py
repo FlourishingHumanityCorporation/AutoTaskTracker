@@ -86,27 +86,15 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
         """Get database manager instance (lazy loading)."""
         if self._db_manager is None:
             try:
-                # For dashboards, use a simplified connection approach to avoid timeouts
-                from autotasktracker.dashboards.simple_db import SimpleDatabaseManager
-                
-                logger.info(f"Dashboard using simplified PostgreSQL connection: {self.config.DB_PATH}")
-                self._db_manager = SimpleDatabaseManager(self.config.DB_PATH)
-                logger.info(f"Database type: {self._db_manager.get_database_type()}")
+                # Use the PostgreSQL-only DatabaseManager
+                logger.info("Initializing PostgreSQL DatabaseManager for dashboard")
+                self._db_manager = DatabaseManager()
+                logger.info("DatabaseManager initialized successfully")
                     
             except Exception as e:
-                logger.error(f"Failed to initialize simplified database manager: {e}")
-                # Fallback to regular DatabaseManager
-                try:
-                    self._db_manager = DatabaseManager(
-                        db_path=self.config.DB_PATH, 
-                        use_pensieve_api=False
-                    )
-                    logger.info("Fallback to regular DatabaseManager succeeded")
-                except Exception as e2:
-                    logger.error(f"All database managers failed: {e2}")
-                    # Create emergency simple connection
-                    from autotasktracker.dashboards.simple_db import SimpleDatabaseManager
-                    self._db_manager = SimpleDatabaseManager("sqlite://~/.memos/database.db")
+                logger.error(f"Failed to initialize database manager: {e}")
+                # No fallback available - database connection failed
+                self._db_manager = None
         return self._db_manager
     
     def show_health_status(self):
@@ -114,9 +102,20 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
         with st.sidebar:
             st.divider()
             
-            # Get health status
+            # Get health status - trigger immediate check if unknown
             health_summary = self.get_health_status()
             status = health_summary.get('status', 'unknown')
+            
+            # If status is unknown, trigger an immediate health check
+            if status == 'unknown':
+                try:
+                    # Force a health check
+                    self._health_monitor.check_health()
+                    health_summary = self.get_health_status()
+                    status = health_summary.get('status', 'unknown')
+                except Exception as e:
+                    logger.warning(f"Failed to perform immediate health check: {e}")
+                    status = 'unhealthy'
             
             if status == 'healthy':
                 st.success("🟢 Pensieve Healthy")
@@ -167,7 +166,7 @@ class BaseDashboard(HealthAwareMixin, StreamlitWebSocketMixin):
         Returns:
             True if connected, False otherwise
         """
-        if not self.db_manager.test_connection():
+        if not self.db_manager or not self.db_manager.test_connection():
             show_error_message(
                 "Cannot connect to database",
                 "Make sure Memos is running: memos start"

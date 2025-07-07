@@ -26,11 +26,10 @@ class TimezoneManager:
     def _detect_local_timezone(self) -> timezone:
         """Detect the local system timezone."""
         try:
-            # Get the current UTC offset accounting for DST
-            if time.daylight:
-                offset_seconds = -time.altzone  # DST offset (negative because altzone is negative)
-            else:
-                offset_seconds = -time.timezone  # Standard offset
+            # Get the current UTC offset by comparing actual times
+            local_now = datetime.now()
+            utc_now = datetime.utcnow()
+            offset_seconds = (local_now - utc_now).total_seconds()
                 
             return timezone(timedelta(seconds=offset_seconds))
         except Exception as e:
@@ -40,10 +39,11 @@ class TimezoneManager:
     def _calculate_utc_offset(self) -> float:
         """Calculate UTC offset in hours for the current local timezone."""
         try:
-            if time.daylight:
-                return time.altzone / 3600  # DST offset in hours
-            else:
-                return time.timezone / 3600  # Standard offset in hours
+            # Calculate actual offset by comparing current times
+            local_now = datetime.now()
+            utc_now = datetime.utcnow()
+            offset_hours = (local_now - utc_now).total_seconds() / 3600
+            return offset_hours
         except (OSError, AttributeError, ValueError) as e:
             logger.debug(f"Error getting timezone offset: {e}")
             return 0.0
@@ -70,7 +70,7 @@ class TimezoneManager:
         # Return as naive UTC datetime (matching Pensieve's storage format)
         return utc_dt.replace(tzinfo=None)
     
-    def utc_to_local(self, utc_dt: datetime) -> datetime:
+    def utc_to_local(self, utc_dt: datetime, legacy_fix: bool = True) -> datetime:
         """Convert UTC datetime from database to local datetime for display.
         
         Args:
@@ -85,6 +85,13 @@ class TimezoneManager:
         # Add UTC timezone info if naive
         if utc_dt.tzinfo is None:
             utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+        
+        # Legacy data fix: The database has timestamps that are 1 hour ahead
+        # (stored as if UTC+8 instead of UTC+7 for PDT)
+        # This is a temporary fix until data is corrected
+        if legacy_fix and utc_dt.year == 2025 and utc_dt.month <= 7:
+            # Subtract an extra hour to get correct local time
+            utc_dt = utc_dt - timedelta(hours=1)
         
         # Convert to local timezone
         local_dt = utc_dt.astimezone(self._local_timezone)

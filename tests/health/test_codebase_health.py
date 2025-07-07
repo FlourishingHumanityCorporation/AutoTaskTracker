@@ -754,7 +754,7 @@ This test will PASS once root directory is properly organized!
                 db_issues.append(f"{file_path}: Direct sqlite3.connect (use DatabaseManager)")
             
             # Look for hardcoded database paths
-            db_path_patterns = ['.memos/database.db', '~/.memos/', 'database.db']
+            db_path_patterns = ['.memos/database.db', '/Users/paulrohde/AutoTaskTracker.memos/', 'database.db']
             for pattern in db_path_patterns:
                 # Exclude config files and pensieve modules which legitimately interface with memos defaults
                 if (pattern in content and 

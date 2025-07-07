@@ -244,7 +244,7 @@ class TaskRepository(BaseRepository):
         query = """
         SELECT 
             e.id,
-            e.created_at,
+            COALESCE(e.created_at, e.file_created_at) as created_at,
             e.filepath,
             m1.value as ocr_text,
             m2.value as active_window,
@@ -253,24 +253,34 @@ class TaskRepository(BaseRepository):
             m5.value as minicpm_v_result,
             m6.value as vlm_result,
             m7.value as subtasks,
-            m8.value as tasks_json
+            m8.value as tasks_json,
+            m9.value as session_id,
+            m10.value as dual_model_processed,
+            m11.value as dual_model_version,
+            m12.value as llama3_session_result,
+            m13.value as workflow_analysis
         FROM entities e
-        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = "ocr_result"
-        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
-        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = "tasks"
-        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
-        LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = "minicpm_v_result"
-        LEFT JOIN metadata_entries m6 ON e.id = m6.entity_id AND m6.key = "vlm_result"
-        LEFT JOIN metadata_entries m7 ON e.id = m7.entity_id AND m7.key = "subtasks"
-        LEFT JOIN metadata_entries m8 ON e.id = m8.entity_id AND m8.key = "tasks"
-        WHERE e.created_at >= ? AND e.created_at <= ?
+        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'ocr_text'
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'active_window'
+        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'tasks'
+        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'category'
+        LEFT JOIN metadata_entries m5 ON e.id = m5.entity_id AND m5.key = 'minicpm_v_result'
+        LEFT JOIN metadata_entries m6 ON e.id = m6.entity_id AND m6.key = 'vlm_result'
+        LEFT JOIN metadata_entries m7 ON e.id = m7.entity_id AND m7.key = 'subtasks'
+        LEFT JOIN metadata_entries m8 ON e.id = m8.entity_id AND m8.key = 'tasks'
+        LEFT JOIN metadata_entries m9 ON e.id = m9.entity_id AND m9.key = 'session_id'
+        LEFT JOIN metadata_entries m10 ON e.id = m10.entity_id AND m10.key = 'dual_model_processed'
+        LEFT JOIN metadata_entries m11 ON e.id = m11.entity_id AND m11.key = 'dual_model_version'
+        LEFT JOIN metadata_entries m12 ON e.id = m12.entity_id AND m12.key = 'llama3_session_result'
+        LEFT JOIN metadata_entries m13 ON e.id = m13.entity_id AND m13.key = 'workflow_analysis'
+        WHERE COALESCE(e.created_at, e.file_created_at) >= %s AND COALESCE(e.created_at, e.file_created_at) <= %s
         """
         
-        # Convert local time range to UTC for database query (Pensieve stores UTC)
-        from autotasktracker.core.timezone_manager import get_timezone_manager
-        
-        tz_manager = get_timezone_manager()
-        utc_start, utc_end = tz_manager.convert_query_range(start_date, end_date)
+        # TEMPORARY FIX: Add 8 hours to account for timezone storage issue
+        # TODO: Remove once root cause is fixed
+        from datetime import timedelta
+        utc_start = start_date + timedelta(hours=7)
+        utc_end = end_date + timedelta(hours=7)
         
         params = [
             utc_start.strftime('%Y-%m-%d %H:%M:%S'),
@@ -278,11 +288,11 @@ class TaskRepository(BaseRepository):
         ]
         
         if categories:
-            placeholders = ','.join(['?' for _ in categories])
+            placeholders = ','.join(['%s' for _ in categories])
             query += f" AND m4.value IN ({placeholders})"
             params.extend(categories)
             
-        query += " ORDER BY e.created_at DESC LIMIT ?"
+        query += " ORDER BY COALESCE(e.created_at, e.file_created_at) DESC LIMIT %s"
         params.append(limit)
         
         # Use shorter cache TTL for recent data (60 seconds), longer for historical (5 minutes)
@@ -295,9 +305,9 @@ class TaskRepository(BaseRepository):
             window_title = extract_window_title(row.get("active_window", '')) or row.get("active_window", 'Unknown')
             task_title = row.get("tasks") or window_title
             
-            # Convert UTC timestamp from database to local time for display
+            # TEMPORARY FIX: Subtract 8 hours for correct local time
             utc_timestamp = pd.to_datetime(row['created_at'])
-            local_timestamp = tz_manager.utc_to_local(utc_timestamp)
+            local_timestamp = utc_timestamp - timedelta(hours=7)
             
             # Parse AI metadata if available
             metadata = {}
@@ -326,6 +336,32 @@ class TaskRepository(BaseRepository):
                     metadata['tasks'] = row['tasks_json']
                 except Exception as e:
                     logger.warning(f"Failed to parse tasks_json for task {row['id']}: {e}")
+            
+            # Parse dual-model metadata
+            if 'session_id' in row and row['session_id']:
+                metadata['session_id'] = row['session_id']
+            
+            if 'dual_model_processed' in row and row['dual_model_processed']:
+                metadata['dual_model_processed'] = row['dual_model_processed'] == 'true'
+            
+            if 'dual_model_version' in row and row['dual_model_version']:
+                metadata['dual_model_version'] = row['dual_model_version']
+            
+            if 'llama3_session_result' in row and row['llama3_session_result']:
+                try:
+                    import json
+                    metadata['llama3_session_result'] = json.loads(row['llama3_session_result'])
+                except Exception as e:
+                    logger.warning(f"Failed to parse llama3_session_result for task {row['id']}: {e}")
+                    metadata['llama3_session_result'] = row['llama3_session_result']
+            
+            if 'workflow_analysis' in row and row['workflow_analysis']:
+                try:
+                    import json
+                    metadata['workflow_analysis'] = json.loads(row['workflow_analysis'])
+                except Exception as e:
+                    logger.warning(f"Failed to parse workflow_analysis for task {row['id']}: {e}")
+                    metadata['workflow_analysis'] = row['workflow_analysis']
             
             task = Task(
                 id=row['id'],
@@ -559,7 +595,7 @@ class ActivityRepository(BaseRepository):
         query = """
         SELECT 
             e.id,
-            e.created_at,
+            COALESCE(e.created_at, e.file_created_at) as created_at,
             e.filepath,
             m1.value as ocr_text,
             m2.value as active_window,
@@ -576,11 +612,11 @@ class ActivityRepository(BaseRepository):
         params = []
         
         if categories:
-            placeholders = ','.join(['?' for _ in categories])
+            placeholders = ','.join(['%s' for _ in categories])
             query += f" AND m4.value IN ({placeholders})"
             params.extend(categories)
             
-        query += " ORDER BY e.created_at DESC LIMIT ?"
+        query += " ORDER BY COALESCE(e.created_at, e.file_created_at) DESC LIMIT %s"
         params.append(limit)
         
         df = self._execute_query(query, tuple(params))
@@ -678,14 +714,14 @@ class MetricsRepository(BaseRepository):
         # Get all data for the day
         query = """
         SELECT 
-            e.created_at,
+            COALESCE(e.created_at, e.file_created_at) as created_at,
             m2.value as active_window,
             m4.value as category
         FROM entities e
         LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = "active_window"
         LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = "category"
-        WHERE e.created_at >= ? AND e.created_at <= ?
-        ORDER BY e.created_at
+        WHERE COALESCE(e.created_at, e.file_created_at) >= %s AND COALESCE(e.created_at, e.file_created_at) <= %s
+        ORDER BY COALESCE(e.created_at, e.file_created_at)
         """
         
         df = self._execute_query(query, (
@@ -821,14 +857,19 @@ class MetricsRepository(BaseRepository):
         basic_query = """
         SELECT 
             COUNT(DISTINCT e.id) as total_activities,
-            COUNT(DISTINCT DATE(e.created_at)) as active_days
+            COUNT(DISTINCT DATE(COALESCE(e.created_at, e.file_created_at))) as active_days
         FROM entities e
-        WHERE e.created_at >= ? AND e.created_at <= ?
+        WHERE COALESCE(e.created_at, e.file_created_at) >= %s AND COALESCE(e.created_at, e.file_created_at) <= %s
         """
         
+        # TEMPORARY FIX: Add 8 hours to account for timezone storage issue
+        from datetime import timedelta
+        adjusted_start = start_date + timedelta(hours=7)
+        adjusted_end = end_date + timedelta(hours=7)
+        
         df_basic = self._execute_query(basic_query, (
-            start_date.strftime('%Y-%m-%d %H:%M:%S'),
-            end_date.strftime('%Y-%m-%d %H:%M:%S')
+            adjusted_start.strftime('%Y-%m-%d %H:%M:%S'),
+            adjusted_end.strftime('%Y-%m-%d %H:%M:%S')
         ))
         
         if df_basic.empty:
@@ -845,31 +886,31 @@ class MetricsRepository(BaseRepository):
         SELECT COUNT(DISTINCT m.value) as unique_categories
         FROM metadata_entries m 
         JOIN entities e ON m.entity_id = e.id 
-        WHERE m.key = "category" 
-        AND DATE(e.created_at) >= DATE(?) 
-        AND DATE(e.created_at) <= DATE(?)
+        WHERE m.key = 'category' 
+        AND DATE(COALESCE(e.created_at, e.file_created_at)) >= %s::date 
+        AND DATE(COALESCE(e.created_at, e.file_created_at)) <= %s::date
         """
         
         window_query = """
         SELECT COUNT(DISTINCT m.value) as unique_windows
         FROM metadata_entries m 
         JOIN entities e ON m.entity_id = e.id 
-        WHERE m.key = "active_window" 
-        AND DATE(e.created_at) >= DATE(?) 
-        AND DATE(e.created_at) <= DATE(?)
+        WHERE m.key = 'active_window' 
+        AND DATE(COALESCE(e.created_at, e.file_created_at)) >= %s::date 
+        AND DATE(COALESCE(e.created_at, e.file_created_at)) <= %s::date
         """
         
         # Use longer cache TTL for aggregated metrics (10 minutes for historical, 2 minutes for today)
         metrics_cache_ttl = 120 if (datetime.now().date() == start_date.date()) else 600
         
         df_categories = self._execute_query(category_query, (
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
+            adjusted_start.strftime('%Y-%m-%d'),
+            adjusted_end.strftime('%Y-%m-%d')
         ), cache_ttl=metrics_cache_ttl)
         
         df_windows = self._execute_query(window_query, (
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
+            adjusted_start.strftime('%Y-%m-%d'),
+            adjusted_end.strftime('%Y-%m-%d')
         ), cache_ttl=metrics_cache_ttl)
         
         basic_row = df_basic.iloc[0]
@@ -934,4 +975,99 @@ class MetricsRepository(BaseRepository):
             'unique_windows': len(unique_windows),
             'unique_categories': len(unique_categories),
             'avg_daily_activities': avg_daily_activities
+        }
+    
+    def get_session_metrics(
+        self,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """Get dual-model session metrics for a time period.
+        
+        Args:
+            start_date: Start of period
+            end_date: End of period
+            
+        Returns:
+            Dictionary with session metrics
+        """
+        # Query for dual-model session data
+        query = """
+        SELECT 
+            e.id,
+            COALESCE(e.created_at, e.file_created_at) as created_at,
+            m1.value as session_id,
+            m2.value as dual_model_processed,
+            m3.value as llama3_session_result,
+            m4.value as workflow_analysis
+        FROM entities e
+        LEFT JOIN metadata_entries m1 ON e.id = m1.entity_id AND m1.key = 'session_id'
+        LEFT JOIN metadata_entries m2 ON e.id = m2.entity_id AND m2.key = 'dual_model_processed'
+        LEFT JOIN metadata_entries m3 ON e.id = m3.entity_id AND m3.key = 'llama3_session_result'
+        LEFT JOIN metadata_entries m4 ON e.id = m4.entity_id AND m4.key = 'workflow_analysis'
+        WHERE COALESCE(e.created_at, e.file_created_at) >= %s 
+        AND COALESCE(e.created_at, e.file_created_at) <= %s
+        AND m1.value IS NOT NULL
+        """
+        
+        # TEMPORARY FIX: Add timezone adjustment
+        from datetime import timedelta
+        adjusted_start = start_date + timedelta(hours=7)
+        adjusted_end = end_date + timedelta(hours=7)
+        
+        df = self._execute_query(query, (
+            adjusted_start.strftime('%Y-%m-%d %H:%M:%S'),
+            adjusted_end.strftime('%Y-%m-%d %H:%M:%S')
+        ))
+        
+        if df.empty:
+            return {
+                'total_sessions': 0,
+                'total_analyzed_tasks': 0,
+                'unique_workflows': 0,
+                'workflow_distribution': {},
+                'sessions_with_analysis': 0,
+                'avg_tasks_per_session': 0
+            }
+        
+        # Calculate session metrics
+        unique_sessions = df['session_id'].nunique()
+        total_tasks = len(df)
+        tasks_with_analysis = len(df[df['llama3_session_result'].notna()])
+        
+        # Extract workflow types
+        workflow_types = []
+        for _, row in df.iterrows():
+            if row['llama3_session_result']:
+                try:
+                    import json
+                    analysis = json.loads(row['llama3_session_result'])
+                    if isinstance(analysis, dict) and 'workflow_type' in analysis:
+                        workflow_types.append(analysis['workflow_type'])
+                except Exception:
+                    pass
+                    
+            if row['workflow_analysis']:
+                try:
+                    import json
+                    analysis = json.loads(row['workflow_analysis'])
+                    if isinstance(analysis, dict) and 'primary_workflow' in analysis:
+                        workflow_types.append(analysis['primary_workflow'])
+                except Exception:
+                    pass
+        
+        # Calculate workflow distribution
+        workflow_counts = {}
+        for wf_type in workflow_types:
+            workflow_counts[wf_type] = workflow_counts.get(wf_type, 0) + 1
+        
+        avg_tasks_per_session = total_tasks / unique_sessions if unique_sessions > 0 else 0
+        
+        return {
+            'total_sessions': unique_sessions,
+            'total_analyzed_tasks': total_tasks,
+            'unique_workflows': len(set(workflow_types)),
+            'workflow_distribution': workflow_counts,
+            'sessions_with_analysis': tasks_with_analysis,
+            'avg_tasks_per_session': avg_tasks_per_session
         }

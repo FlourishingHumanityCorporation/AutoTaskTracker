@@ -100,7 +100,7 @@ class TestConfigWithStrictQuality:
             assert config.MAX_SCREENSHOT_SIZE == 200, "Should load valid size"
             
             # Validate defaults for non-specified
-            assert config.MEMOS_PORT == 8839, "Should use default when not in env"
+            assert config.MEMOS_PORT == 8841, "Should use default when not in env"
             assert config.ENABLE_ANALYTICS is True, "Should use default boolean"
     
     def test_config_file_operations_handle_corruption_and_concurrent_access(self):
@@ -211,7 +211,7 @@ class TestConfigWithStrictQuality:
         """Test URL generation handles all edge cases properly."""
         # Test 1: Standard services
         config = Config(
-            MEMOS_PORT=8839,
+            MEMOS_PORT=8841,
             TASK_BOARD_PORT=0,  # Invalid port
             ANALYTICS_PORT=70000,  # Out of range
             TIMETRACKER_PORT=-1,  # Negative
@@ -220,7 +220,7 @@ class TestConfigWithStrictQuality:
         # Valid service
         memos_url = config.get_service_url('memos')
         assert memos_url.startswith('http://'), "Should use HTTP protocol"
-        assert ':8839' in memos_url, "Should include port"
+        assert ':8841' in memos_url, "Should include port"
         assert 'localhost' in memos_url, "Should use localhost"
         
         # Invalid port handling

@@ -31,7 +31,7 @@ class TestPathSecurity:
         """Test that valid paths are accepted."""
         valid_paths = [
             "/tmp/autotask/data",
-            "~/.memos/screenshots",
+            "/Users/paulrohde/AutoTaskTracker.memos/screenshots",
             "./data/cache",
             "data/screenshots",
             "postgresql://localhost/db"
@@ -92,7 +92,7 @@ class TestDatabaseSecurity:
         valid_uris = [
             "postgresql://user:pass@localhost:5432/db",
             "sqlite:///path/to/db.sqlite",
-            "~/.memos/database.db"
+            "/Users/paulrohde/AutoTaskTracker.memos/database.db"
         ]
         
         for uri in valid_uris:

@@ -48,7 +48,7 @@ class PensieveConfigReader:
         """Initialize config reader."""
         config = get_config()
         self.memos_dir = config.memos_dir_property
-        self.config_file = self.memos_dir / "config.yaml"
+        self.config_file = self.memos_dir / "config_autotasktracker.yaml"
         self._cached_config: Optional[PensieveConfig] = None
         self._cache_timestamp: float = 0
     
@@ -152,9 +152,9 @@ class PensieveConfigReader:
         # Default values
         app_config = get_config()
         config_data.update({
-            "database_path": app_config.get_db_path(),
+            "database_path": app_config.get_database_url(),
             "screenshots_dir": app_config.get_screenshots_path(),
-            "record_interval": app_config.SCREENSHOT_INTERVAL_SECONDS,
+            "record_interval": app_config.RECORD_INTERVAL,
             "ocr_enabled": True,
             "api_port": app_config.MEMOS_PORT,
             "web_port": app_config.MEMOS_WEB_PORT,
@@ -179,7 +179,8 @@ class PensieveConfigReader:
                 # Ensure database_path is expanded to full path if it's relative
                 if 'database_path' in yaml_config:
                     db_path = yaml_config['database_path']
-                    if not os.path.isabs(db_path):
+                    # Don't expand PostgreSQL URIs - only expand relative file paths
+                    if not os.path.isabs(db_path) and not db_path.startswith(('postgresql://', 'postgres://')):
                         # If relative path, make it relative to memos directory
                         yaml_config['database_path'] = str(self.memos_dir / db_path)
                 

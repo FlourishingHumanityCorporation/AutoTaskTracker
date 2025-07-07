@@ -147,7 +147,7 @@ def test_pensieve_screenshot_capture_creates_new_image_file() -> None:
     # Screenshots are stored in date-based subdirectories
     from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
-    screens_dir = Path.home() / ".memos" / "screenshots" / today
+    screens_dir = Path("/Users/paulrohde/AutoTaskTracker.memos") / "screenshots" / today
     screens_dir.mkdir(parents=True, exist_ok=True)
 
     before = {p for p in screens_dir.glob("*.png")} | {p for p in screens_dir.glob("*.webp")}
@@ -219,7 +219,7 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
     try:
         # Test 1: Basic health check with performance monitoring
         start_time = time.time()
-        resp = requests.get("http://localhost:8839/health", timeout=2)
+        resp = requests.get("http://localhost:8841/health", timeout=2)
         response_time = time.time() - start_time
         service_available = True
         
@@ -265,7 +265,7 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
         for i in range(3):
             time.sleep(0.1)  # Small delay between requests
             try:
-                followup_resp = requests.get("http://localhost:8839/health", timeout=1)
+                followup_resp = requests.get("http://localhost:8841/health", timeout=1)
                 consecutive_responses.append(followup_resp.status_code)
             except requests.exceptions.RequestException:
                 consecutive_responses.append(None)
@@ -277,7 +277,7 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
         # Test 4: Boundary condition - Concurrent requests
         def make_health_request():
             try:
-                return requests.get("http://localhost:8839/health", timeout=1).status_code
+                return requests.get("http://localhost:8841/health", timeout=1).status_code
             except:
                 return None
         
@@ -291,7 +291,7 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
         
         # Test 5: Side effect validation - Health check shouldn't affect service state
         # Make another request to ensure the health checks didn't break anything
-        final_resp = requests.get("http://localhost:8839/health", timeout=2)
+        final_resp = requests.get("http://localhost:8841/health", timeout=2)
         assert final_resp.status_code == 200, "Health checks should not affect service state"
         
         # Performance regression detection
@@ -311,7 +311,7 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
     if service_available:
         try:
             # Should get 404 for non-existent endpoint, not 500 or connection error
-            invalid_resp = requests.get("http://localhost:8839/nonexistent", timeout=1)
+            invalid_resp = requests.get("http://localhost:8841/nonexistent", timeout=1)
             # Business rule: Server should return proper HTTP errors, not crash
             assert invalid_resp.status_code in [400, 404, 405], f"Invalid endpoint should return 4xx, got {invalid_resp.status_code}"
         except requests.exceptions.RequestException:
@@ -321,7 +321,7 @@ def test_pensieve_rest_api_health_endpoint_responds_successfully() -> None:
     # State validation: Verify service is still available after all tests
     if service_available:
         try:
-            final_check = requests.get("http://localhost:8839/health", timeout=1)
+            final_check = requests.get("http://localhost:8841/health", timeout=1)
             assert final_check.status_code == 200, "Service should remain available after testing"
         except requests.exceptions.RequestException:
             pytest.fail("Service became unavailable after health check testing")

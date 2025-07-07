@@ -83,7 +83,7 @@ def test_pensieve_pipeline_processes_screenshots_in_headless_ci_environment(e2e_
 
     from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
-    screenshots_dir = home_dir / ".memos" / "screenshots" / today
+    screenshots_dir = Path("/Users/paulrohde/AutoTaskTracker.memos") / "screenshots" / today
     screenshots_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Simulate screenshot arrival by copying sample PNG

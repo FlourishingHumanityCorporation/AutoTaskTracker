@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 # Connect to database
-db_path = Path.home() / '.memos' / 'database.db'
+db_path = Path('/Users/paulrohde/AutoTaskTracker.memos') / 'database.db'
 conn = sqlite3.connect(str(db_path))
 cursor = conn.cursor()
 

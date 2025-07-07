@@ -37,7 +37,7 @@ class TestVLMExtractionOnRealScreenshots:
     @pytest.fixture
     def real_screenshots_for_vlm(self) -> List[Dict[str, Any]]:
         """Get real screenshots suitable for VLM processing."""
-        memos_db = Path.home() / ".memos" / "database.db"
+        memos_db = Path("/Users/paulrohde/AutoTaskTracker.memos") / "database.db"
         if not memos_db.exists():
             pytest.skip("Real memos database not found - need actual AutoTaskTracker usage data")
         

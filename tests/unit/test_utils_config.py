@@ -30,21 +30,21 @@ class TestConfig:
         init_time = time.time() - start_time
         
         # Test database settings defaults with path validation
-        expected_db_path = os.path.expanduser("~/.memos/database.db")
+        expected_db_path = os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/database.db")
         assert config.DB_PATH == expected_db_path, "DB path should match expected default"
         assert os.path.isabs(config.DB_PATH), "DB path should be absolute"
         assert config.DB_PATH.endswith(".db"), "DB path should point to SQLite database"
         
-        expected_screenshots_dir = os.path.expanduser("~/.memos/screenshots")
+        expected_screenshots_dir = os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/screenshots")
         assert config.SCREENSHOTS_DIR == expected_screenshots_dir, "Screenshots dir should match expected"
         assert os.path.isabs(config.SCREENSHOTS_DIR), "Screenshots dir should be absolute"
         
-        expected_logs_dir = os.path.expanduser("~/.memos/logs")
+        expected_logs_dir = os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/logs")
         assert config.LOGS_DIR == expected_logs_dir, "Logs dir should match expected"
         assert os.path.isabs(config.LOGS_DIR), "Logs dir should be absolute"
         
         # Test server ports with business rule validation
-        assert config.MEMOS_PORT == 8839, "Memos port should be 8839"
+        assert config.MEMOS_PORT == 8841, "Memos port should be 8841"
         assert 1024 <= config.MEMOS_PORT <= 65535, "Memos port should be in valid range"
         assert config.TASK_BOARD_PORT == 8602, "Task board port should be 8602"
         assert 1024 <= config.TASK_BOARD_PORT <= 65535, "Task board port should be in valid range"
@@ -343,7 +343,7 @@ class TestConfig:
         
         # Create config with known ports for testing
         config = Config(
-            MEMOS_PORT=8839,
+            MEMOS_PORT=8841,
             TASK_BOARD_PORT=8602,
             ANALYTICS_PORT=8603,
             TIMETRACKER_PORT=8604,
@@ -357,7 +357,7 @@ class TestConfig:
         
         # Test all valid services with comprehensive URL validation
         service_tests = [
-            ('memos', 8839, 'http://localhost:8839'),
+            ('memos', 8841, 'http://localhost:8841'),
             ('task_board', 8602, 'http://localhost:8602'),
             ('analytics', 8603, 'http://localhost:8603'),
             ('timetracker', 8604, 'http://localhost:8604'),
@@ -782,8 +782,8 @@ class TestGlobalConfigManagement:
             assert isinstance(config, Config)
             assert config.TASK_BOARD_PORT == 8602
             # Validate complete default configuration
-            assert config.DB_PATH == os.path.expanduser("~/.memos/database.db")
-            assert config.MEMOS_PORT == 8839
+            assert config.DB_PATH == os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/database.db")
+            assert config.MEMOS_PORT == 8841
             assert config.ANALYTICS_PORT == 8603
             # Verify all feature flags are set correctly
             assert config.ENABLE_NOTIFICATIONS is True
@@ -910,8 +910,8 @@ class TestGlobalConfigManagement:
         assert new_config.TASK_BOARD_PORT == 8502  # Default value
         assert new_config.ENABLE_NOTIFICATIONS is True  # Default value
         # Verify complete reset to defaults
-        assert new_config.DB_PATH == os.path.expanduser("~/.memos/database.db")
-        assert new_config.MEMOS_PORT == 8839
+        assert new_config.DB_PATH == os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/database.db")
+        assert new_config.MEMOS_PORT == 8841
         # Test that reset is persistent
         assert get_config() is new_config
 
@@ -950,7 +950,7 @@ class TestConfigIntegration:
         """Test comprehensive config validation scenarios."""
         # Test all valid configuration
         valid_config = Config(
-            MEMOS_PORT=8839,
+            MEMOS_PORT=8841,
             TASK_BOARD_PORT=8602,
             ANALYTICS_PORT=8603,
             TIMETRACKER_PORT=8604,

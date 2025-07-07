@@ -1414,7 +1414,7 @@ class TestStreamlitHelpersIntegration:
         # Show error with details
         show_error_message(
             "Database connection failed",
-            "Could not connect to database at ~/.memos/database.db\nPlease check if memos is running"
+            "Could not connect to database at /Users/paulrohde/AutoTaskTracker.memos/database.db\nPlease check if memos is running"
         )
         
         # Show info for next steps

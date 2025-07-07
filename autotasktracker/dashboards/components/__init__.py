@@ -28,6 +28,7 @@ from .period_stats import PeriodStats
 from .session_controls import SessionControlsComponent
 from .smart_defaults import SmartDefaultsComponent
 from .timeline_visualization import TimelineVisualizationComponent
+from .session_insights import SessionInsightsComponent, WorkflowVisualizationComponent
 
 __all__ = [
     'TimeFilterComponent',
@@ -75,5 +76,7 @@ __all__ = [
     'PeriodStats',
     'SessionControlsComponent',
     'SmartDefaultsComponent',
-    'TimelineVisualizationComponent'
+    'TimelineVisualizationComponent',
+    'SessionInsightsComponent',
+    'WorkflowVisualizationComponent'
 ]

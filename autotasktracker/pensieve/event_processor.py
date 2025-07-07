@@ -4,6 +4,7 @@ import json
 import time
 import threading
 import logging
+import os
 from datetime import datetime
 from typing import Dict, Any, Callable, List, Optional
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from autotasktracker.pensieve.api_client import get_pensieve_client, PensieveAPI
 from autotasktracker.pensieve.health_monitor import get_health_monitor
 from autotasktracker.core.task_extractor import get_task_extractor
 from autotasktracker.core import ActivityCategorizer
+from autotasktracker.ai.dual_model_processor import create_dual_model_processor
+from autotasktracker.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +56,17 @@ class EventProcessor:
         self.health_monitor = get_health_monitor()
         self.task_extractor = get_task_extractor()
         self.categorizer = ActivityCategorizer()
+        
+        # Dual-model processor (if enabled)
+        self.config = get_config()
+        self.dual_model_processor = None
+        if self.config.ENABLE_DUAL_MODEL:
+            try:
+                self.dual_model_processor = create_dual_model_processor()
+                logger.info("Dual-model processor enabled for real-time processing")
+            except Exception as e:
+                logger.warning(f"Failed to initialize dual-model processor: {e}")
+                logger.info("Continuing with standard processing only")
         
         # Statistics
         self.events_processed = 0
@@ -119,6 +133,15 @@ class EventProcessor:
             return
         
         self.running = False
+        
+        # Finalize any active dual-model sessions
+        if self.dual_model_processor:
+            try:
+                self.dual_model_processor.finalize_session()
+                logger.info("Finalized dual-model session")
+            except Exception as e:
+                logger.warning(f"Failed to finalize dual-model session: {e}")
+        
         if self.processor_thread:
             self.processor_thread.join(timeout=5)
         
@@ -220,15 +243,16 @@ class EventProcessor:
             from autotasktracker.core import DatabaseManager
             
             # Use direct database access for change detection
-            db = DatabaseManager(use_pensieve_api=False)  # Direct SQLite for speed
+            db = DatabaseManager()  # Use PostgreSQL for event detection
             
             with db.get_connection() as conn:
-                cursor = conn.cursor()
+                from psycopg2.extras import RealDictCursor
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
                 
                 # Get entities newer than last processed ID
                 cursor.execute(
                     "SELECT id, filepath, filename, created_at, last_scan_at, file_type_group "
-                    "FROM entities WHERE id > ? ORDER BY id ASC LIMIT 20",
+                    "FROM entities WHERE id > %s ORDER BY id ASC LIMIT 20",
                     (self.last_processed_id,)
                 )
                 
@@ -245,11 +269,22 @@ class EventProcessor:
                         event_type = 'entity_added'
                         timestamp = entity['created_at']
                     
+                    # Handle timestamp conversion
+                    if isinstance(timestamp, datetime):
+                        event_timestamp = timestamp
+                    elif timestamp:
+                        # Handle string timestamps
+                        timestamp_str = timestamp.replace('Z', '+00:00') if timestamp.endswith('Z') else timestamp
+                        event_timestamp = datetime.fromisoformat(timestamp_str)
+                    else:
+                        # Fallback to current time if no timestamp
+                        event_timestamp = datetime.now()
+                    
                     # Create event
                     event = PensieveEvent(
                         event_type=event_type,
                         entity_id=entity_id,
-                        timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00') if timestamp.endswith('Z') else timestamp),
+                        timestamp=event_timestamp,
                         data={
                             'filepath': entity['filepath'],
                             'filename': entity['filename'],
@@ -429,13 +464,84 @@ class EventProcessor:
                     self.pensieve_client.store_entity_metadata(entity_id, 'activity_category', category)
                 
                 logger.info(f"Real-time processed entity {entity_id}: {len(tasks)} tasks extracted")
+                
+                # Trigger dual-model processing if enabled
+                if self.dual_model_processor:
+                    self._trigger_dual_model_processing(entity_id, window_title)
+            else:
+                # Even if no tasks extracted via standard method, try dual-model processing
+                if self.dual_model_processor:
+                    self._trigger_dual_model_processing(entity_id, window_title)
         
         except Exception as e:
             logger.error(f"Failed to extract tasks for entity {entity_id}: {e}")
     
+    def _trigger_dual_model_processing(self, entity_id: int, window_title: str = None):
+        """Trigger dual-model processing for an entity."""
+        try:
+            # Get entity metadata to find the screenshot path
+            metadata = self.pensieve_client.get_entity_metadata(entity_id)
+            
+            # Try to get the entity by ID
+            entity = self.pensieve_client.get_entity(entity_id)
+            if not entity:
+                logger.warning(f"Could not find entity {entity_id} for dual-model processing")
+                return
+            screenshot_path = entity.filepath
+            
+            if not screenshot_path:
+                logger.warning(f"No screenshot path found for entity {entity_id}")
+                return
+            
+            # Check if file exists
+            if not os.path.exists(screenshot_path):
+                logger.warning(f"Screenshot file not found: {screenshot_path}")
+                return
+            
+            # Get window title if not provided
+            if not window_title:
+                window_title = metadata.get("active_window", '')
+            
+            # Get timestamp from entity
+            created_at = entity.created_at or entity.file_created_at
+            timestamp = None
+            if created_at:
+                if isinstance(created_at, str):
+                    from dateutil import parser
+                    timestamp = parser.parse(created_at)
+                else:
+                    timestamp = created_at
+            
+            if not timestamp:
+                timestamp = datetime.now()
+            
+            # Process with dual-model processor
+            logger.debug(f"Starting dual-model processing for entity {entity_id}")
+            result = self.dual_model_processor.process_screenshot(
+                image_path=screenshot_path,
+                window_title=window_title,
+                entity_id=entity_id,  # Keep as integer for database compatibility
+                timestamp=timestamp
+            )
+            
+            if result.success:
+                logger.info(f"Dual-model processing completed for entity {entity_id}: session={result.session_id}")
+                
+                # Log session analysis if available
+                if result.session_analysis:
+                    workflow_type = result.session_analysis.get('workflow_type', 'unknown')
+                    logger.info(f"Session analysis for entity {entity_id}: workflow={workflow_type}")
+            else:
+                logger.warning(f"Dual-model processing failed for entity {entity_id}: {result.error}")
+                
+        except Exception as e:
+            logger.error(f"Failed dual-model processing for entity {entity_id}: {e}")
+            import traceback
+            logger.debug(f"Dual-model processing traceback: {traceback.format_exc()}")
+    
     def get_statistics(self) -> Dict[str, Any]:
         """Get processing statistics."""
-        return {
+        stats = {
             'running': self.running,
             'events_processed': self.events_processed,
             'events_failed': self.events_failed,
@@ -445,8 +551,19 @@ class EventProcessor:
                 event_type: len(handlers) 
                 for event_type, handlers in self.event_handlers.items()
             },
-            'poll_interval': self.poll_interval
+            'poll_interval': self.poll_interval,
+            'dual_model_enabled': self.dual_model_processor is not None
         }
+        
+        # Add dual-model statistics if available
+        if self.dual_model_processor:
+            try:
+                dual_stats = self.dual_model_processor.get_session_status()
+                stats['dual_model_status'] = dual_stats
+            except Exception as e:
+                stats['dual_model_error'] = str(e)
+        
+        return stats
     
     def __enter__(self):
         """Context manager entry."""

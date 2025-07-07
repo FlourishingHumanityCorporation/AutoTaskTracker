@@ -44,7 +44,7 @@ from autotasktracker.ai.vlm_processor import SmartVLMProcessor
 from autotasktracker.config import get_config
 
 # Test configuration
-TEST_SCREENSHOT_DIR = Path("~/.memos/screenshots").expanduser()
+TEST_SCREENSHOT_DIR = Path("/Users/paulrohde/AutoTaskTracker.memos/screenshots")
 TEST_SCREENSHOT_LIMIT = 3  # Number of test screenshots to use
 
 @pytest.fixture(scope="module")

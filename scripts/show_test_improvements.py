@@ -92,7 +92,7 @@ def run_tests_and_analyze():
         "✅ Fixed OCR: Switched from non-existent memos.entities to pytesseract",
         "✅ Generated embeddings: Created 200 embeddings to enable search tests",
         "✅ Created mock VLM: Built mock service to test VLM without Ollama",
-        "✅ Real data validation: Tests use 3,979 real screenshots from ~/.memos/database.db",
+        "✅ Real data validation: Tests use 3,979 real screenshots from /Users/paulrohde/AutoTaskTracker.memos/database.db",
         "✅ Performance metrics: Captured extraction rates (43,000+ screenshots/sec)"
     ]
     

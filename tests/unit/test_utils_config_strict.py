@@ -153,7 +153,7 @@ class TestConfigStrictMode:
         with patch.dict(os.environ, {}, clear=True):  # Empty environment
             config = Config.from_env()
             assert config.TASK_BOARD_PORT == 8502, "Should use default when missing"
-            assert config.DB_PATH == os.path.expanduser("~/.memos/database.db"), \
+            assert config.DB_PATH == os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/database.db"), \
                 "Should use default path when missing"
             assert config.validate() is True, "Default config should be valid"
         
@@ -167,7 +167,7 @@ class TestConfigStrictMode:
             config = Config.from_env()
             assert config.TASK_BOARD_PORT == 9999, "Should use env value"
             assert config.ENABLE_ANALYTICS is False, "Should use env value"
-            assert config.MEMOS_PORT == 8839, "Should keep default"
+            assert config.MEMOS_PORT == 8841, "Should keep default"
             assert config.SHOW_SCREENSHOTS is True, "Should keep default"
             # Verify partial config doesn't break relationships
             assert config.CACHE_TTL_SECONDS >= config.AUTO_REFRESH_SECONDS, \

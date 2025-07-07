@@ -30,9 +30,9 @@ class PensieveIntegrationAnalyzer:
         api_usage = []
         
         api_patterns = [
-            r'http[s]?://.*:8839',  # Pensieve default port
-            r'localhost:8839',
-            r'127\.0\.0\.1:8839',
+            r'http[s]?://.*:8841',  # Pensieve default port
+            r'localhost:8841',
+            r'127\.0\.0\.1:8841',
             r'memos.*api',
             r'/api/screenshots',
             r'/api/metadata',
@@ -167,7 +167,7 @@ class PensieveIntegrationAnalyzer:
     def get_unused_features_report(self) -> Dict[str, str]:
         """Get report of unused Pensieve features."""
         unused_features = {
-            'REST API': 'Port 8839 API endpoints',
+            'REST API': 'Port 8841 API endpoints',
             'Webhooks': 'Real-time screenshot events',
             'Tagging': 'Entity tagging system',
             'Export/Import': 'Data portability features',

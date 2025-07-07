@@ -112,20 +112,25 @@ class CategoryFilterComponent:
             categories = CategoryFilterComponent.DEFAULT_CATEGORIES
             
         if multiselect:
-            # FIXED: Default to empty list (all categories) instead of selecting all
+            # Handle session state properly to avoid conflicts
+            if key not in st.session_state:
+                st.session_state[key] = []  # Initialize empty = all categories
+            
             selected = st.multiselect(
                 "Categories",
-                categories[1:],  # Skip "All Categories" for multiselect
-                default=st.session_state.get(key, []),  # Empty default = all categories
+                categories[1:] if categories and len(categories) > 1 else [],  # Skip "All Categories" for multiselect
                 key=key,
                 help="Leave empty to show all categories"
             )
             return selected  # Empty list means all categories
         else:
+            # For single select, handle session state properly
+            if key not in st.session_state:
+                st.session_state[key] = categories[0] if categories else "All Categories"
+                
             selected = st.selectbox(
                 "Category",
-                categories,
-                index=0,
+                categories if categories else ["All Categories"],
                 key=key
             )
             return [] if selected == "All Categories" else [selected]

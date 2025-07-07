@@ -1,16 +1,25 @@
 """
-Centralized configuration module for AutoTaskTracker.
-Manages all configuration settings, paths, and environment variables.
-Includes Pensieve configuration synchronization.
+Unified Configuration for AutoTaskTracker
+
+This is the ONLY configuration file for AutoTaskTracker.
+Includes all ports, paths, API endpoints, service configurations,
+security validations, Pensieve integration, and thread safety.
+
+Usage:
+    from autotasktracker.config import get_config
+    config = get_config()
 """
+
 import os
 import sys
 import re
-import json
+import threading
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import Optional, Dict, Any, Union
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List, Union
 import logging
+
+# Port definitions included inline (no separate ports file)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +70,7 @@ def _validate_path_security(path: str) -> str:
         if pattern in path_lower:
             logger.warning(f"Potentially dangerous path rejected: {path}")
             # Return safe default instead of raising to prevent DoS
-            return os.path.expanduser("~/.memos/database.db")
+            return "/Users/paulrohde/AutoTaskTracker.memos/database.db"
     
     # Ensure path is within user directory or explicitly allowed locations
     expanded = os.path.expanduser(normalized)
@@ -72,7 +81,7 @@ def _validate_path_security(path: str) -> str:
     
     if not any(expanded.startswith(prefix) for prefix in allowed_prefixes):
         logger.warning(f"Path outside allowed directories rejected: {path}")
-        return os.path.expanduser("~/.memos/database.db")
+        return "/Users/paulrohde/AutoTaskTracker.memos/database.db"
     
     return expanded
 
@@ -140,224 +149,295 @@ def _sanitize_string_input(value: str, max_length: int = 255) -> str:
 
 @dataclass
 class Config:
-    """Central configuration for AutoTaskTracker with environment variable support."""
+    """Comprehensive centralized configuration for AutoTaskTracker."""
     
-    # Database settings
-    DB_PATH: str = field(default_factory=lambda: os.getenv("AUTOTASK_DATABASE_URL", "postgresql://postgres:mysecretpassword@localhost:5433/autotasktracker"))
+    # ============================================================================
+    # DATABASE CONFIGURATION
+    # ============================================================================
     
-    # Directory settings - use Pensieve configuration when available
-    def _get_pensieve_path(self, default_path: str, config_key: str) -> str:
-        """Get path from Pensieve config or fall back to default."""
-        if self.PENSIEVE_CONFIG_SYNC:
-            try:
-                pensieve_config = self.get_pensieve_config()
-                if pensieve_config and config_key in pensieve_config:
-                    return pensieve_config[config_key]
-            except Exception:
-                pass  # Fall back to default
-        return os.path.expanduser(default_path)
-    
-    @property 
-    def SCREENSHOTS_DIR(self) -> str:
-        return self._get_pensieve_path("~/.memos/screenshots", "screenshots_dir")
+    # PostgreSQL Database (Primary)
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5433
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "mysecretpassword"
+    POSTGRES_DATABASE: str = "autotasktracker"
     
     @property
-    def LOGS_DIR(self) -> str:
-        return self._get_pensieve_path("~/.memos/logs", "logs_dir")
+    def DATABASE_URL(self) -> str:
+        """Primary PostgreSQL database URL."""
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DATABASE}"
     
-    @property
-    def VLM_CACHE_DIR(self) -> str:
-        return self._get_pensieve_path("~/.memos/vlm_cache", "cache_dir")
     
-    # VLM configuration (allow override for testing)
-    vlm_model: Optional[str] = field(default=None)
-    vlm_port: Optional[int] = field(default=None)
+    # Note: SQLite support removed - PostgreSQL only
     
-    # Server configuration
-    SERVER_HOST: str = "localhost"  # Default hostname for all services
+    # ============================================================================
+    # DIRECTORY PATHS
+    # ============================================================================
     
-    # Server ports
-    MEMOS_PORT: int = 8839
-    MEMOS_WEB_PORT: int = 8840
+    # Base directories
+    MEMOS_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos"
+    SCREENSHOTS_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos/screenshots"
+    LOGS_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos/logs"
+    CACHE_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos/cache"
+    VLM_CACHE_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos/vlm_cache"
+    EMBEDDINGS_CACHE_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos/embeddings_cache"
+    TEMP_DIR: str = "/Users/paulrohde/AutoTaskTracker.memos/temp"
+    
+    # Configuration files
+    PENSIEVE_CONFIG_FILE: str = "/Users/paulrohde/AutoTaskTracker.memos/config_autotasktracker.yaml"
+    AUTOTASK_CONFIG_FILE: str = "/Users/paulrohde/AutoTaskTracker.memos/autotask_config.json"
+    
+    # ============================================================================
+    # PORT CONFIGURATION - Imported from ports.py
+    # ============================================================================
+    
+    # Port values defined directly to avoid circular imports
+    
+    # Core Dashboard Ports
     TASK_BOARD_PORT: int = 8602
     ANALYTICS_PORT: int = 8603
-    TIMETRACKER_PORT: int = 8604
-    TIME_TRACKER_PORT: int = 8605  # Alias for compatibility
+    TIMETRACKER_PORT: int = 8605
+    TIME_TRACKER_PORT: int = 8605  # Alias
     NOTIFICATIONS_PORT: int = 8606
     ADVANCED_ANALYTICS_PORT: int = 8607
     OVERVIEW_PORT: int = 8608
     FOCUS_TRACKER_PORT: int = 8609
     DAILY_SUMMARY_PORT: int = 8610
     
-    # VLM configuration
-    VLM_MODEL: str = "minicpm-v"
-    VLM_PORT: int = 11434
+    # Administrative Ports
+    LAUNCHER_PORT: int = 8611
+    VLM_MONITOR_PORT: int = 8612
+    AI_TASK_DASHBOARD_PORT: int = 8613
+    ACHIEVEMENT_BOARD_PORT: int = 8614
+    REALTIME_DASHBOARD_PORT: int = 8615
     
-    # Embedding configuration  
-    EMBEDDING_MODEL: str = "jina-embeddings-v2-base-en"
-    EMBEDDING_DIM: int = 768
+    # API and Service Ports
+    AUTOTASK_API_PORT: int = 8620
+    HEALTH_CHECK_PORT: int = 8621
+    METRICS_PORT: int = 8622
+    WEBHOOK_PORT: int = 8623
     
-    # Application settings
-    AUTO_REFRESH_SECONDS: int = 30
-    CACHE_TTL_SECONDS: int = 60
-    TASK_LIMIT: int = 100
-    GROUP_INTERVAL_MINUTES: int = 5
-    SCREENSHOT_INTERVAL_SECONDS: int = 4
+    # Development Ports
+    DEV_DASHBOARD_PORT: int = 8650
+    TEST_API_PORT: int = 8651
+    DEBUG_PORT: int = 8652
     
-    # Processing configuration
-    BATCH_SIZE: int = 50
-    CONFIDENCE_THRESHOLD: float = 0.7
+    # Additional Dashboard Ports
+    POSTGRES_TASK_BOARD_PORT: int = 8653
+    POSTGRES_ANALYTICS_PORT: int = 8654
+    POSTGRES_TIMETRACKER_PORT: int = 8655
+    QUICK_DASHBOARD_PORT: int = 8656
+    FINAL_DASHBOARD_PORT: int = 8657
+    ADAPTIVE_TASK_BOARD_PORT: int = 8658
     
-    # Time tracking settings
-    MIN_SESSION_DURATION_SECONDS: int = 30
-    MAX_SESSION_GAP_SECONDS: int = 600  # 10 minutes
-    IDLE_THRESHOLD_SECONDS: int = 300   # 5 minutes
+    # External Service Ports
+    MEMOS_PORT: int = 8841  # AutoTaskTracker specific
+    MEMOS_WEB_PORT: int = 8842  # AutoTaskTracker specific
+    OLLAMA_PORT: int = 11434
+    OCR_SERVICE_PORT: int = 5555
+    POSTGRES_PORT: int = 5433
+    JUPYTER_PORT: int = 8888
+    TENSORBOARD_PORT: int = 6006
     
-    # Pensieve integration settings
-    USE_PENSIEVE_API: bool = True
-    PENSIEVE_CONFIG_SYNC: bool = True
-    PENSIEVE_CACHE_ENABLED: bool = True
+    # ============================================================================
+    # API ENDPOINTS
+    # ============================================================================
     
-    # Feature flags
-    SHOW_SCREENSHOTS: bool = True
+    SERVER_HOST: str = "localhost"
+    
+    @property
+    def API_ENDPOINTS(self) -> Dict[str, str]:
+        """All API endpoints used by AutoTaskTracker."""
+        return {
+            # Core APIs
+            "pensieve_api": f"http://{self.SERVER_HOST}:{self.MEMOS_PORT}",
+            "pensieve_web": f"http://{self.SERVER_HOST}:{self.MEMOS_WEB_PORT}",
+            "autotask_api": f"http://{self.SERVER_HOST}:{self.AUTOTASK_API_PORT}",
+            
+            # AI Service APIs
+            "ollama_api": f"http://{self.SERVER_HOST}:{self.OLLAMA_PORT}",
+            "ollama_embeddings": f"http://{self.SERVER_HOST}:{self.OLLAMA_PORT}/v1/embeddings",
+            "ocr_api": f"http://{self.SERVER_HOST}:{self.OCR_SERVICE_PORT}/predict",
+            
+            # Dashboard URLs
+            "task_board": f"http://{self.SERVER_HOST}:{self.TASK_BOARD_PORT}",
+            "analytics": f"http://{self.SERVER_HOST}:{self.ANALYTICS_PORT}",
+            "timetracker": f"http://{self.SERVER_HOST}:{self.TIMETRACKER_PORT}",
+            "notifications": f"http://{self.SERVER_HOST}:{self.NOTIFICATIONS_PORT}",
+            "advanced_analytics": f"http://{self.SERVER_HOST}:{self.ADVANCED_ANALYTICS_PORT}",
+            "overview": f"http://{self.SERVER_HOST}:{self.OVERVIEW_PORT}",
+            "focus_tracker": f"http://{self.SERVER_HOST}:{self.FOCUS_TRACKER_PORT}",
+            "daily_summary": f"http://{self.SERVER_HOST}:{self.DAILY_SUMMARY_PORT}",
+            "launcher": f"http://{self.SERVER_HOST}:{self.LAUNCHER_PORT}",
+            "vlm_monitor": f"http://{self.SERVER_HOST}:{self.VLM_MONITOR_PORT}",
+            "ai_task_dashboard": f"http://{self.SERVER_HOST}:{self.AI_TASK_DASHBOARD_PORT}",
+            "achievement_board": f"http://{self.SERVER_HOST}:{self.ACHIEVEMENT_BOARD_PORT}",
+            "realtime_dashboard": f"http://{self.SERVER_HOST}:{self.REALTIME_DASHBOARD_PORT}",
+            
+            # Utility URLs
+            "health_check": f"http://{self.SERVER_HOST}:{self.HEALTH_CHECK_PORT}/health",
+            "metrics": f"http://{self.SERVER_HOST}:{self.METRICS_PORT}/metrics",
+            "webhooks": f"http://{self.SERVER_HOST}:{self.WEBHOOK_PORT}/webhooks",
+        }
+    
+    # ============================================================================
+    # AI MODEL CONFIGURATION
+    # ============================================================================
+    
+    # VLM (Vision Language Model) Settings
+    VLM_MODEL_NAME: str = "minicpm-v:8b"
+    VLM_ENDPOINT: str = f"http://localhost:11434"
+    VLM_CONCURRENCY: int = 8
+    VLM_FORCE_JPEG: bool = True
+    VLM_PROMPT: str = "Please describe the content of this image, including the layout and visual elements."
+    VLM_TEMPERATURE: float = 0.0  # Temperature for VLM inference (0.0-1.0) - 0.0 for deterministic output
+    
+    # Dual-Model Configuration (Phase 2)
+    LLAMA3_MODEL_NAME: str = "llama3:8b"
+    ENABLE_DUAL_MODEL: bool = True   # Feature flag for dual-model processing
+    
+    # OCR Settings  
+    OCR_ENDPOINT: str = f"http://localhost:5555/predict"
+    OCR_USE_LOCAL: bool = True
+    OCR_CONCURRENCY: int = 8
+    OCR_FORCE_JPEG: bool = False
+    
+    # Embedding Settings
+    EMBEDDING_MODEL: str = "arkohut/jina-embeddings-v2-base-en"
+    EMBEDDING_DIMENSIONS: int = 768
+    EMBEDDING_ENDPOINT: str = f"http://localhost:11434/v1/embeddings"
+    EMBEDDING_USE_LOCAL: bool = True
+    
+    # ============================================================================
+    # PENSIEVE/MEMOS CONFIGURATION
+    # ============================================================================
+    
+    # Recording Settings
+    RECORD_INTERVAL: int = 4        # seconds between screenshots
+    PROCESSING_INTERVAL: int = 1    # processing interval
+    IDLE_TIMEOUT: int = 300         # idle timeout in seconds
+    
+    # Watch Settings
+    RATE_WINDOW_SIZE: int = 20
+    SPARSITY_FACTOR: float = 1.0
+    
+    # Storage Settings
+    CACHE_TTL: int = 600            # cache time-to-live in seconds
+    MAX_STORAGE_GB: float = 10.0    # maximum storage in GB
+    CLEANUP_DAYS: int = 30          # cleanup old data after N days
+    
+    # Plugin Settings
+    DEFAULT_PLUGINS: List[str] = field(default_factory=lambda: [
+        "builtin_ocr",
+        "builtin_vlm"
+    ])
+    
+    # ============================================================================
+    # AUTHENTICATION & SECURITY
+    # ============================================================================
+    
+    # Authentication (empty by default for local development)
+    AUTH_USERNAME: str = ""
+    AUTH_PASSWORD: str = ""
+    
+    # API Tokens (empty by default, set via environment)
+    OLLAMA_TOKEN: str = ""
+    OCR_TOKEN: str = ""
+    EMBEDDING_TOKEN: str = ""
+    
+    # Security Settings
+    ENABLE_CORS: bool = True
+    ALLOWED_ORIGINS: List[str] = field(default_factory=lambda: [
+        "http://localhost:8602",
+        "http://localhost:8603", 
+        "http://localhost:8605",
+        "http://localhost:8606",
+        "http://localhost:8607",
+        "http://localhost:8608",
+        "http://localhost:8609",
+        "http://localhost:8610"
+    ])
+    
+    # ============================================================================
+    # FEATURE FLAGS
+    # ============================================================================
+    
+    # Core Features
+    ENABLE_VLM: bool = True
+    ENABLE_OCR: bool = True
+    ENABLE_EMBEDDINGS: bool = True
+    ENABLE_REAL_TIME: bool = True
     ENABLE_NOTIFICATIONS: bool = True
-    ENABLE_ANALYTICS: bool = True
     
-    # Performance settings
-    MAX_SCREENSHOT_SIZE: int = 300  # pixels for thumbnails
-    CONNECTION_POOL_SIZE: int = 5
-    QUERY_TIMEOUT_SECONDS: int = 30
+    # Advanced Features
+    ENABLE_VECTOR_SEARCH: bool = True
+    ENABLE_AI_INSIGHTS: bool = True
+    ENABLE_PERFORMANCE_MONITORING: bool = True
+    ENABLE_AUTO_BACKUP: bool = True
+    
+    # Development Features
+    ENABLE_DEBUG_MODE: bool = False
+    ENABLE_PROFILING: bool = False
+    ENABLE_TELEMETRY: bool = True
     
     def __post_init__(self):
         """Initialize configuration with environment overrides and security validation."""
-        try:
-            # Database path with security validation
-            env_db_path = os.getenv("AUTOTASK_DB_PATH", self.DB_PATH)
-            self.db_path = Path(_validate_path_security(env_db_path))
-            
-            # Directory paths with security validation
-            env_memos_dir = os.getenv("AUTOTASK_MEMOS_DIR", os.path.expanduser("~/.memos"))
-            self.memos_dir = Path(_validate_path_security(env_memos_dir))
-            
-            env_vlm_cache = os.getenv("AUTOTASK_VLM_CACHE_DIR", self.VLM_CACHE_DIR)
-            self.vlm_cache_dir = Path(_validate_path_security(env_vlm_cache))
-            
-            env_screenshots = os.getenv("AUTOTASK_SCREENSHOTS_DIR", self.SCREENSHOTS_DIR)
-            self.screenshots_dir = Path(_validate_path_security(env_screenshots))
-            
-            # VLM settings with validation
-            default_vlm_model = self.vlm_model if self.vlm_model else self.VLM_MODEL
-            env_vlm_model = os.getenv("AUTOTASK_VLM_MODEL", default_vlm_model)
-            self.vlm_model = _sanitize_string_input(env_vlm_model, max_length=100)
-            
-            default_vlm_port = self.vlm_port if self.vlm_port else self.VLM_PORT
-            env_vlm_port = os.getenv("AUTOTASK_VLM_PORT", str(default_vlm_port))
-            self.vlm_port = _validate_port_security(env_vlm_port)
-            
-            # Embedding settings with validation
-            env_embedding_model = os.getenv("AUTOTASK_EMBEDDING_MODEL", self.EMBEDDING_MODEL)
-            self.embedding_model = _sanitize_string_input(env_embedding_model, max_length=200)
-            
-            env_embedding_dim = os.getenv("AUTOTASK_EMBEDDING_DIM", str(self.EMBEDDING_DIM))
-            try:
-                self.embedding_dim = int(env_embedding_dim)
-                if not (1 <= self.embedding_dim <= 10000):
-                    raise ValueError("Embedding dimension out of range")
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid embedding dimension, using default: {e}")
-                self.embedding_dim = self.EMBEDDING_DIM
-            
-            # Processing settings with validation
-            env_batch_size = os.getenv("AUTOTASK_BATCH_SIZE", str(self.BATCH_SIZE))
-            try:
-                self.batch_size = int(env_batch_size)
-                if not (1 <= self.batch_size <= 10000):
-                    raise ValueError("Batch size out of range")
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid batch size, using default: {e}")
-                self.batch_size = self.BATCH_SIZE
-            
-            env_confidence = os.getenv("AUTOTASK_CONFIDENCE_THRESHOLD", str(self.CONFIDENCE_THRESHOLD))
-            try:
-                self.confidence_threshold = float(env_confidence)
-                if not (0.0 <= self.confidence_threshold <= 1.0):
-                    raise ValueError("Confidence threshold out of range")
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid confidence threshold, using default: {e}")
-                self.confidence_threshold = self.CONFIDENCE_THRESHOLD
-            
-            # Port overrides with validation
-            env_task_board_port = os.getenv("AUTOTASK_TASK_BOARD_PORT", str(self.TASK_BOARD_PORT))
-            try:
-                self.TASK_BOARD_PORT = _validate_port_security(env_task_board_port)
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid task board port, using default: {e}")
-            
-            # Application settings with validation
-            env_auto_refresh = os.getenv("AUTOTASK_AUTO_REFRESH_SECONDS", str(self.AUTO_REFRESH_SECONDS))
-            try:
-                self.AUTO_REFRESH_SECONDS = int(env_auto_refresh)
-                if not (1 <= self.AUTO_REFRESH_SECONDS <= 3600):
-                    raise ValueError("Auto refresh seconds out of range")
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid auto refresh seconds, using default: {e}")
-                self.AUTO_REFRESH_SECONDS = 30
-            
-            # Create directories if they don't exist
-            self._ensure_directories()
-            
-        except Exception as e:
-            logger.error(f"Error during config initialization: {e}")
-            # Fall back to safe defaults
-            self._initialize_safe_defaults()
-    
-    def _initialize_safe_defaults(self):
-        """Initialize with safe default values in case of configuration errors."""
-        self.db_path = Path(os.path.expanduser("~/.memos/database.db"))
-        self.memos_dir = Path(os.path.expanduser("~/.memos"))
-        self.vlm_cache_dir = Path(os.path.expanduser("~/.memos/vlm_cache"))
-        self.screenshots_dir = Path(os.path.expanduser("~/.memos/screenshots"))
-        self.vlm_model = "minicpm-v"
-        self.vlm_port = 11434
-        self.embedding_model = "jina-embeddings-v2-base-en"
-        self.embedding_dim = 768
-        self.batch_size = 50
-        self.confidence_threshold = 0.7
+        # Validate paths without trying to set properties
+        _validate_path_security(self.DATABASE_URL)
         
-        try:
-            self._ensure_directories()
-        except Exception as e:
-            logger.error(f"Failed to create safe default directories: {e}")
+        # Create required directories - let it fail if there are permission issues
+        self.create_directories()
     
-    def _get_path(self, env_var: str, default: str) -> Path:
-        """Get path from environment or use default with security validation."""
-        path_str = os.getenv(env_var, default)
-        validated_path = _validate_path_security(path_str)
-        return Path(validated_path)
+    # ============================================================================
+    # PENSIEVE INTEGRATION
+    # ============================================================================
     
-    def _ensure_directories(self):
-        """Ensure required directories exist with proper error handling."""
-        dirs = [self.memos_dir, self.vlm_cache_dir, self.screenshots_dir]
-        for dir_path in dirs:
-            if not dir_path.exists():
-                try:
-                    dir_path.mkdir(parents=True, exist_ok=True)
-                    logger.debug(f"Created directory: {dir_path}")
-                except OSError as e:
-                    logger.warning(f"Failed to create directory {dir_path}: {e}")
-                    # Continue with other directories
+    # Pensieve integration settings
+    USE_PENSIEVE_API: bool = True
+    PENSIEVE_CONFIG_SYNC: bool = False  # DISABLED to prevent recursion
+    PENSIEVE_CACHE_ENABLED: bool = True
     
-    def get_db_path(self) -> str:
-        """Get database path as string."""
-        return str(self.db_path)
+    @property
+    def SCREENSHOTS_DIR_PROPERTY(self) -> str:
+        """Screenshots directory."""
+        return os.path.expanduser(self.SCREENSHOTS_DIR)
+    
+    @property
+    def LOGS_DIR_PROPERTY(self) -> str:
+        """Logs directory."""
+        return os.path.expanduser(self.LOGS_DIR)
+    
+    @property
+    def VLM_CACHE_DIR_PROPERTY(self) -> str:
+        """VLM cache directory."""
+        return os.path.expanduser(self.VLM_CACHE_DIR)
+    
+    def get_service_url(self, service: str) -> str:
+        """Get service URL."""
+        # Use get_url_by_service for consistency
+        return self.get_url_by_service(service) or f"http://{self.SERVER_HOST}:8841"
+    
+    def get_performance_config(self) -> Dict[str, Any]:
+        """Get performance configuration."""
+        return {
+            'batch_size': self.SPARSITY_FACTOR,
+            'cache_ttl': self.CACHE_TTL,
+            'auto_refresh': self.CACHE_TTL,
+            'confidence_threshold': self.VLM_CONCURRENCY
+        }
+    
+    # ============================================================================
+    # PATH AND DATABASE METHODS
+    # ============================================================================
+    
     
     def get_vlm_cache_path(self) -> str:
         """Get VLM cache directory path as string."""
-        return str(self.vlm_cache_dir)
+        return str(self.get_expanded_path(self.VLM_CACHE_DIR_PROPERTY))
     
     def get_screenshots_path(self) -> str:
         """Get screenshots directory path as string."""
-        return str(self.screenshots_dir)
+        return str(self.get_expanded_path(self.SCREENSHOTS_DIR_PROPERTY))
     
     def get_ollama_url(self) -> str:
         """Get Ollama API URL with validation."""
@@ -370,168 +450,284 @@ class Config:
             else:
                 logger.warning(f"Invalid OLLAMA_URL format, using default: {env_url}")
         
-        return f"http://{self.SERVER_HOST}:{self.vlm_port}"
+        return f"http://{self.SERVER_HOST}:{self.OLLAMA_PORT}"
     
-    def get_pensieve_config(self) -> Optional[Dict[str, Any]]:
-        """Get Pensieve configuration if available."""
-        if not hasattr(self, '_pensieve_config_cache'):
-            self._pensieve_config_cache = None
-            
-        if not self.PENSIEVE_CONFIG_SYNC:
-            return None
-            
-        # Use cached config to avoid repeated imports
-        if self._pensieve_config_cache is not None:
-            return self._pensieve_config_cache
-            
+    def get_database_backend(self) -> str:
+        """Get the configured database backend."""
+        return "postgresql"  # Only PostgreSQL supported
+    
+    def get_database_url(self) -> str:
+        """Get database URL."""
+        return self.DATABASE_URL
+    
+    
+    def test_database_connection(self) -> bool:
+        """Test PostgreSQL database connection."""
         try:
-            from autotasktracker.pensieve.config_sync import get_synced_config
-            synced_config = get_synced_config()
-            self._pensieve_config_cache = {
-                'api_base_url': synced_config.api_base_url,
-                'database_path': synced_config.database_path,
-                'screenshots_dir': synced_config.screenshots_dir,
-                'logs_dir': getattr(synced_config, 'logs_dir', os.path.expanduser('~/.memos/logs')),
-                'cache_dir': getattr(synced_config, 'cache_dir', os.path.expanduser('~/.memos/vlm_cache')),
-                'ocr_timeout': synced_config.ocr_timeout,
-                'batch_size': synced_config.batch_size,
-                'cache_enabled': self.PENSIEVE_CACHE_ENABLED
-            }
-            return self._pensieve_config_cache
-        except Exception as e:
-            logger.warning(f"Failed to get Pensieve config: {e}")
-            return None
-    
-    def get_service_url(self, service: str) -> str:
-        """Get service URL with Pensieve integration."""
-        if service == 'memos' and self.PENSIEVE_CONFIG_SYNC:
-            pensieve_config = self.get_pensieve_config()
-            if pensieve_config:
-                return pensieve_config['api_base_url']
-        
-        # Fallback to default ports
-        service_ports = {
-            'memos': self.MEMOS_PORT,
-            'task_board': self.TASK_BOARD_PORT,
-            'analytics': self.ANALYTICS_PORT,
-            'timetracker': self.TIME_TRACKER_PORT
-        }
-        
-        port = service_ports.get(service, 8839)
-        return f"http://{self.SERVER_HOST}:{port}"
-    
-    def get_performance_config(self) -> Dict[str, Any]:
-        """Get performance configuration with Pensieve sync."""
-        base_config = {
-            'batch_size': self.BATCH_SIZE,
-            'cache_ttl': self.CACHE_TTL_SECONDS,
-            'auto_refresh': self.AUTO_REFRESH_SECONDS,
-            'confidence_threshold': self.CONFIDENCE_THRESHOLD
-        }
-        
-        # Merge with Pensieve configuration if available
-        if self.PENSIEVE_CONFIG_SYNC:
-            try:
-                from autotasktracker.pensieve.config_sync import get_pensieve_config_sync
-                sync = get_pensieve_config_sync()
-                performance_config = sync.get_performance_config()
-                base_config.update(performance_config)
-            except Exception as e:
-                logger.debug(f"Could not sync performance config: {e}")
-        
-        return base_config
-    
-    def get_service_url(self, service_name: str) -> str:
-        """Get service URL for a given service name with validation."""
-        if not isinstance(service_name, str) or not service_name:
-            return ""
-        
-        service_ports = {
-            'memos': self.MEMOS_PORT,
-            'task_board': self.TASK_BOARD_PORT,
-            'analytics': self.ANALYTICS_PORT,
-            'timetracker': self.TIME_TRACKER_PORT,
-            'notifications': self.NOTIFICATIONS_PORT,
-            'advanced_analytics': self.ADVANCED_ANALYTICS_PORT,
-            'overview': self.OVERVIEW_PORT,
-            'focus_tracker': self.FOCUS_TRACKER_PORT,
-            'daily_summary': self.DAILY_SUMMARY_PORT
-        }
-        
-        port = service_ports.get(service_name.lower())
-        if port is None:
-            return ""
-        
-        return f"http://{self.SERVER_HOST}:{port}"
-    
-    def validate(self) -> bool:
-        """Validate configuration settings."""
-        try:
-            # Check database directory exists or can be created
-            db_dir = self.db_path.parent
-            if not db_dir.exists():
-                try:
-                    db_dir.mkdir(parents=True, exist_ok=True)
-                except OSError:
-                    logger.warning(f"Cannot create database directory: {db_dir}")
-                    return False
-            
-            # Validate port ranges and uniqueness
-            ports = [
-                self.MEMOS_PORT, self.MEMOS_WEB_PORT, self.TASK_BOARD_PORT, self.ANALYTICS_PORT,
-                self.TIME_TRACKER_PORT, self.NOTIFICATIONS_PORT, self.ADVANCED_ANALYTICS_PORT,
-                self.OVERVIEW_PORT, self.FOCUS_TRACKER_PORT, self.DAILY_SUMMARY_PORT, self.vlm_port
-            ]
-            
-            for port in ports:
-                if not (1024 <= port <= 65535):
-                    logger.error(f"Port out of valid range: {port}")
-                    return False
-            
-            # Check for port conflicts
-            if len(set(ports)) != len(ports):
-                logger.error("Port conflicts detected")
-                return False
-            
+            import psycopg2
+            conn = psycopg2.connect(self.DATABASE_URL)
+            conn.close()
             return True
-            
         except Exception as e:
-            logger.error(f"Configuration validation failed: {e}")
+            logger.error(f"PostgreSQL connection test failed: {e}")
             return False
     
-    @property  
+    @property
     def memos_dir_property(self) -> Path:
         """Get memos directory as Path object."""
-        if hasattr(self, 'memos_dir') and isinstance(self.memos_dir, Path):
-            return self.memos_dir
-        # Fallback for legacy compatibility
-        return Path(self.get_db_path()).parent
+        return self.get_expanded_path(self.MEMOS_DIR)
     
-    def to_dict(self) -> dict:
+    @property
+    def MEMOS_CONFIG_PATH(self) -> Path:
+        """Get AutoTaskTracker specific memos config path."""
+        return self.memos_dir_property / "config_autotasktracker.yaml"
+    
+    # ============================================================================
+    # UTILITY METHODS
+    # ============================================================================
+    
+    def get_expanded_path(self, path: str) -> Path:
+        """Get expanded Path object from string path."""
+        return Path(os.path.expanduser(path))
+    
+    def get_all_ports(self) -> Dict[str, int]:
+        """Get all defined ports."""
+        return {
+            # Core Dashboard ports
+            "task_board": self.TASK_BOARD_PORT,
+            "analytics": self.ANALYTICS_PORT,
+            "timetracker": self.TIMETRACKER_PORT,
+            "time_tracker": self.TIME_TRACKER_PORT,
+            "notifications": self.NOTIFICATIONS_PORT,
+            "advanced_analytics": self.ADVANCED_ANALYTICS_PORT,
+            "overview": self.OVERVIEW_PORT,
+            "focus_tracker": self.FOCUS_TRACKER_PORT,
+            "daily_summary": self.DAILY_SUMMARY_PORT,
+            
+            # Administrative ports
+            "launcher": self.LAUNCHER_PORT,
+            "vlm_monitor": self.VLM_MONITOR_PORT,
+            "ai_task_dashboard": self.AI_TASK_DASHBOARD_PORT,
+            "achievement_board": self.ACHIEVEMENT_BOARD_PORT,
+            "realtime_dashboard": self.REALTIME_DASHBOARD_PORT,
+            
+            # API ports
+            "autotask_api": self.AUTOTASK_API_PORT,
+            "health_check": self.HEALTH_CHECK_PORT,
+            "metrics": self.METRICS_PORT,
+            "webhook": self.WEBHOOK_PORT,
+            
+            # Additional Dashboard ports
+            "postgres_task_board": self.POSTGRES_TASK_BOARD_PORT,
+            "postgres_analytics": self.POSTGRES_ANALYTICS_PORT,
+            "postgres_timetracker": self.POSTGRES_TIMETRACKER_PORT,
+            "quick_dashboard": self.QUICK_DASHBOARD_PORT,
+            "final_dashboard": self.FINAL_DASHBOARD_PORT,
+            "adaptive_task_board": self.ADAPTIVE_TASK_BOARD_PORT,
+            
+            # External services
+            "memos": self.MEMOS_PORT,
+            "memos_web": self.MEMOS_WEB_PORT,
+            "ollama": self.OLLAMA_PORT,
+            "ocr_service": self.OCR_SERVICE_PORT,
+            "postgres": self.POSTGRES_PORT,
+            
+            # Development
+            "dev_dashboard": self.DEV_DASHBOARD_PORT,
+            "test_api": self.TEST_API_PORT,
+            "debug": self.DEBUG_PORT,
+            "jupyter": self.JUPYTER_PORT,
+            "tensorboard": self.TENSORBOARD_PORT,
+        }
+    
+    def get_all_paths(self) -> Dict[str, str]:
+        """Get all defined paths."""
+        return {
+            "memos_dir": self.MEMOS_DIR,
+            "screenshots_dir": self.SCREENSHOTS_DIR,
+            "logs_dir": self.LOGS_DIR,
+            "cache_dir": self.CACHE_DIR,
+            "vlm_cache_dir": self.VLM_CACHE_DIR,
+            "embeddings_cache_dir": self.EMBEDDINGS_CACHE_DIR,
+            "temp_dir": self.TEMP_DIR,
+            "pensieve_config": self.PENSIEVE_CONFIG_FILE,
+            "autotask_config": self.AUTOTASK_CONFIG_FILE,
+        }
+    
+    def validate_configuration(self) -> List[str]:
+        """Validate configuration and return list of issues."""
+        issues = []
+        
+        # Check port ranges
+        all_ports = self.get_all_ports()
+        for name, port in all_ports.items():
+            if not (1024 <= port <= 65535):
+                issues.append(f"Port {name} ({port}) out of valid range")
+        
+        # Check for port conflicts (excluding intentional aliases)
+        port_values = list(all_ports.values())
+        from collections import Counter
+        port_counts = Counter(port_values)
+        # Allow timetracker/time_tracker alias conflict
+        conflicts = [(port, count) for port, count in port_counts.items() 
+                    if count > 1 and port != self.TIMETRACKER_PORT]
+        if conflicts:
+            issues.append(f"Port conflicts detected: {conflicts}")
+        
+        # Check critical paths exist
+        critical_paths = [self.MEMOS_DIR, self.SCREENSHOTS_DIR]
+        for path in critical_paths:
+            expanded = os.path.expanduser(path)
+            if not os.path.exists(expanded):
+                issues.append(f"Critical path does not exist: {expanded}")
+        
+        return issues
+    
+    def create_directories(self) -> None:
+        """Create all required directories."""
+        paths = self.get_all_paths()
+        for name, path in paths.items():
+            if name.endswith('_dir'):
+                expanded = self.get_expanded_path(path)
+                expanded.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created directory: {expanded}")
+    
+    def get_port_by_service(self, service_name: str) -> Optional[int]:
+        """Get port number for a specific service."""
+        ports = self.get_all_ports()
+        return ports.get(service_name.lower())
+    
+    def get_url_by_service(self, service_name: str) -> Optional[str]:
+        """Get URL for a specific service."""
+        port = self.get_port_by_service(service_name)
+        if port is None:
+            return None
+        return f"http://{self.SERVER_HOST}:{port}"
+    
+    def to_dict(self) -> Dict[str, Any]:
         """Export configuration as dictionary."""
         return {
-            "db_path": str(self.db_path),
-            "memos_dir": str(self.memos_dir),
-            "vlm_cache_dir": str(self.vlm_cache_dir),
-            "screenshots_dir": str(self.screenshots_dir),
-            "vlm_model": self.vlm_model,
-            "vlm_port": self.vlm_port,
-            "embedding_model": self.embedding_model,
-            "embedding_dim": self.embedding_dim,
-            "batch_size": self.batch_size,
-            "confidence_threshold": self.confidence_threshold,
-            "ports": {
-                "task_board": self.TASK_BOARD_PORT,
-                "analytics": self.ANALYTICS_PORT,
-                "time_tracker": self.TIME_TRACKER_PORT,
-                "memos": self.MEMOS_PORT
+            "database_url": self.DATABASE_URL,
+            "api_endpoints": self.API_ENDPOINTS,
+            "all_ports": self.get_all_ports(),
+            "all_paths": self.get_all_paths(),
+            "ai_config": {
+                "vlm_model": self.VLM_MODEL_NAME,
+                "vlm_endpoint": self.VLM_ENDPOINT,
+                "ocr_endpoint": self.OCR_ENDPOINT,
+                "embedding_model": self.EMBEDDING_MODEL,
+                "embedding_endpoint": self.EMBEDDING_ENDPOINT,
+            },
+            "feature_flags": {
+                "enable_vlm": self.ENABLE_VLM,
+                "enable_ocr": self.ENABLE_OCR,
+                "enable_embeddings": self.ENABLE_EMBEDDINGS,
+                "enable_real_time": self.ENABLE_REAL_TIME,
+                "enable_vector_search": self.ENABLE_VECTOR_SEARCH,
+                "enable_debug_mode": self.ENABLE_DEBUG_MODE,
             }
         }
 
 
-# Global configuration singleton
+# Global instance (using standard name now)
+
+
+
+
+def load_config_from_env() -> Config:
+    """Load configuration with environment variable overrides."""
+    config = Config()
+    
+    # Database overrides
+    if os.getenv("AUTOTASK_POSTGRES_HOST"):
+        config.POSTGRES_HOST = os.getenv("AUTOTASK_POSTGRES_HOST")
+    if os.getenv("AUTOTASK_POSTGRES_PORT"):
+        config.POSTGRES_PORT = int(os.getenv("AUTOTASK_POSTGRES_PORT"))
+    if os.getenv("AUTOTASK_POSTGRES_DB"):
+        config.POSTGRES_DATABASE = os.getenv("AUTOTASK_POSTGRES_DB")
+    if os.getenv("AUTOTASK_SERVER_HOST"):
+        config.SERVER_HOST = os.getenv("AUTOTASK_SERVER_HOST")
+    
+    # Path overrides
+    if os.getenv("AUTOTASK_MEMOS_DIR"):
+        config.MEMOS_DIR = os.getenv("AUTOTASK_MEMOS_DIR")
+    if os.getenv("AUTOTASK_SCREENSHOTS_DIR"):
+        config.SCREENSHOTS_DIR = os.getenv("AUTOTASK_SCREENSHOTS_DIR")
+    if os.getenv("AUTOTASK_VLM_CACHE_DIR"):
+        config.VLM_CACHE_DIR = os.getenv("AUTOTASK_VLM_CACHE_DIR")
+    
+    # Port overrides
+    if os.getenv("AUTOTASK_TASK_BOARD_PORT"):
+        config.TASK_BOARD_PORT = int(os.getenv("AUTOTASK_TASK_BOARD_PORT"))
+    if os.getenv("AUTOTASK_ANALYTICS_PORT"):
+        config.ANALYTICS_PORT = int(os.getenv("AUTOTASK_ANALYTICS_PORT"))
+    if os.getenv("AUTOTASK_TIMETRACKER_PORT"):
+        config.TIMETRACKER_PORT = int(os.getenv("AUTOTASK_TIMETRACKER_PORT"))
+    if os.getenv("AUTOTASK_NOTIFICATIONS_PORT"):
+        config.NOTIFICATIONS_PORT = int(os.getenv("AUTOTASK_NOTIFICATIONS_PORT"))
+    if os.getenv("AUTOTASK_ADVANCED_ANALYTICS_PORT"):
+        config.ADVANCED_ANALYTICS_PORT = int(os.getenv("AUTOTASK_ADVANCED_ANALYTICS_PORT"))
+    if os.getenv("AUTOTASK_OVERVIEW_PORT"):
+        config.OVERVIEW_PORT = int(os.getenv("AUTOTASK_OVERVIEW_PORT"))
+    if os.getenv("AUTOTASK_FOCUS_TRACKER_PORT"):
+        config.FOCUS_TRACKER_PORT = int(os.getenv("AUTOTASK_FOCUS_TRACKER_PORT"))
+    if os.getenv("AUTOTASK_DAILY_SUMMARY_PORT"):
+        config.DAILY_SUMMARY_PORT = int(os.getenv("AUTOTASK_DAILY_SUMMARY_PORT"))
+    if os.getenv("AUTOTASK_LAUNCHER_PORT"):
+        config.LAUNCHER_PORT = int(os.getenv("AUTOTASK_LAUNCHER_PORT"))
+    if os.getenv("AUTOTASK_VLM_MONITOR_PORT"):
+        config.VLM_MONITOR_PORT = int(os.getenv("AUTOTASK_VLM_MONITOR_PORT"))
+    if os.getenv("AUTOTASK_API_PORT"):
+        config.AUTOTASK_API_PORT = int(os.getenv("AUTOTASK_API_PORT"))
+    if os.getenv("AUTOTASK_HEALTH_CHECK_PORT"):
+        config.HEALTH_CHECK_PORT = int(os.getenv("AUTOTASK_HEALTH_CHECK_PORT"))
+    if os.getenv("AUTOTASK_METRICS_PORT"):
+        config.METRICS_PORT = int(os.getenv("AUTOTASK_METRICS_PORT"))
+    if os.getenv("AUTOTASK_WEBHOOK_PORT"):
+        config.WEBHOOK_PORT = int(os.getenv("AUTOTASK_WEBHOOK_PORT"))
+    if os.getenv("AUTOTASK_MEMOS_PORT"):
+        config.MEMOS_PORT = int(os.getenv("AUTOTASK_MEMOS_PORT"))
+    if os.getenv("AUTOTASK_MEMOS_WEB_PORT"):
+        config.MEMOS_WEB_PORT = int(os.getenv("AUTOTASK_MEMOS_WEB_PORT"))
+    
+    # AI Service overrides
+    if os.getenv("AUTOTASK_VLM_MODEL"):
+        config.VLM_MODEL_NAME = os.getenv("AUTOTASK_VLM_MODEL")
+    if os.getenv("AUTOTASK_VLM_PORT"):
+        config.OLLAMA_PORT = int(os.getenv("AUTOTASK_VLM_PORT"))
+    if os.getenv("AUTOTASK_EMBEDDING_MODEL"):
+        config.EMBEDDING_MODEL = os.getenv("AUTOTASK_EMBEDDING_MODEL")
+    
+    # Processing overrides
+    if os.getenv("AUTOTASK_BATCH_SIZE"):
+        config.SPARSITY_FACTOR = float(os.getenv("AUTOTASK_BATCH_SIZE"))
+    if os.getenv("AUTOTASK_CONFIDENCE_THRESHOLD"):
+        config.VLM_CONCURRENCY = int(os.getenv("AUTOTASK_CONFIDENCE_THRESHOLD"))
+    if os.getenv("AUTOTASK_AUTO_REFRESH_SECONDS"):
+        config.CACHE_TTL = int(os.getenv("AUTOTASK_AUTO_REFRESH_SECONDS"))
+    
+    # Feature flag overrides
+    if os.getenv("AUTOTASK_DEBUG_MODE") == "true":
+        config.ENABLE_DEBUG_MODE = True
+    if os.getenv("AUTOTASK_DISABLE_VLM") == "true":
+        config.ENABLE_VLM = False
+    
+    # Pensieve integration overrides
+    if os.getenv("PENSIEVE_CACHE_TTL"):
+        config.CACHE_TTL = int(os.getenv("PENSIEVE_CACHE_TTL"))
+    if os.getenv("PENSIEVE_REALTIME") == "false":
+        config.ENABLE_REAL_TIME = False
+    if os.getenv("PENSIEVE_AUTO_MIGRATION") == "false":
+        config.ENABLE_AUTO_BACKUP = False
+    if os.getenv("PENSIEVE_RETRY_ATTEMPTS"):
+        config.VLM_CONCURRENCY = int(os.getenv("PENSIEVE_RETRY_ATTEMPTS"))
+    
+    return config
+
+
+# Global configuration singleton with thread safety
 _config_instance: Optional[Config] = None
-_config_lock = None
+_config_lock: Optional[threading.Lock] = None
 
 
 def get_config() -> Config:
@@ -540,9 +736,6 @@ def get_config() -> Config:
     
     if _config_instance is not None:
         return _config_instance
-    
-    # Lazy import to avoid circular dependencies
-    import threading
     
     if _config_lock is None:
         _config_lock = threading.Lock()
@@ -555,11 +748,10 @@ def get_config() -> Config:
 
 
 def set_config(config_instance: Config) -> None:
-    """Set a custom configuration instance."""
+    """Set a custom configuration instance (thread-safe)."""
     global _config_instance, _config_lock
     
     if _config_lock is None:
-        import threading
         _config_lock = threading.Lock()
     
     with _config_lock:
@@ -567,16 +759,16 @@ def set_config(config_instance: Config) -> None:
 
 
 def reset_config() -> None:
-    """Reset configuration to force reload on next access."""
+    """Reset configuration to force reload on next access (thread-safe)."""
     global _config_instance, _config_lock
     
     if _config_lock is None:
-        import threading
         _config_lock = threading.Lock()
     
     with _config_lock:
         _config_instance = None
 
 
-# Legacy alias for backwards compatibility
-config = get_config()
+# Compatibility aliases for smooth migration
+get_central_config = get_config  # Alias for code expecting central_config
+CentralConfig = Config  # Alias for type hints

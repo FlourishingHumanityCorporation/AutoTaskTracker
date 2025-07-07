@@ -151,8 +151,9 @@ class PostgreSQLAdapter:
             # Enhance with metadata and task info, applying date and category filters
             tasks = []
             for entity in entities:
-                # Apply date filter
-                entity_date = self._parse_frame_date(entity.created_at)
+                # Apply date filter using effective timestamp
+                effective_timestamp = entity.created_at or getattr(entity, 'file_created_at', None)
+                entity_date = self._parse_frame_date(effective_timestamp)
                 if not self._is_date_in_range(entity_date, start_date, end_date):
                     continue
                 
@@ -161,7 +162,7 @@ class PostgreSQLAdapter:
                 if "tasks" in metadata:
                     task_data = {
                         'id': entity.id,
-                        'timestamp': entity.created_at,
+                        'timestamp': effective_timestamp,
                         'filepath': entity.filepath,
                         "tasks": self._parse_tasks_safely(metadata.get("tasks")),
                         "category": metadata.get("category", 'Other'),
@@ -205,12 +206,20 @@ class PostgreSQLAdapter:
                 if "tasks" in metadata:
                     task_data = {
                         'id': entity.id,
-                        'timestamp': entity.created_at,
+                        'timestamp': effective_timestamp,
                         'filepath': entity.filepath,
                         "tasks": self._parse_tasks_safely(metadata.get("tasks")),
                         "category": metadata.get("category", 'Other'),
                         "active_window": metadata.get("active_window", ''),
-                        "ocr_result": self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', '')
+                        "ocr_result": self.pensieve_client.get_entity_metadata(entity.id, 'ocr_result').get('ocr_result', ''),
+                        # Include dual-model metadata for session insights
+                        "metadata": {
+                            "session_id": metadata.get("session_id"),
+                            "dual_model_processed": metadata.get("dual_model_processed"),
+                            "dual_model_version": metadata.get("dual_model_version"),
+                            "llama3_session_result": metadata.get("llama3_session_result"),
+                            "vlm_description": metadata.get("vlm_description")
+                        }
                     }
                     
                     if not categories or task_data["category"] in categories:
@@ -385,7 +394,7 @@ class PostgreSQLAdapter:
                 'priority': 'high',
                 'action': 'Upgrade to PostgreSQL',
                 'benefit': 'Better performance and concurrent access',
-                'command': f'memos migrate --sqlite-url sqlite:///{self.config.get_db_path()} --pg-url postgresql://user:pass@localhost/pensieve'
+                'command': f'memos migrate --sqlite-url {self.config.SQLITE_FALLBACK_URL} --pg-url {self.config.get_database_url()}'
             })
             
             recommendations['recommendations'].append({

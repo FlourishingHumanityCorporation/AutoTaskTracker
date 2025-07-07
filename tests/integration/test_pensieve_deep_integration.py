@@ -21,7 +21,7 @@ class TestPensieveAPIClient:
         """Test API client can be initialized."""
         client = get_pensieve_client()
         assert client is not None
-        assert client.base_url == "http://localhost:8839"
+        assert client.base_url == "http://localhost:8841"
         assert client.timeout == 30
     
     def test_api_client_health_check(self):

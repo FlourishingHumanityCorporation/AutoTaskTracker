@@ -22,7 +22,7 @@ from autotasktracker.pensieve.cache_manager import PensieveCacheManager
 
 def get_database_path():
     """Get the database path."""
-    return os.path.expanduser("~/.memos/database.db")
+    return os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/database.db")
 
 def test_cache_performance():
     """Test cache performance with real database queries."""

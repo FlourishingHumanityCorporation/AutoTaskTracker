@@ -37,11 +37,11 @@ class SmartVLMProcessor:
     def __init__(self, db_path: str = None, cache_dir: str = None):
         """Initialize the smart VLM processor."""
         config = get_config()
-        self.db_path = db_path or config.get_db_path()
+        self.db_path = db_path or config.get_database_url()
         self.cache_dir = Path(cache_dir or config.get_vlm_cache_path())
         self.cache_dir.mkdir(exist_ok=True)
-        self.vlm_model = config.vlm_model
-        self.vlm_port = config.vlm_port
+        self.vlm_model = config.VLM_MODEL_NAME
+        self.vlm_port = config.OLLAMA_PORT
         
         # Initialize caches with memory management
         self.hash_cache = {}  # image_path -> perceptual_hash
@@ -260,7 +260,7 @@ class SmartVLMProcessor:
                 # Check for existing VLM results (excluding processing flags)
                 cursor.execute("""
                     SELECT 1 FROM metadata_entries 
-                    WHERE entity_id = ? AND key IN ('minicpm_v_result', "vlm_structured", 'vlm_description')
+                    WHERE entity_id = %s AND key IN ('minicpm_v_result', 'vlm_structured', 'vlm_description')
                     LIMIT 1
                 """, (entity_id,))
                 
@@ -282,7 +282,7 @@ class SmartVLMProcessor:
                 # Check for existing VLM results first
                 cursor.execute("""
                     SELECT 1 FROM metadata_entries 
-                    WHERE entity_id = ? AND key IN ('minicpm_v_result', "vlm_structured", 'vlm_description')
+                    WHERE entity_id = %s AND key IN ('minicpm_v_result', 'vlm_structured', 'vlm_description')
                     LIMIT 1
                 """, (entity_id,))
                 
@@ -293,7 +293,7 @@ class SmartVLMProcessor:
                 # Check for existing processing flag
                 cursor.execute("""
                     SELECT 1 FROM metadata_entries 
-                    WHERE entity_id = ? AND key = 'vlm_processing'
+                    WHERE entity_id = %s AND key = 'vlm_processing'
                     LIMIT 1
                 """, (entity_id,))
                 
@@ -305,7 +305,7 @@ class SmartVLMProcessor:
                 cursor.execute("""
                     INSERT INTO metadata_entries 
                     (entity_id, key, value, source_type, data_type, created_at, updated_at) 
-                    VALUES (?, ?, ?, 'vlm', 'text', datetime('now'), datetime('now'))
+                    VALUES (%s, %s, %s, 'vlm', 'text', NOW(), NOW())
                 """, (entity_id, 'vlm_processing', 'in_progress'))
                 
                 conn.commit()
@@ -329,14 +329,14 @@ class SmartVLMProcessor:
                     # Remove processing flag
                     cursor.execute("""
                         DELETE FROM metadata_entries 
-                        WHERE entity_id = ? AND key = 'vlm_processing'
+                        WHERE entity_id = %s AND key = 'vlm_processing'
                     """, (entity_id,))
                 else:
                     # Update to failed status
                     cursor.execute("""
                         UPDATE metadata_entries 
-                        SET value = 'failed', updated_at = datetime('now')
-                        WHERE entity_id = ? AND key = 'vlm_processing'
+                        SET value = 'failed', updated_at = NOW()
+                        WHERE entity_id = %s AND key = 'vlm_processing'
                     """, (entity_id,))
                 
                 conn.commit()
@@ -356,9 +356,11 @@ class SmartVLMProcessor:
                 
                 # Save structured VLM result
                 cursor.execute("""
-                    INSERT OR REPLACE INTO metadata_entries 
+                    INSERT INTO metadata_entries 
                     (entity_id, key, value, source_type, data_type, created_at, updated_at) 
-                    VALUES (?, ?, ?, 'vlm', 'json', datetime('now'), datetime('now'))
+                    VALUES (%s, %s, %s, 'vlm', 'json', NOW(), NOW())
+                    ON CONFLICT (entity_id, key) DO UPDATE SET 
+                    value = EXCLUDED.value, updated_at = NOW()
                 """, (entity_id, 'vlm_description', json.dumps(structured_result)))
                 
                 conn.commit()
@@ -556,7 +558,7 @@ class SmartVLMProcessor:
                     'images': [image_base64],
                     'stream': False,  # Use non-streaming for reliability
                     'options': {
-                        'temperature': 0.7,
+                        'temperature': get_config().VLM_TEMPERATURE,
                         'top_p': 0.9,
                         'num_predict': 300,
                         'num_ctx': 4096
@@ -632,25 +634,266 @@ class SmartVLMProcessor:
         return None
     
     def _structure_vlm_result(self, raw_result: str, app_type: str, window_title: str) -> Dict:
-        """Structure VLM result into useful format."""
+        """Structure VLM result into improved format with better organization."""
+        import time
+        start_time = time.time()
+        
         # Extract key information from the VLM description
         task = self._extract_task_from_description(raw_result, app_type)
         category = self._map_app_to_category(app_type)
+        ui_elements = self._extract_ui_elements(raw_result)
+        subtasks = self._extract_subtasks(raw_result)
         
+        # Clean and truncate description if needed
+        clean_description = self._clean_description(raw_result)
+        
+        # Enhanced structured format
         structured = {
+            "schema_version": "2.0",
+            "analysis": {
+                "task_classification": {
+                    "primary_task": task,
+                    "task_category": self._get_task_category(task),
+                    "subcategory": self._get_task_subcategory(task, app_type),
+                    "confidence_score": self._calculate_confidence(raw_result, app_type)
+                },
+                "application_context": {
+                    "app_type": app_type,
+                    "app_name": self._extract_app_name(window_title),
+                    "window_title": window_title or "Unknown",
+                    "is_fullscreen": self._detect_fullscreen(raw_result)
+                },
+                "content_analysis": {
+                    "summary": clean_description,
+                    "key_elements": self._extract_key_elements(raw_result),
+                    "text_content_detected": self._has_text_content(raw_result),
+                    "media_content_detected": self._has_media_content(raw_result)
+                },
+                "ui_structure": {
+                    "layout_type": self._detect_layout_type(raw_result),
+                    "interactive_elements": ui_elements if ui_elements else None,
+                    "primary_focus": self._detect_primary_focus(raw_result)
+                },
+                "workflow_indicators": {
+                    "productivity_level": self._assess_productivity_level(raw_result),
+                    "multitasking_detected": len(subtasks) > 2,
+                    "focus_areas": self._extract_focus_areas(raw_result, subtasks),
+                    "estimated_duration": self._estimate_duration(task, raw_result)
+                }
+            },
+            "metadata": {
+                "processed_at": datetime.now().isoformat() + "Z",
+                "processing_time_ms": int((time.time() - start_time) * 1000),
+                "model_version": "minicpm-v:8b",
+                "prompt_version": "v2.0",
+                "quality_score": self._calculate_quality_score(raw_result, task)
+            },
+            # Legacy fields for backward compatibility
             "tasks": task,
             "category": category,
-            'description': raw_result,
-            'visual_context': raw_result,  # For compatibility
-            'app_type': app_type,
+            "confidence": self._calculate_confidence(raw_result, app_type),
+            "app_type": app_type,
             "active_window": window_title,
-            'processed_at': datetime.now().isoformat(),
-            'confidence': 0.8,  # Default confidence
-            'ui_elements': self._extract_ui_elements(raw_result),
-            'subtasks': self._extract_subtasks(raw_result),
+            "processed_at": datetime.now().isoformat(),
+            "subtasks": subtasks
         }
         
         return structured
+    
+    def _clean_description(self, raw_description: str) -> str:
+        """Clean and truncate description to remove formatting issues."""
+        if not raw_description:
+            return ""
+        
+        # Remove markdown formatting
+        clean_desc = raw_description.replace('**', '').replace('*', '')
+        
+        # Truncate if too long and ends mid-sentence
+        if len(clean_desc) > 500:
+            # Find last complete sentence within 500 chars
+            sentences = clean_desc[:500].split('.')
+            if len(sentences) > 1:
+                clean_desc = '.'.join(sentences[:-1]) + '.'
+            else:
+                clean_desc = clean_desc[:500].strip() + '...'
+        
+        return clean_desc.strip()
+    
+    def _get_task_category(self, task: str) -> str:
+        """Get standardized task category."""
+        task_lower = task.lower()
+        if any(word in task_lower for word in ['video', 'conference', 'meeting', 'call']):
+            return 'collaboration'
+        elif any(word in task_lower for word in ['command', 'terminal', 'git', 'development']):
+            return 'development'
+        elif any(word in task_lower for word in ['document', 'writing', 'editing']):
+            return 'documentation'
+        elif any(word in task_lower for word in ['browsing', 'research', 'reading']):
+            return 'research'
+        else:
+            return 'general'
+    
+    def _get_task_subcategory(self, task: str, app_type: str) -> str:
+        """Get specific subcategory based on task and app type."""
+        task_lower = task.lower()
+        if 'video' in task_lower or 'conference' in task_lower:
+            return 'meeting'
+        elif 'command' in task_lower or app_type == 'Terminal':
+            return 'terminal_operations'
+        elif 'development' in task_lower or 'coding' in task_lower:
+            return 'software_development'
+        elif 'document' in task_lower:
+            return 'document_editing'
+        else:
+            return 'other'
+    
+    def _extract_app_name(self, window_title: str) -> str:
+        """Extract clean application name from window title."""
+        if not window_title:
+            return "Unknown"
+        
+        # Common app name extraction patterns
+        app_indicators = ['Chrome', 'Firefox', 'Safari', 'Terminal', 'Notion', 'VS Code', 'Zoom']
+        for app in app_indicators:
+            if app.lower() in window_title.lower():
+                return app
+        
+        # Take first part of window title
+        parts = window_title.split(' - ')
+        return parts[-1] if parts else window_title
+    
+    def _detect_fullscreen(self, description: str) -> bool:
+        """Detect if application is in fullscreen mode."""
+        fullscreen_indicators = ['fullscreen', 'full screen', 'maximized', 'full window']
+        return any(indicator in description.lower() for indicator in fullscreen_indicators)
+    
+    def _extract_key_elements(self, description: str) -> List[str]:
+        """Extract key UI/content elements from description."""
+        elements = []
+        desc_lower = description.lower()
+        
+        # Look for common UI elements
+        if 'video' in desc_lower:
+            elements.append('Video interface')
+        if 'document' in desc_lower or 'editor' in desc_lower:
+            elements.append('Document editor')
+        if 'chat' in desc_lower or 'message' in desc_lower:
+            elements.append('Chat interface')
+        if 'button' in desc_lower:
+            elements.append('Interactive buttons')
+        if 'menu' in desc_lower:
+            elements.append('Menu system')
+        
+        return elements[:5]  # Limit to 5 key elements
+    
+    def _has_text_content(self, description: str) -> bool:
+        """Detect if screenshot contains readable text content."""
+        text_indicators = ['text', 'document', 'typing', 'writing', 'content', 'message']
+        return any(indicator in description.lower() for indicator in text_indicators)
+    
+    def _has_media_content(self, description: str) -> bool:
+        """Detect if screenshot contains media content."""
+        media_indicators = ['video', 'image', 'audio', 'media', 'camera', 'screen sharing']
+        return any(indicator in description.lower() for indicator in media_indicators)
+    
+    def _detect_layout_type(self, description: str) -> str:
+        """Detect the layout type of the interface."""
+        desc_lower = description.lower()
+        if 'split' in desc_lower or 'panel' in desc_lower:
+            return 'split_screen'
+        elif 'tab' in desc_lower:
+            return 'tabbed'
+        elif 'grid' in desc_lower:
+            return 'grid_layout'
+        else:
+            return 'single_window'
+    
+    def _detect_primary_focus(self, description: str) -> str:
+        """Detect the primary focus area of the interface."""
+        desc_lower = description.lower()
+        if 'document' in desc_lower or 'editor' in desc_lower:
+            return 'document_editor'
+        elif 'video' in desc_lower:
+            return 'video_interface'
+        elif 'terminal' in desc_lower or 'command' in desc_lower:
+            return 'terminal'
+        elif 'browser' in desc_lower or 'web' in desc_lower:
+            return 'web_browser'
+        else:
+            return 'unknown'
+    
+    def _assess_productivity_level(self, description: str) -> str:
+        """Assess productivity level based on activity description."""
+        desc_lower = description.lower()
+        if any(word in desc_lower for word in ['focused', 'active', 'engaged', 'working']):
+            return 'high'
+        elif any(word in desc_lower for word in ['browsing', 'casual', 'reading']):
+            return 'medium'
+        else:
+            return 'unknown'
+    
+    def _extract_focus_areas(self, description: str, subtasks: List[str]) -> List[str]:
+        """Extract focus areas from description and subtasks."""
+        focus_areas = []
+        desc_lower = description.lower()
+        
+        if 'communication' in desc_lower or 'meeting' in desc_lower:
+            focus_areas.append('communication')
+        if 'documentation' in desc_lower or 'writing' in desc_lower:
+            focus_areas.append('documentation')
+        if 'development' in desc_lower or 'coding' in desc_lower:
+            focus_areas.append('development')
+        if 'analysis' in desc_lower or 'research' in desc_lower:
+            focus_areas.append('analysis')
+        
+        return focus_areas[:3]  # Limit to 3 focus areas
+    
+    def _estimate_duration(self, task: str, description: str) -> str:
+        """Estimate typical duration for this type of task."""
+        task_lower = task.lower()
+        if 'meeting' in task_lower or 'conference' in task_lower:
+            return '30-60_minutes'
+        elif 'development' in task_lower or 'command' in task_lower:
+            return '15-120_minutes'
+        elif 'document' in task_lower:
+            return '10-60_minutes'
+        else:
+            return '5-30_minutes'
+    
+    def _calculate_confidence(self, description: str, app_type: str) -> float:
+        """Calculate confidence score based on description quality and app detection."""
+        if not description:
+            return 0.3
+        
+        confidence = 0.5  # Base confidence
+        
+        # Boost confidence for detailed descriptions
+        if len(description) > 100:
+            confidence += 0.2
+        
+        # Boost for specific UI element detection
+        ui_indicators = ['button', 'menu', 'panel', 'interface', 'screen']
+        detected_elements = sum(1 for indicator in ui_indicators if indicator in description.lower())
+        confidence += min(detected_elements * 0.1, 0.3)
+        
+        # Boost for app type consistency
+        if app_type and app_type != 'Unknown':
+            confidence += 0.1
+        
+        return min(confidence, 1.0)
+    
+    def _calculate_quality_score(self, description: str, task: str) -> float:
+        """Calculate overall quality score for the analysis."""
+        score = 0.5  # Base score
+        
+        if description and len(description) > 50:
+            score += 0.2
+        if task and task != "Unknown":
+            score += 0.2
+        if not description.endswith('might'):  # Not truncated
+            score += 0.1
+        
+        return min(score, 1.0)
     
     def _extract_task_from_description(self, description: str, app_type: str) -> str:
         """Extract a concise task description from VLM output."""

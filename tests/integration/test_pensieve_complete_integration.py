@@ -75,7 +75,7 @@ class TestPensieveCompleteIntegration:
                 'screenshots_dir': '/test/screenshots',
                 'ocr_timeout': 45,
                 'batch_size': 200,
-                'port': 8839
+                'port': 8841
             }
             mock_client.return_value = mock_api
             

@@ -25,7 +25,7 @@ import logging
 import threading
 import concurrent.futures
 
-from autotasktracker.config import config, get_config, Config
+from autotasktracker.config import get_config, Config
 from autotasktracker.pensieve.config_reader import (
     PensieveConfigReader, 
     get_pensieve_config_reader,
@@ -48,7 +48,7 @@ class TestConfigSystemHealthAudit:
         """Worker function for parallel config access testing."""
         try:
             config = get_config()
-            db_path = config.get_db_path()
+            db_path = get_config().get_database_url()
             access_time = time.time()
             results_list.append({
                 'worker_id': worker_id,
@@ -316,7 +316,7 @@ class TestConfigSystemHealthAudit:
             db_manager = DatabaseManager()
             
             # Test that config provides valid database path
-            db_path = config.get_db_path()
+            db_path = get_config().get_database_url()
             assert db_path is not None, "Config should provide database path"
             
             # Test database path accessibility
@@ -543,7 +543,7 @@ class TestConfigUsageInProduction:
         # Patterns that should use config
         hardcoded_patterns = {
             'ports': {
-                'pattern': r'\b(8502|8503|8504|8505|8506|8839|11434)\b',
+                'pattern': r'\b(8502|8503|8504|8505|8506|8841|11434)\b',
                 'should_use': 'config.TASK_BOARD_PORT, config.ANALYTICS_PORT, etc.'
             },
             'localhost_urls': {
@@ -559,7 +559,7 @@ class TestConfigUsageInProduction:
                 'should_use': 'config.get_db_path()'
             },
             'api_endpoints': {
-                'pattern': r'["\']http://localhost:(8839|11434)[^"\']*["\']',
+                'pattern': r'["\']http://localhost:(8841|11434)[^"\']*["\']',
                 'should_use': 'config.get_service_url("memos") or config.get_ollama_url()'
             }
         }
@@ -687,7 +687,7 @@ class TestConfigUsageInProduction:
                 
                 # Check for hardcoded URLs
                 url_patterns = [
-                    r'["\']http://localhost:8839[^"\']*["\']',
+                    r'["\']http://localhost:8841[^"\']*["\']',
                     r'["\']http://localhost:11434[^"\']*["\']',
                     r'["\']http://127\.0\.0\.1:\d+[^"\']*["\']'
                 ]
@@ -1071,7 +1071,7 @@ class TestConfigTestSystemIntegration:
             config = get_config()
             
             # Should be able to get basic config information
-            db_path = config.get_db_path()
+            db_path = get_config().get_database_url()
             assert db_path is not None, "Config should provide database path in test context"
             
             # 2. Test config with mocking (common in tests)

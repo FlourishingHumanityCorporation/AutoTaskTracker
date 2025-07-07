@@ -54,7 +54,10 @@ class AITaskDisplay:
                         timestamp = task_data['timestamp']
                         if isinstance(timestamp, str):
                             timestamp = datetime.fromisoformat(timestamp)
-                        st.caption(f"🕒 {timestamp.strftime('%H:%M:%S')}")
+                        # TEMPORARY FIX: No offset needed - times are already in local time
+                        from datetime import timedelta
+                        display_time = timestamp
+                        st.caption(f"🕒 {display_time.strftime('%H:%M:%S')}")
                     except (ValueError, TypeError) as e:
                         logger.debug(f"Could not parse timestamp: {e}")
                 
@@ -153,14 +156,16 @@ class AITaskDisplay:
         AI-extracted task information.
         """
         # Format time period display
-        from autotasktracker.core.timezone_manager import get_timezone_manager
-        tz_manager = get_timezone_manager()
+        # TEMPORARY FIX: No offset needed - times are already in local time
+        from datetime import timedelta
+        display_timestamp = timestamp
+        display_end_time = end_time
         
-        if end_time:
-            time_period = tz_manager.format_time_period(timestamp, end_time, format_12h=False)
+        if display_end_time:
+            time_period = f"[{display_timestamp.strftime('%H:%M')}-{display_end_time.strftime('%H:%M')}]"
             confidence_indicator = "🟢" if duration_minutes >= 2 else "🟡" if duration_minutes >= 1 else "🔴"
         else:
-            time_period = f"[{tz_manager.format_for_display(timestamp)}]"
+            time_period = f"[{display_timestamp.strftime('%H:%M')}]"
             confidence_indicator = "🔴"  # Low confidence without end time
         
         # Main header with enhanced format
@@ -214,7 +219,7 @@ class AITaskDisplay:
                         if os.path.exists(screenshot_path):
                             img = Image.open(screenshot_path)
                             img.thumbnail((200, 200))
-                            st.image(img, use_column_width=True)
+                            st.image(img, use_container_width=True)
                         else:
                             st.info("No screenshot available")
                     except Exception as e:

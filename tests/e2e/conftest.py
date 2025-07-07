@@ -4,7 +4,7 @@ This sets up an *isolated* HOME directory so Pensieve (`memos`) stores its
 SQLite DB and screenshots in a throw-away place.  All background processes
 spawned by the test are recorded and torn down automatically.
 
-The fixture intentionally avoids touching your real ~/.memos data.
+The fixture intentionally avoids touching your real /Users/paulrohde/AutoTaskTracker.memos data.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def e2e_env() -> Generator[Dict[str, Any], None, None]:
     """Yield an isolated environment & process-tracker for E2E tests."""
 
     temp_home = Path(tempfile.mkdtemp(prefix="pensieve_e2e_"))
-    # Memos will create ~/.memos inside this temp HOME.
+    # Memos will create /Users/paulrohde/AutoTaskTracker.memos inside this temp HOME.
 
     test_env = os.environ.copy()
     test_env["HOME"] = str(temp_home)

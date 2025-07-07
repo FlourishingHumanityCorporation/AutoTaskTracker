@@ -58,9 +58,9 @@ def _run(cmd: list[str], timeout: float = 10) -> subprocess.CompletedProcess[str
 @pytest.fixture
 def _db_conn():
     """Direct connection to the memos SQLite DB."""
-    db_path = os.path.expanduser("~/.memos/database.db")
+    db_path = os.path.expanduser("/Users/paulrohde/AutoTaskTracker.memos/database.db")
     if not os.path.exists(db_path):
-        pytest.skip("No Pensieve database found at ~/.memos/database.db")
+        pytest.skip("No Pensieve database found at /Users/paulrohde/AutoTaskTracker.memos/database.db")
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
